@@ -224,7 +224,7 @@
       "phase": 0,
       "priority": "High",
       "effort_days": 1.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR001"
       ],
@@ -241,7 +241,9 @@
         "src/attackmap/artifact_publisher.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "tests/test_run_events.py 5/5; live CLI scan published events.jsonl with 19 records, all fields, 7 stages, 3 analyzers with end records (AC-006 snippet passed)"
+      ]
     },
     {
       "id": "AR004",

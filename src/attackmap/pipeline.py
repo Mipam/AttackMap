@@ -6,31 +6,31 @@ single-repo scan body so tests can call ``run_scan`` without Typer.
 
 from __future__ import annotations
 
-from collections import Counter
-from contextlib import contextmanager
-from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
 import json
 import os
 import time
+from collections import Counter
+from collections.abc import Callable
+from contextlib import contextmanager, suppress
+from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
-
-from .application_errors import AnalysisConfigurationError, AnalysisExit, emit_text
-from .ai_budget import AiBudget, budget_scope, current_budget
-from .diagnostics import DiagnosticContext, DiagnosticStage, _analyzers, scan_diagnostic
+from typing import Any
 
 from . import __version__
+from .ai_budget import AiBudget, budget_scope, current_budget
 from .analyzer import summarize_architecture, summarize_attack_surface
-from .artifact_manifest import make_run_id, write_artifact_manifest
+from .analyzer_run_ledger import AnalyzerRunLedger, AnalyzerRunPlan
 from .analyzers import (
     analyze_repository,
     get_analyzer_metadata,
     resolve_run_analyzers,
 )
-from .analyzer_run_ledger import AnalyzerRunLedger, AnalyzerRunPlan
+from .application_errors import AnalysisConfigurationError, AnalysisExit, emit_text
+from .artifact_manifest import make_run_id, write_artifact_manifest
 from .cve import query_vulnerabilities
 from .defensive_review import render_defensive_review
+from .diagnostics import DiagnosticContext, DiagnosticStage, _analyzers, scan_diagnostic
 from .diff import (
     FindingSnapshot,
     diff_findings,
@@ -44,7 +44,7 @@ from .index import RepoIndex, active_index_for, clear_pinned_index
 from .llm_review import LlmReviewError, generate_llm_review
 from .md import sanitize_llm_markdown
 from .models import AnalyzerError, AttackPath, AttackSurface, Finding, ScanResult
-from .progress import create_progress
+from .progress import EventLog, create_progress
 from .recon_to_analysis import translate_recon
 from .report import render_console_summary, render_pr_comment, write_reports
 from .review_prompts import HUNT_LENSES
@@ -201,7 +201,7 @@ class StageTiming:
 
 
 def _engine_utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @dataclass
@@ -226,6 +226,7 @@ class RunState:
     diagnostic_stages: list[DiagnosticStage] = field(default_factory=list)
     time_budget: TimeBudget | None = None
     attempt_started: float = field(default_factory=time.perf_counter, repr=False)
+    events: EventLog | None = field(default=None, repr=False)
 
     def finish_scan(self, outcome: str) -> None:
         if self.scan_finished_at is None:
@@ -243,16 +244,25 @@ class RunState:
 def _diagnostic_phase(state: RunState, name: str):
     started = time.perf_counter()
     outcome = "completed"
+    events = state.events
+    if events is not None:
+        events.stage(name, "start")
     try:
         yield
     except BaseException as exc:
         outcome = "cancelled" if isinstance(exc, KeyboardInterrupt) else "failed"
+        if events is not None:
+            events.stage(name, "cancelled" if outcome == "cancelled" else "error",
+                         ms=int((time.perf_counter() - started) * 1000),
+                         detail=type(exc).__name__)
         raise
     finally:
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         state.timings.append(StageTiming(name=name, milliseconds=elapsed_ms))
         state.diagnostic_stages.append(DiagnosticStage(stage_id=name, outcome=outcome,
                                                        duration_milliseconds=elapsed_ms))
+        if events is not None and outcome == "completed":
+            events.stage(name, "end", ms=elapsed_ms)
 
 
 def _timed(state: RunState, name: str, fn: Callable[[], None]) -> None:
@@ -380,6 +390,11 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
     echo = options.echo
     repo_path = options.repo_path
     output = Path(options.output)
+    # AR003: structured run event log. Additive only — stdout progress is
+    # untouched, and the log is persisted into the generation directory by
+    # _run_scan_published before the pointer swap.
+    if state.events is None:
+        state.events = EventLog(run_id=options.run_id or make_run_id())
 
     with _diagnostic_phase(state, "request_validation"):
         if options.fail_on_new_high and options.baseline is None:
@@ -440,6 +455,9 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
         if state.scan is None:
             state.scan = ScanResult(root=str(repo_path))
         scan_now = state.scan
+        if state.events is not None:
+            state.events.stage(skipped_stage, "skip",
+                               detail=f"time budget of {budget.seconds}s expired")
         if state.analyzer_run_plan is not None and not state.analyzer_run_plan.ledger.execution_complete:
             state.analyzer_run_plan.skip_for_deadline()
             scan_now.analyzer_run_ledger = state.analyzer_run_plan.ledger.model_copy(deep=True)
@@ -475,6 +493,7 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                 isolated_analyzers=options.isolated_analyzers,
                 incremental=options.incremental,
                 index=captured_index,
+                events=state.events,
             )
 
         try:
@@ -636,8 +655,8 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
         _timed(state, "suppress", _suppress)
         findings = state.findings
 
-    architecture_md = getattr(state, "_architecture_md")
-    attack_surface_md = getattr(state, "_attack_surface_md")
+    architecture_md = state._architecture_md
+    attack_surface_md = state._attack_surface_md
     scan_report: dict[str, Any] | None = None
     analyzer_meta: list[dict[str, Any]] = []
 
@@ -1081,6 +1100,20 @@ def run_scan(options: AnalyzeOptions) -> RunState:
         return _run_scan_published(options)
 
 
+def _flush_event_log(state: RunState, folder: Path) -> None:
+    """Persist the run's event log into the staged generation (AR003).
+
+    Called before ``publish_generation`` so a committed generation always
+    carries its ``events.jsonl``. Extra files are not part of the artifact
+    manifest, so validation is unaffected.
+    """
+    if state.events is None or not state.events.records():
+        return
+    safe_write_text(folder, folder / "events.jsonl",
+                    "".join(json.dumps(r, ensure_ascii=False) + "\n"
+                            for r in state.events.records()))
+
+
 def _run_scan_published(options: AnalyzeOptions) -> RunState:
     """Publish one validated generation; flat files are compatibility exports."""
     if not options.atomic_output:
@@ -1091,14 +1124,16 @@ def _run_scan_published(options: AnalyzeOptions) -> RunState:
             from .artifact_publisher import write_diagnostic
             outcome = "cancelled" if isinstance(exc, KeyboardInterrupt) else "failed"
             state.finish_scan(outcome)
-            try:
+            with suppress(OSError, ValueError):
                 write_diagnostic(Path(options.output), options.run_id or make_run_id(), state=outcome,
                                  scan_timing=state.scan_timing(), context=_diagnostic_context(state, outcome))
-            except (OSError, ValueError):
-                pass
             raise
     from .artifact_publisher import (
-        export_compatibility, generation_dir, prepare_output_root, publish_generation, write_diagnostic,
+        export_compatibility,
+        generation_dir,
+        prepare_output_root,
+        publish_generation,
+        write_diagnostic,
     )
     base = prepare_output_root(Path(options.output))
     run_id = options.run_id or make_run_id()
@@ -1110,15 +1145,19 @@ def _run_scan_published(options: AnalyzeOptions) -> RunState:
         ensure_output_dir(folder, mark=True)
         state = _run_scan(staged, state=state)
         with _diagnostic_phase(state, "publication"):
+            _flush_event_log(state, folder)
             publish_generation(base, run_id)
     except BaseException as exc:
         outcome = "cancelled" if isinstance(exc, KeyboardInterrupt) else "failed"
         state.finish_scan(outcome)
-        try:
+        if state.events is not None and state.events.records():
+            # Best effort only; the diagnostic below still records the failure.
+            with suppress(OSError, ValueError):
+                state.events.stage("publication", outcome, detail=type(exc).__name__)
+                _flush_event_log(state, folder)
+        with suppress(OSError, ValueError):
             write_diagnostic(base, run_id, state=outcome, scan_timing=state.scan_timing(),
                              context=_diagnostic_context(state, outcome))
-        except (OSError, ValueError):
-            pass
         raise
     # Publication is already committed. A failed convenience export must not
     # turn the authoritative successful generation into a failed execution.

@@ -1,37 +1,50 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-from contextlib import nullcontext
-from dataclasses import dataclass
-from importlib.metadata import entry_points
 import importlib
 import inspect
 import json
 import logging
 import os
 import re
-from pathlib import Path
 import subprocess
 import sys
-from typing import Callable, Protocol, TYPE_CHECKING, cast
+import time
+from collections.abc import Callable, Iterable
+from contextlib import nullcontext, suppress
+from importlib.metadata import entry_points
+from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from .analyzer_catalog import AnalyzerDiscoveryCollector
     from .analyzer_run_ledger import AnalyzerRunPlan
-    from .progress import ScanProgress
+    from .progress import EventLog, ScanProgress
 from urllib.error import URLError
 from urllib.request import urlopen
 
 from pydantic import BaseModel, Field
 
-from .srcpaths import JS_TS_SUFFIXES, SKIP_DIRS, in_skipped_dir, is_skipped_dir
-from .plugins_lock import OFFICIAL_PLUGINS
-from .safe_fs import walk_repo
-from .merge import MERGE_SCHEMA, initial_seen, merge_into
-from .analyzer_host import (AnalyzerHostError, HostLimits, IsolatedOutcome,
-                            HOST_INPUT_INVALID, run_isolated_analyzer)
+from .analyzer_host import (
+    HOST_INPUT_INVALID,
+    AnalyzerHostError,
+    HostLimits,
+    IsolatedOutcome,
+    run_isolated_analyzer,
+)
 from .ecosystem_php import OmekaSAnalyzer, PhpLaminasAnalyzer, PhpWebAnalyzer
-
+from .merge import MERGE_SCHEMA, initial_seen, merge_into
+from .models import AnalyzerError
+from .plugins_lock import OFFICIAL_PLUGINS
+from .redact import redact_text
+from .safe_fs import walk_repo as walk_repo
+from .scanner import (
+    CODE_EXTENSIONS,
+    run_repo_passes,
+    scan_files,
+)
+from .scanner import (
+    scan_repo as scan_repo,
+)
 from .sdk.contracts import (
     AnalyzerMetadata,
     AnalyzerProtocol,
@@ -39,27 +52,30 @@ from .sdk.contracts import (
     AnalyzerResult,
     normalize_analyzer_metadata,
 )
-from .models import AnalyzerError
-from .redact import redact_text
 from .sdk.models import (
     AuthHint,
     DatabaseHint,
-    EdgeHint,
-    EntrypointHint,
     ExternalCall,
-    FrameworkHint,
-    ProtocolHint,
     Route,
     ScanResult,
     SecretHint,
-    ServiceHint,
 )
-from .scanner import (
-    CODE_EXTENSIONS,
-    run_repo_passes,
-    scan_files,
-    scan_repo,
+from .sdk.models import (
+    EdgeHint as EdgeHint,
 )
+from .sdk.models import (
+    EntrypointHint as EntrypointHint,
+)
+from .sdk.models import (
+    FrameworkHint as FrameworkHint,
+)
+from .sdk.models import (
+    ProtocolHint as ProtocolHint,
+)
+from .sdk.models import (
+    ServiceHint as ServiceHint,
+)
+from .srcpaths import JS_TS_SUFFIXES, SKIP_DIRS, in_skipped_dir, is_skipped_dir
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +166,7 @@ class DefaultAnalyzer:
         return PassSources.for_root(root).is_dir(Path(root).resolve())
 
     def analyze(
-        self, root: str | Path, progress: "ScanProgress | None" = None, recall: bool = False,
+        self, root: str | Path, progress: ScanProgress | None = None, recall: bool = False,
         index=None, incremental: bool | None = None,
     ) -> AnalyzerResult:
         return scan_files(
@@ -186,7 +202,7 @@ class BuiltinPythonWebAnalyzer:
         return PassSources.for_root(root).is_dir(Path(root).resolve())
 
     def analyze(
-        self, root: str | Path, progress: "ScanProgress | None" = None, recall: bool = False,
+        self, root: str | Path, progress: ScanProgress | None = None, recall: bool = False,
         index=None, incremental: bool | None = None,
     ) -> AnalyzerResult:
         return scan_files(root, suffixes={".py"}, progress=progress, index=index, incremental=incremental)
@@ -203,7 +219,7 @@ class BuiltinJavaScriptWebAnalyzer:
     plugin has room to grow without stomping on core.
     """
 
-    _JS_SUFFIXES = set(JS_TS_SUFFIXES)
+    _JS_SUFFIXES: frozenset[str] = frozenset(JS_TS_SUFFIXES)
     _WEB_DEPENDENCY_TOKENS = (
         "express",
         "fastify",
@@ -263,7 +279,7 @@ class BuiltinJavaScriptWebAnalyzer:
         return False
 
     def analyze(
-        self, root: str | Path, progress: "ScanProgress | None" = None, recall: bool = False,
+        self, root: str | Path, progress: ScanProgress | None = None, recall: bool = False,
         index=None, incremental: bool | None = None,
     ) -> AnalyzerResult:
         return scan_files(root, suffixes=self._JS_SUFFIXES, progress=progress, index=index, incremental=incremental)
@@ -524,18 +540,16 @@ def _load_discovered_analyzer(
         if catalog is not None and record is not None:
             catalog.failed(record, "metadata", exc)
         return None
-    try:
-        setattr(analyzer, "metadata", canonical_metadata)
-    except Exception:
-        # Some analyzers may expose read-only metadata attributes; normalization is still validated.
-        pass
+    # Some analyzers may expose read-only metadata attributes; normalization is still validated.
+    with suppress(Exception):
+        analyzer.metadata = canonical_metadata
     # Remember how this analyzer was discovered so the optional isolated
     # host (analyzer_host) can reload it in a subprocess the same way.
     try:
-        setattr(analyzer, "_attackmap_entry_point_name", getattr(analyzer_entry_point, "name", None))
+        analyzer._attackmap_entry_point_name = getattr(analyzer_entry_point, "name", None)
         # Retain the exact discovery origin for a later run ledger without a
         # second discovery/load or inferring provenance from a colliding name.
-        setattr(analyzer, "_attackmap_entry_point", analyzer_entry_point)
+        analyzer._attackmap_entry_point = analyzer_entry_point
     except Exception:
         pass
 
@@ -568,7 +582,7 @@ def _is_valid_analyzer(candidate: object) -> bool:
         return False
 
     try:
-        metadata = normalize_analyzer_metadata(getattr(candidate, "metadata"))
+        metadata = normalize_analyzer_metadata(candidate.metadata)
     except Exception:
         return False
     return isinstance(metadata.name, str) and bool(metadata.name.strip())
@@ -780,14 +794,15 @@ def _fetch_org_repositories(api_url: str) -> list[dict[str, object]]:
 def analyze_repository(
     root: str | Path,
     analyzers: Iterable[Analyzer] | None = None,
-    progress: "ScanProgress | None" = None,
+    progress: ScanProgress | None = None,
     recall: bool = False,
     strict: bool = False,
     isolated_analyzers: bool = False,
-    isolated_limits: "HostLimits | None" = None,
+    isolated_limits: HostLimits | None = None,
     incremental: bool | None = None,
     index: object | None = None,
     run_plan: AnalyzerRunPlan | None = None,
+    events: EventLog | None = None,
 ) -> AnalyzerResult:
     """Run every active analyzer and merge their results.
 
@@ -824,8 +839,9 @@ def analyze_repository(
     except (SnapshotInputError, OSError) as exc:
         shared_input, input_error = nullcontext(None), exc
     with shared_input as input_bundle:
-        for analyzer, ledger_row in zip(active_analyzers, plan._selected_records):
+        for analyzer, ledger_row in zip(active_analyzers, plan._selected_records, strict=True):
             analysis_started = None
+            event_started = time.perf_counter() if events is not None else None
             try:
                 if isolated_analyzers and not _is_builtin_analyzer(analyzer):
                     ledger_row.execution_mode = "isolated"
@@ -833,6 +849,8 @@ def analyze_repository(
                     if input_error is None:
                         analysis_started = plan.mark()
                         plan.observe(ledger_row, "analysis", "requested")
+                        if events is not None:
+                            events.analyzer(analyzer.name, "start")
                         if progress is not None:
                             progress.stage(f"Analyzer {_log_identity(analyzer.name)} isolated analysis requested")
                     outcome = (IsolatedOutcome(analyzer=analyzer.name, error_type=HOST_INPUT_INVALID,
@@ -842,6 +860,10 @@ def analyze_repository(
                     if outcome.error_type is not None:
                         ledger_row.failed("captured_input" if input_error is not None else "isolated_host", outcome.error_type)
                         plan.observe(ledger_row, "analysis", "failed", error_type=outcome.error_type)
+                        if events is not None:
+                            events.analyzer(analyzer.name, "error",
+                                            ms=int((time.perf_counter() - event_started) * 1000),
+                                            detail=outcome.error_type)
                         if strict:
                             raise AnalyzerHostError(
                                 f"isolated analyzer '{analyzer.name}': {outcome.error_type}: {outcome.message}"
@@ -866,6 +888,8 @@ def analyze_repository(
                     plan.observe(ledger_row, "analysis", "started")
                     if progress is not None:
                         progress.stage(f"Analyzer {_log_identity(analyzer.name)} analysis started")
+                    if events is not None:
+                        events.analyzer(analyzer.name, "start")
                     result = _coerce_result(_call_analyze(analyzer, repo_root, progress, recall, index, incremental), repo_root).model_copy(deep=True)
                 if (analyzer.name == "python" and _entry_point_distribution(
                         getattr(analyzer, "_attackmap_entry_point", None)) == "attackmap-analyzer-python"):
@@ -889,6 +913,10 @@ def analyze_repository(
                 if ledger_row.error is None:
                     ledger_row.failed("analysis", _log_exception_type(exc))
                     plan.observe(ledger_row, "analysis", "failed", error_type=_log_exception_type(exc))
+                if events is not None:
+                    events.analyzer(analyzer.name, "error",
+                                    ms=int((time.perf_counter() - event_started) * 1000),
+                                    detail=_log_exception_type(exc))
                 if strict:
                     raise
                 error = AnalyzerError(
@@ -905,6 +933,9 @@ def analyze_repository(
             finally:
                 if analysis_started is not None:
                     ledger_row.analysis_duration_ms = plan.duration_ms(analysis_started)
+            if events is not None:
+                events.analyzer(analyzer.name, "end",
+                                ms=int((time.perf_counter() - event_started) * 1000))
             results.append(result)
             ledger_row.analysis_started = True
             ledger_row.execution = "succeeded"
@@ -976,7 +1007,7 @@ def _coerce_result(result: object, root: Path) -> AnalyzerResult:
 def _call_analyze(
     analyzer: Analyzer,
     root: Path,
-    progress: "ScanProgress | None",
+    progress: ScanProgress | None,
     recall: bool = False,
     index: object | None = None,
     incremental: bool | None = None,
@@ -1022,7 +1053,7 @@ def resolve_run_analyzers(
     opt_in_matches: list[str] | None = None,
     *,
     run_plan: AnalyzerRunPlan | None = None,
-    progress: "ScanProgress | None" = None,
+    progress: ScanProgress | None = None,
 ) -> list[Analyzer]:
     """The analyzers to run on ``root``, in ``(priority, name)`` order (#221).
 
@@ -1045,7 +1076,7 @@ def resolve_run_analyzers(
     if run_plan is not None:
         if run_plan.repository_root != repo_root or run_plan.ledger.resolution_complete:
             raise ValueError("Analyzer run plan belongs to another repository or is already resolved")
-        from .analyzer_run_ledger import AnalyzerRunRecord, AnalyzerRunError, analyzer_run_identity
+        from .analyzer_run_ledger import AnalyzerRunError, AnalyzerRunRecord, analyzer_run_identity
     for analyzer in registered:
         row = None
         if run_plan is not None:
@@ -1107,7 +1138,7 @@ def resolve_analyzer_run(
     index: object | None = None,
     profile_id: str | None = None,
     opt_in_matches: list[str] | None = None,
-    progress: "ScanProgress | None" = None,
+    progress: ScanProgress | None = None,
 ) -> AnalyzerRunPlan:
     """Resolve once against one capture; the returned plan can execute once."""
     from .analyzer_run_ledger import AnalyzerRunLedger, AnalyzerRunPlan

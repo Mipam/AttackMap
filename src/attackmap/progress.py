@@ -19,6 +19,8 @@ import json
 import sys
 import threading
 import time
+from collections.abc import Callable
+from datetime import UTC
 from typing import TextIO
 
 # NDJSON progress protocol version (consumed by the macOS GUI and other
@@ -245,9 +247,74 @@ def create_progress(
     return ScanProgress(enabled=True, stream=stream)
 
 
+class EventLog:
+    """In-memory JSONL run-event log (AR003).
+
+    Records what ran, when, and how it ended, for every published generation
+    (``events.jsonl``). Purely additive: stdout progress rendering is
+    untouched, and logging failures never abort a scan. Every record carries
+    ``ts, run_id, trace_id, stage, event, status``; ``ms`` and ``detail`` are
+    attached when known.
+    """
+
+    REQUIRED_FIELDS = ("ts", "run_id", "trace_id", "stage", "event", "status")
+
+    def __init__(self, *, run_id: str, trace_id: str | None = None,
+                 clock: Callable[[], str] | None = None) -> None:
+        self.run_id = run_id
+        self.trace_id = trace_id or run_id
+        self._clock = clock or _utc_now_iso
+        self._records: list[dict] = []
+        self._lock = threading.Lock()
+
+    def record(self, *, stage: str, event: str, status: str,
+               ms: int | None = None, detail: str | None = None) -> None:
+        entry: dict = {
+            "ts": self._clock(),
+            "run_id": self.run_id,
+            "trace_id": self.trace_id,
+            "stage": stage,
+            "event": event,
+            "status": status,
+        }
+        if ms is not None:
+            entry["ms"] = int(ms)
+        if detail is not None:
+            entry["detail"] = str(detail)[:500]
+        with self._lock:
+            self._records.append(entry)
+
+    def stage(self, stage: str, status: str, *, ms: int | None = None,
+              detail: str | None = None) -> None:
+        self.record(stage=stage, event="stage", status=status, ms=ms, detail=detail)
+
+    def analyzer(self, name: str, status: str, *, stage: str = "scan_and_merge",
+                 ms: int | None = None, detail: str | None = None) -> None:
+        text = name if detail is None else f"{name}: {str(detail)[:480]}"
+        self.record(stage=stage, event="analyzer", status=status, ms=ms, detail=text)
+
+    def records(self) -> list[dict]:
+        with self._lock:
+            return list(self._records)
+
+    def flush(self, path) -> int:
+        """Write every record as JSONL; returns the record count."""
+        entries = self.records()
+        payload = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in entries)
+        with self._lock:
+            path.write_text(payload, encoding="utf-8")
+        return len(entries)
+
+
+def _utc_now_iso() -> str:
+    from datetime import datetime
+    return datetime.now(UTC).isoformat()
+
+
 __all__ = [
-    "ScanProgress",
-    "JsonScanProgress",
-    "create_progress",
     "PROGRESS_PROTOCOL_VERSION",
+    "EventLog",
+    "JsonScanProgress",
+    "ScanProgress",
+    "create_progress",
 ]

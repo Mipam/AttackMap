@@ -98,6 +98,7 @@ python -m tools.report_identity --corpus tests/fixtures/regression.yaml
 ### AR003 · Structured run event log
 **Phase** 0 · **Priority** High · **Effort** 1 d · **Depends** AR001 · **Blocks** AR083
 **Lease** `progress` · **Acceptance** AC-006
+**Status** DONE — `EventLog` in `progress.py`; stage start/end/skip emitted from `_diagnostic_phase` + `_deadline_hit`; analyzer start/end/error emitted from `analyze_repository(events=…)`; `events.jsonl` flushed into the generation dir before the pointer swap; live AC-006 snippet passed (19 records, 7 stages, 3 analyzers). Note: the `publication` stage legitimately records only `start` — the log is finalized by the commit it triggers
 
 **Files** `src/attackmap/progress.py`, `src/attackmap/pipeline.py`, `src/attackmap/artifact_publisher.py`
 
