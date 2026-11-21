@@ -196,16 +196,22 @@ class _FakeEntryPoints(list):
         return [ep for ep in self if ep.group == group]
 
 
-def test_third_party_analyzer_warns_and_is_skipped_when_trusted_only(
+def test_third_party_analyzer_is_refused_unless_allowed(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """AR006: non-official analyzers raise a typed refusal by default; the
+    env opt-in loads them, and the legacy trusted-only env stays a no-op."""
     eps = _FakeEntryPoints([_FakeEntryPoint("go", "evil-typosquat"), _FakeEntryPoint("go", "attackmap_analyzer_go")])
     monkeypatch.setattr(analyzers, "entry_points", lambda: eps)
+    monkeypatch.delenv(analyzers.ALLOW_UNTRUSTED_ENV, raising=False)
+    with pytest.raises(analyzers.UntrustedAnalyzerError) as excinfo:
+        discover_installed_analyzers()
+    assert "evil-typosquat" in str(excinfo.value)
+    assert "--allow-untrusted-analyzers" in str(excinfo.value)
+    monkeypatch.setenv(analyzers.ALLOW_UNTRUSTED_ENV, "1")
     with caplog.at_level(logging.WARNING, logger=analyzers.logger.name):
         assert len(discover_installed_analyzers()) == 2
-    assert "evil-typosquat" in caplog.text and "not an official" in caplog.text
-    monkeypatch.setenv("ATTACKMAP_TRUSTED_ANALYZERS_ONLY", "1")
-    assert len(discover_installed_analyzers()) == 1  # only the official distribution
+    assert "evil-typosquat" in caplog.text and "third-party analyzer" in caplog.text
 
 
 def test_trusted_only_flag_does_not_leak_into_the_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

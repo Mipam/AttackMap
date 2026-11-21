@@ -4,12 +4,14 @@ import pytest
 
 from attackmap.analyzer_contracts import normalize_analyzer_metadata
 from attackmap.analyzers import (
+    ALLOW_UNTRUSTED_ENV,
     ANALYZER_ENTRYPOINT_GROUP,
     AnalyzerMetadata,
     AnalyzerResult,
     BuiltinJavaScriptWebAnalyzer,
     BuiltinPythonWebAnalyzer,
     DefaultAnalyzer,
+    UntrustedAnalyzerError,
     analyze_repository,
     discover_installed_analyzers,
     get_analyzer_metadata,
@@ -40,7 +42,7 @@ def test_analyzer_result_reuses_scan_result_shape() -> None:
 
 
 def test_get_registered_analyzers_exposes_builtin_web_analyzers(monkeypatch) -> None:
-    monkeypatch.setattr("attackmap.analyzers.discover_installed_analyzers", lambda: [])
+    monkeypatch.setattr("attackmap.analyzers.discover_installed_analyzers", lambda **kwargs: [])
     analyzers = get_registered_analyzers()
 
     assert len(analyzers) == 9
@@ -125,9 +127,58 @@ def test_discover_installed_analyzers_loads_valid_entrypoints_in_name_order(monk
     )
     monkeypatch.setattr("attackmap.analyzers.entry_points", lambda: fake_points)
 
-    analyzers = discover_installed_analyzers()
+    analyzers = discover_installed_analyzers(allow_untrusted=True)
 
     assert [analyzer.name for analyzer in analyzers] == ["external-a", "external-b"]
+
+
+def test_discover_installed_analyzers_refuses_third_party_by_default(monkeypatch) -> None:
+    """AR006/AC-009: non-official entry points raise a typed refusal."""
+    class ExternalAnalyzer:
+        metadata = AnalyzerMetadata(
+            name="external-x",
+            description="external x",
+            scope="external analyzer test",
+            ecosystems=("php",),
+        )
+
+        @property
+        def name(self) -> str:
+            return "external-x"
+
+        def analyze(self, root: str | Path) -> AnalyzerResult:
+            return AnalyzerResult(root=str(root))
+
+    class FakeEntryPoint:
+        def __init__(self, name: str, value) -> None:
+            self.name = name
+            self._value = value
+
+        def load(self):
+            return self._value
+
+    class FakeEntryPoints:
+        def __init__(self, candidates) -> None:
+            self._candidates = candidates
+
+        def select(self, *, group: str):
+            if group != ANALYZER_ENTRYPOINT_GROUP:
+                return []
+            return self._candidates
+
+    monkeypatch.setattr(
+        "attackmap.analyzers.entry_points",
+        lambda: FakeEntryPoints([FakeEntryPoint("external-x", ExternalAnalyzer)]),
+    )
+
+    with pytest.raises(UntrustedAnalyzerError) as excinfo:
+        discover_installed_analyzers()
+    assert "external-x" in str(excinfo.value)
+    assert "--allow-untrusted-analyzers" in str(excinfo.value)
+    assert ALLOW_UNTRUSTED_ENV in str(excinfo.value)
+    # The env opt-in loads it.
+    monkeypatch.setenv(ALLOW_UNTRUSTED_ENV, "1")
+    assert [a.name for a in discover_installed_analyzers()] == ["external-x"]
 
 
 def test_discover_installed_analyzers_includes_php_web_when_installed() -> None:
@@ -221,7 +272,8 @@ def test_get_registered_analyzers_skips_duplicate_names(monkeypatch) -> None:
         def analyze(self, root: str | Path) -> AnalyzerResult:
             return AnalyzerResult(root=str(root))
 
-    monkeypatch.setattr("attackmap.analyzers.discover_installed_analyzers", lambda: [DuplicatePythonAnalyzer()])
+    monkeypatch.setattr("attackmap.analyzers.discover_installed_analyzers",
+                        lambda **kwargs: [DuplicatePythonAnalyzer()])
 
     analyzers = get_registered_analyzers()
 
@@ -327,7 +379,7 @@ def test_get_available_modules_returns_registered_metadata(monkeypatch) -> None:
 
 def test_get_analyzer_metadata_normalizes_external_rich_metadata_shape() -> None:
     class ExternalAnalyzer:
-        metadata = {
+        metadata = {  # noqa: RUF012 - duck-typed test fixture
             "name": "atproto",
             "display_name": "AT Protocol Analyzer",
             "version": "0.9.0",

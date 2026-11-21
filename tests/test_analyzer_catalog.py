@@ -62,7 +62,10 @@ class _Plugin:
 
 
 def _install(monkeypatch: pytest.MonkeyPatch, *points: _EntryPoint) -> _EntryPoints:
+    # AR006: third-party plugins are refused by default; catalog tests opt in
+    # explicitly so they can exercise loading, shadowing and metadata paths.
     monkeypatch.delenv(registry.TRUSTED_ONLY_ENV, raising=False)
+    monkeypatch.setenv(registry.ALLOW_UNTRUSTED_ENV, "1")
     entry_points = _EntryPoints(list(points))
     monkeypatch.setattr(registry, "entry_points", lambda: entry_points)
     return entry_points
@@ -109,7 +112,7 @@ def test_snapshot_metadata_matches_effective_run_order_and_loads_once(monkeypatc
     assert [item.model_dump() for item in snapshot.metadata] == [registry.get_analyzer_metadata(item).model_dump() for item in expected]
     assert payload["effective_order"][:2] == ["early", "aaa-tie"]
     assert payload["scope"] == "installed_discovery"
-    assert payload["policy"] == {"registry_precedence": "builtin_first_seen_name", "run_order": ["priority", "name"], "trusted_only": False}
+    assert payload["policy"] == {"registry_precedence": "builtin_first_seen_name", "run_order": ["priority", "name"], "trusted_only": False, "allow_untrusted": True}
     assert discovery.selections == 1 and early.loads == tie.loads == 1
     assert not any("executed" in row or "applicable" in row for row in payload["candidates"])
     assert _plugin_rows(payload)[0]["metadata"]["enabled_by_default"] is False
@@ -131,34 +134,35 @@ def test_plugin_name_collision_uses_entry_point_order_before_priority(monkeypatc
     assert snapshot.analyzers[-1] is first.loaded
 
 
-def test_trusted_only_records_third_party_without_loading_it(monkeypatch) -> None:
+def test_third_party_is_refused_by_default_and_legacy_env_is_a_noop(monkeypatch) -> None:
+    """AR006/AC-009: catalog discovery refuses non-official plugins."""
     third_party = _EntryPoint("external", _Plugin("external"))
     official = _EntryPoint("python", _Plugin("python"), package="attackmap-analyzer-python")
     _install(monkeypatch, third_party, official)
+    monkeypatch.delenv(registry.ALLOW_UNTRUSTED_ENV, raising=False)
+    # The legacy env used to enable refusal; refusal is now the default, so
+    # setting it must not change anything.
     monkeypatch.setenv(registry.TRUSTED_ONLY_ENV, "1")
 
-    payload = get_analyzer_catalog().to_dict()
-    rows = {row["name"]: row for row in _plugin_rows(payload)}
-
-    assert third_party.loads == 0 and official.loads == 1
-    assert rows["external"]["status"] == "skipped_policy"
-    assert rows["external"]["metadata"] is None
-    assert rows["external"]["official_package"] is False
-    assert rows["python"]["status"] == "effective"
-    assert rows["python"]["official_package"] is True
-    assert payload["policy"]["trusted_only"] is True
+    with pytest.raises(registry.UntrustedAnalyzerError) as excinfo:
+        get_analyzer_catalog()
+    assert "external" in str(excinfo.value)
+    # Nothing loaded: refusal precedes any plugin execution.
+    assert third_party.loads == 0 and official.loads == 0
 
 
-def test_third_party_is_effective_under_existing_default_policy(monkeypatch) -> None:
+def test_third_party_is_effective_under_explicit_opt_in(monkeypatch) -> None:
     point = _EntryPoint("external", _Plugin("external"))
     _install(monkeypatch, point)
 
-    row = _plugin_rows(get_analyzer_catalog().to_dict())[0]
+    payload = get_analyzer_catalog().to_dict()
+    row = _plugin_rows(payload)[0]
 
     assert row["status"] == "effective"
     assert row["official_package"] is False
     assert row["package"] == {"name": "third-party", "version": "2.3.4"}
     assert row["entry_point"] == {"name": "external", "group": registry.ANALYZER_ENTRYPOINT_GROUP, "value": "example.plugin:Analyzer"}
+    assert payload["policy"]["allow_untrusted"] is True
 
 
 def test_discovery_keeps_named_load_initialization_metadata_and_contract_errors(monkeypatch) -> None:
@@ -168,7 +172,7 @@ def test_discovery_keeps_named_load_initialization_metadata_and_contract_errors(
 
     class BrokenMetadata:
         name = "bad-meta"
-        metadata = {"name": "INVALID NAME"}
+        metadata = {"name": "INVALID NAME"}  # noqa: RUF012 - duck-typed test fixture
 
         def analyze(self, root):
             return None
@@ -316,6 +320,7 @@ def test_undiscovered_official_packages_are_distinct_from_failed_entry_points(mo
 def test_legacy_entry_point_mapping_still_supports_catalog(monkeypatch) -> None:
     point = _EntryPoint("external", _Plugin("external"))
     monkeypatch.delenv(registry.TRUSTED_ONLY_ENV, raising=False)
+    monkeypatch.setenv(registry.ALLOW_UNTRUSTED_ENV, "1")
     monkeypatch.setattr(registry, "entry_points", lambda: {registry.ANALYZER_ENTRYPOINT_GROUP: [point]})
 
     assert _plugin_rows(get_analyzer_catalog().to_dict())[0]["status"] == "effective"

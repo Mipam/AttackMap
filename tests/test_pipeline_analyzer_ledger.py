@@ -36,7 +36,7 @@ def _run(tmp_path, *, plugins, monkeypatch, explicit=True, profile_id=None):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "app.py").write_text("x = 1\n", encoding="utf-8")
-    monkeypatch.setattr(registry, "get_registered_analyzers", lambda: plugins)
+    monkeypatch.setattr(registry, "get_registered_analyzers", lambda **kwargs: plugins)
     output = tmp_path / "reports"
     state = run_scan(AnalyzeOptions(repo_path=repo, output=output, analyzers=plugins if explicit else None,
         analyzer_profile_id=profile_id, atomic_output=False, output_format="json", no_suppress=True,
@@ -65,7 +65,7 @@ def test_pipeline_detects_once_and_report_manifest_share_observed_outcomes(tmp_p
 def test_pipeline_preserves_automatic_skips_and_detect_error_without_claiming_success(tmp_path, monkeypatch):
     plugins = [CountingPlugin("opt-in", enabled=False), CountingPlugin("unmatched", detection=False),
                CountingPlugin("detect-error", detection=ValueError("PIPELINE_LEDGER_PRIVATE")), CountingPlugin("good")]
-    state, report, manifest = _run(tmp_path, plugins=plugins, monkeypatch=monkeypatch, explicit=False)
+    state, _report, manifest = _run(tmp_path, plugins=plugins, monkeypatch=monkeypatch, explicit=False)
     ledger = manifest["analyzer_run_ledger"]
     rows = {row["name"]: row for row in ledger["entries"]}
 
@@ -81,7 +81,7 @@ def test_pipeline_preserves_automatic_skips_and_detect_error_without_claiming_su
 
 def test_all_unmatched_publishes_decisions_and_retains_empty_legacy_selected_list(tmp_path, monkeypatch):
     plugin = CountingPlugin(detection=False)
-    state, report, manifest = _run(tmp_path, plugins=[plugin], monkeypatch=monkeypatch)
+    state, _report, manifest = _run(tmp_path, plugins=[plugin], monkeypatch=monkeypatch)
     assert state.analyzers == [] and manifest["analyzers"] == []
     assert manifest["analyzer_run_ledger"]["entries"][0]["execution"] == "skipped"
     assert manifest["analyzer_run_ledger"]["execution_complete"] is True
@@ -90,7 +90,7 @@ def test_all_unmatched_publishes_decisions_and_retains_empty_legacy_selected_lis
 
 def test_selected_analysis_failure_remains_failed_in_both_artifacts(tmp_path, monkeypatch):
     plugin = CountingPlugin(failure=True)
-    state, report, manifest = _run(tmp_path, plugins=[plugin], monkeypatch=monkeypatch)
+    _state, report, manifest = _run(tmp_path, plugins=[plugin], monkeypatch=monkeypatch)
     row = manifest["analyzer_run_ledger"]["entries"][0]
     assert row["selection"] == "selected" and row["execution"] == "failed"
     assert row["analysis_started"] is True
@@ -107,7 +107,7 @@ def test_deadline_before_scan_records_selected_but_unexecuted_analyzer(tmp_path,
         return False
     monkeypatch.setattr(TimeBudget, "check", deadline)
     plugin = CountingPlugin()
-    state, report, manifest = _run(tmp_path, plugins=[plugin], monkeypatch=monkeypatch)
+    _state, report, manifest = _run(tmp_path, plugins=[plugin], monkeypatch=monkeypatch)
     row = manifest["analyzer_run_ledger"]["entries"][0]
     assert plugin.detect_calls == 1 and plugin.analysis_calls == 0
     assert row["selection"] == "selected" and row["execution"] == "skipped"

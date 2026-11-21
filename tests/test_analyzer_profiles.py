@@ -1,7 +1,7 @@
 """Offline profile contracts and preservation of runner selection semantics."""
 
-from dataclasses import FrozenInstanceError
 import json
+from dataclasses import FrozenInstanceError
 
 import pytest
 
@@ -15,7 +15,6 @@ from attackmap.analyzer_profiles import (
     get_analyzer_profiles,
     resolve_analyzer_profile,
 )
-
 
 PROFILE_MODULES = {
     "automatic": (),
@@ -164,7 +163,7 @@ def test_runtime_detection_still_gates_explicit_opt_in_modules(monkeypatch, tmp_
             return self.name != "atproto"
 
     registered = [FakeAnalyzer(metadata) for metadata in full_metadata]
-    monkeypatch.setattr(analyzers, "get_registered_analyzers", lambda: registered)
+    monkeypatch.setattr(analyzers, "get_registered_analyzers", lambda **kwargs: registered)
     profile = resolve_analyzer_profile("node-atproto", full_metadata)
     explicit = [item for item in registered if item.name in profile.module_names]
     actual = analyzers.resolve_run_analyzers(tmp_path, analyzers=explicit)
@@ -190,7 +189,7 @@ def test_runtime_priority_and_name_order_are_not_profile_membership_order(monkey
     changed = [item.model_copy(update={"priority": 1}) if item.name == "node-atproto" else item for item in full_metadata]
     profile = resolve_analyzer_profile("node-atproto", changed)
     registered = [FakeAnalyzer(metadata) for metadata in changed if metadata.name in profile.module_names]
-    monkeypatch.setattr(analyzers, "get_registered_analyzers", lambda: registered)
+    monkeypatch.setattr(analyzers, "get_registered_analyzers", lambda **kwargs: registered)
     actual = analyzers.resolve_run_analyzers(tmp_path, analyzers=registered)
     assert profile.module_names[-1] == "node-atproto"
     assert profile.candidate_module_names == tuple(item.name for item in actual)

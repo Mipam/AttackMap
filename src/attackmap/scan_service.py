@@ -14,15 +14,16 @@ import sys
 import tempfile
 import time
 from collections import deque
+from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Callable
-
-from .application_errors import AnalysisAborted, AnalysisConfigurationError, AnalysisExit, emit_text
+from typing import Any
 
 from .analyzers import MissingAnalyzersError, select_requested_analyzers
 from .anomalies import route_auth_signals
+from .application_errors import AnalysisAborted, AnalysisConfigurationError, AnalysisExit, emit_text
 from .contracts import DeploymentAliases, link_contracts
 from .crossrepo import (
     find_cross_boundary_flows,
@@ -37,8 +38,14 @@ from .fleet import (
     render_fleet_graph_mermaid,
     render_fleet_summary,
 )
-from .fleet_admission import (FleetAdmissionError, FleetMemoryLedger, FleetMemoryPolicy,
-                              current_reservation, reservation_scope, unverified_fleet_cleanup)
+from .fleet_admission import (
+    FleetAdmissionError,
+    FleetMemoryLedger,
+    FleetMemoryPolicy,
+    current_reservation,
+    reservation_scope,
+    unverified_fleet_cleanup,
+)
 from .models import AttackPath, Finding, ScanResult
 from .pipeline import AnalyzeOptions, ScanAiLimits, run_scan
 from .run_contract import RunRequest
@@ -69,6 +76,8 @@ class ScanRequest:
     strict_suppressions: bool = False
     strict_analyzers: bool = False
     isolated_analyzers: bool = False
+    # AR006: opt in to loading non-official analyzer plugins (default refused).
+    allow_untrusted_analyzers: bool = False
     # C34/AM048: activate the per-file incremental cache (default off).
     incremental: bool = False
     time_budget_seconds: int | None = None
@@ -197,6 +206,7 @@ def _analyze_options(
         strict_suppressions=request.strict_suppressions,
         strict_analyzers=request.strict_analyzers,
         isolated_analyzers=request.isolated_analyzers,
+        allow_untrusted_analyzers=request.allow_untrusted_analyzers,
         progress_format=request.progress_format,
         no_progress=request.no_progress,
         secrets_history=request.secrets_history,
@@ -252,7 +262,7 @@ def _run_single_repo(request: ScanRequest, analyzers: list | None) -> RunSummary
         return RunSummary(exit_code=1, error=f"aborted: {exc}")
     except UnsafePathError as exc:
         raise ScanRequestError(str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001 — surface as failed scan
+    except Exception as exc:
         return RunSummary(exit_code=1, error=f"{type(exc).__name__}: {exc}")
 
     if request.fleet_result is not None and state.exit_code == 0:
@@ -549,7 +559,7 @@ def _run_fleet_repo_worker(
                 **({"index_byte_budget": index_byte_budget} if index_byte_budget is not None else {}))
         except FleetAdmissionError:
             raise
-        except Exception as exc:  # noqa: BLE001 — surface parse/load errors as a repo failure
+        except Exception as exc:
             raise _FleetRepoError(
                 repo_id, str(repo_path), f"failed to load report: {type(exc).__name__}: {exc}"
             ) from exc
@@ -572,7 +582,7 @@ def _run_fleet_serial(
     output_root: Path,
 ) -> None:
     """Sequential per-repo scan used when max_workers == 1."""
-    for repo_id, repo_path in zip(fleet_repo_ids(request.repo_paths), request.repo_paths):
+    for repo_id, repo_path in zip(fleet_repo_ids(request.repo_paths), request.repo_paths, strict=True):
         if request.cancel_check is not None and request.cancel_check():
             break
         request.echo("")
@@ -596,7 +606,7 @@ def _run_fleet_serial(
             )
         except AnalysisConfigurationError as exc:
             raise ScanRequestError(str(exc)) from exc
-        except Exception as exc:  # noqa: BLE001 — one bad repo must not sink the fleet (#217)
+        except Exception as exc:
             message = f"{type(exc).__name__}: {exc}"
             request.echo(f"Error: {repo_id} failed and was skipped — {message}", err=True)
             fleet.failed.append({"repo_id": repo_id, "root": str(repo_path), "error": message})
@@ -626,7 +636,7 @@ def _run_fleet_parallel(
     repo_ids = fleet_repo_ids(request.repo_paths)
     input_quotas = _fleet_input_quotas(request.fleet_input_byte_budget, repo_ids)
     pending: list[tuple[str, Path]] = [
-        (repo_id, repo_path) for repo_id, repo_path in zip(repo_ids, request.repo_paths)
+        (repo_id, repo_path) for repo_id, repo_path in zip(repo_ids, request.repo_paths, strict=True)
     ]
     ledger = FleetMemoryLedger(request.fleet_memory_policy) if request.fleet_memory_policy is not None else None
 
@@ -720,7 +730,7 @@ def _run_fleet_parallel(
                         request.fleet_event({"repo_id": repo_id, "state": "failed"})
                 except FleetAdmissionError as exc:
                     admission_failure(repo_id, repo_path, exc)
-                except Exception as exc:  # noqa: BLE001 — worker bugs must not sink the fleet
+                except Exception as exc:
                     message = f"{type(exc).__name__}: {exc}"
                     request.echo(
                         f"Error: {repo_id} failed and was skipped - {message}", err=True
@@ -956,7 +966,11 @@ def _run_fleet(request: ScanRequest, analyzers: list | None) -> RunSummary:
         return _run_fleet_generation(request, analyzers)
     from .artifact_manifest import make_run_id
     from .artifact_publisher import (
-        diagnostic_context_from_generation, export_compatibility, generation_dir, publish_generation, write_diagnostic,
+        diagnostic_context_from_generation,
+        export_compatibility,
+        generation_dir,
+        publish_generation,
+        write_diagnostic,
     )
     from .diagnostics import unknown_diagnostic
     base = Path(request.output)
@@ -982,10 +996,9 @@ def _run_fleet(request: ScanRequest, analyzers: list | None) -> RunSummary:
         summary.exit_code = 130
         return summary
     except BaseException as exc:
-        try:
+        # Diagnostic storage must not mask the original failure.
+        with suppress(OSError, ValueError):
             diagnostic("cancelled" if isinstance(exc, KeyboardInterrupt) else "failed")
-        except (OSError, ValueError):
-            pass
         raise
     try:
         export_compatibility(base, stage, output_format=request.output_format)
@@ -1011,13 +1024,12 @@ def execute_scan_request(request: ScanRequest) -> RunSummary:
             from .artifact_manifest import make_run_id
             from .artifact_publisher import write_diagnostic
             from .diagnostics import startup_diagnostic
-            try:
+            # Diagnostic storage cannot mask the typed request error.
+            with suppress(OSError, ValueError):
                 write_diagnostic(request.output, request.run_id or make_run_id(), state="failed",
                     error="Request configuration unavailable.",
                     context=startup_diagnostic("request_validation",
                         duration_milliseconds=validation_duration))
-            except (OSError, ValueError):
-                pass  # Diagnostic storage cannot mask the typed request error.
         raise ScanRequestError("At least one repository path is required.")
 
     if request.fleet_input_byte_budget is not None:
@@ -1039,7 +1051,7 @@ def execute_scan_request(request: ScanRequest) -> RunSummary:
         analyzers = request.analyzers
         if request.analyzer_profile_id is not None:
             from .analyzer_profiles import get_analyzer_profiles, resolve_analyzer_profile
-            from .analyzers import get_registered_analyzers, get_analyzer_metadata
+            from .analyzers import get_analyzer_metadata, get_registered_analyzers
             if request.modules or request.install_missing:
                 raise ValueError("Analyzer profiles cannot be combined with explicit modules or installation")
             definition = next((p for p in get_analyzer_profiles()
@@ -1053,7 +1065,7 @@ def execute_scan_request(request: ScanRequest) -> RunSummary:
             else:
                 registered = analyzers if analyzers is not None else get_registered_analyzers()
                 metadata = [get_analyzer_metadata(a) for a in registered]
-                if any(a.name != meta.name for a, meta in zip(registered, metadata)):
+                if any(a.name != meta.name for a, meta in zip(registered, metadata, strict=True)):
                     raise ValueError("Analyzer runtime names do not match their declared metadata; profile unavailable.")
                 selection = resolve_analyzer_profile(definition.qualified_name, metadata)
                 by_name = {a.name: a for a in registered}
@@ -1069,14 +1081,13 @@ def execute_scan_request(request: ScanRequest) -> RunSummary:
             from .artifact_manifest import make_run_id
             from .artifact_publisher import write_diagnostic
             from .diagnostics import startup_diagnostic
-            try:
+            # Preserve the typed configuration failure if diagnostics cannot be written.
+            with suppress(OSError, ValueError):
                 write_diagnostic(request.output, request.run_id or make_run_id(), state="failed",
                                  error="Requested analyzer configuration unavailable.",
                                  context=startup_diagnostic("select_analyzers",
                                      duration_milliseconds=selection_duration,
                                      requested_analyzers=request.modules))
-            except (OSError, ValueError):
-                pass  # Preserve the typed configuration failure if diagnostics cannot be written.
         raise ScanRequestError(str(exc)) from exc
 
     if len(request.repo_paths) == 1:

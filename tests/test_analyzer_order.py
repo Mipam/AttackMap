@@ -42,7 +42,7 @@ def _repo(tmp_path: Path) -> Path:
 
 def _registry(monkeypatch: pytest.MonkeyPatch, *plugins: _Plugin) -> None:
     monkeypatch.setattr(
-        analyzers_mod, "get_registered_analyzers", lambda: [*get_builtin_repository_analyzers(), *plugins]
+        analyzers_mod, "get_registered_analyzers", lambda **kwargs: [*get_builtin_repository_analyzers(), *plugins]
     )
 
 

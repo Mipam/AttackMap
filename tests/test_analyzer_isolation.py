@@ -93,7 +93,7 @@ def test_cli_reports_and_strict_fails(tmp_path: Path, monkeypatch: pytest.Monkey
     monkeypatch.setattr(
         analyzers_mod,
         "get_registered_analyzers",
-        lambda: [_Bad("broken", RuntimeError("plugin bug")), BuiltinPythonWebAnalyzer()],
+        lambda **kwargs: [_Bad("broken", RuntimeError("plugin bug")), BuiltinPythonWebAnalyzer()],
     )
     runner = CliRunner()
     out = tmp_path / "out"

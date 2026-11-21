@@ -300,7 +300,7 @@
       "phase": 0,
       "priority": "High",
       "effort_days": 0.5,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR001"
       ],
@@ -317,7 +317,9 @@
         "src/attackmap/ui/config.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "tests/test_analyzer_trust.py 4/4: default refusal names analyzer+flag; --allow-untrusted-analyzers and env opt-in load; legacy TRUSTED env noop; catalog/ledger/profile tests updated to new contract"
+      ]
     },
     {
       "id": "AR007",

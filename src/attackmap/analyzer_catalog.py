@@ -7,14 +7,14 @@ not an attestation of the installed source or of a locked upstream commit.
 
 from __future__ import annotations
 
-from copy import deepcopy
-from dataclasses import dataclass, field
-from importlib.metadata import PackageNotFoundError, version
 import hashlib
 import inspect
 import json
-from pathlib import Path
 import re
+from copy import deepcopy
+from dataclasses import dataclass, field
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
@@ -145,6 +145,8 @@ class AnalyzerDiscoveryCollector:
     """Optional observer used by the existing discovery and registry functions."""
 
     trusted_only: bool
+    # AR006: non-official plugins are refused unless explicitly allowed.
+    allow_untrusted: bool = False
     candidates: list[dict[str, object]] = field(default_factory=list)
     loaded: list[tuple[AnalyzerProtocol, dict[str, object]]] = field(default_factory=list)
     errors: list[dict[str, str | None]] = field(default_factory=list)
@@ -219,6 +221,7 @@ class AnalyzerCatalogSnapshot:
                 "registry_precedence": "builtin_first_seen_name",
                 "run_order": ["priority", "name"],
                 "trusted_only": self._collector.trusted_only,
+                "allow_untrusted": self._collector.allow_untrusted,
             },
             "effective_order": [analyzer.name for analyzer in self.analyzers],
             "candidates": self._collector.candidates,
@@ -230,9 +233,16 @@ class AnalyzerCatalogSnapshot:
 
 def get_analyzer_catalog() -> AnalyzerCatalogSnapshot:
     """Discover once, preserving registry precedence and the effective run order."""
-    from .analyzers import _run_order_key, get_analyzer_metadata, get_registered_analyzers, trusted_analyzers_only
+    from .analyzers import (
+        _run_order_key,
+        allow_untrusted_analyzers,
+        get_analyzer_metadata,
+        get_registered_analyzers,
+        trusted_analyzers_only,
+    )
 
-    collector = AnalyzerDiscoveryCollector(trusted_only=trusted_analyzers_only())
+    collector = AnalyzerDiscoveryCollector(trusted_only=trusted_analyzers_only(),
+                                           allow_untrusted=allow_untrusted_analyzers())
     analyzers = tuple(sorted(get_registered_analyzers(catalog=collector), key=_run_order_key))
     metadata = tuple(get_analyzer_metadata(analyzer) for analyzer in analyzers)
     return AnalyzerCatalogSnapshot(analyzers, metadata, collector)

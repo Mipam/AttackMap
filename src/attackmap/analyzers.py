@@ -436,6 +436,7 @@ def get_builtin_repository_analyzers() -> list[Analyzer]:
 _OFFICIAL_BY_PACKAGE = {entry["package"]: entry for entry in OFFICIAL_PLUGINS}
 TRUSTED_ONLY_ENV = "ATTACKMAP_TRUSTED_ANALYZERS_ONLY"
 ALLOW_SYSTEM_INSTALL_ENV = "ATTACKMAP_ALLOW_SYSTEM_INSTALL"
+ALLOW_UNTRUSTED_ENV = "ATTACKMAP_ALLOW_UNTRUSTED_ANALYZERS"
 
 
 class MissingAnalyzersError(ValueError):
@@ -446,12 +447,41 @@ class MissingAnalyzersError(ValueError):
         super().__init__(f"Requested analyzer module(s) not available: {', '.join(missing)}")
 
 
+class UntrustedAnalyzerError(PermissionError):
+    """A non-official analyzer entry point was refused (AR006, AC-009).
+
+    Secure by default: only official, lock-pinned plugins load. The message
+    names the analyzer and the exact opt-in, so the remedy is on screen.
+    """
+
+    def __init__(self, analyzer: str, reason: str) -> None:
+        self.analyzer = analyzer
+        self.reason = reason
+        super().__init__(
+            f"Analyzer '{analyzer}' refused: {reason}. "
+            f"Pass --allow-untrusted-analyzers (or set {ALLOW_UNTRUSTED_ENV}=1) "
+            "to load non-official analyzers."
+        )
+
+
 def official_plugin(name: str) -> dict | None:
     """The lock entry for an official analyzer (by analyzer, package or repo name)."""
     return _OFFICIAL_BY_PACKAGE.get(_normalize_repo_name(name))
 
 
+def allow_untrusted_analyzers() -> bool:
+    """Whether non-official analyzer entry points may load (env opt-in)."""
+    return os.environ.get(ALLOW_UNTRUSTED_ENV, "").strip().lower() in {"1", "true", "yes"}
+
+
 def trusted_analyzers_only() -> bool:
+    """Legacy compatibility no-op (AR006).
+
+    ``ATTACKMAP_TRUSTED_ANALYZERS_ONLY`` used to opt into refusing
+    non-official analyzers; refusing is now the default, so this env var no
+    longer changes behaviour. It is still accepted (and still reported by the
+    CLI/GUI plumbing) so older wrappers and frozen builds keep working.
+    """
     return os.environ.get(TRUSTED_ONLY_ENV, "").strip().lower() in {"1", "true", "yes"}
 
 
@@ -465,7 +495,15 @@ def discover_installed_analyzers(
     group: str = ANALYZER_ENTRYPOINT_GROUP,
     *,
     catalog: AnalyzerDiscoveryCollector | None = None,
+    allow_untrusted: bool | None = None,
 ) -> list[Analyzer]:
+    """Discover entry-point analyzers, refusing non-official ones by default.
+
+    Secure by default (AR006/AC-009): only official, lock-pinned plugin
+    distributions load. Anything else raises :class:`UntrustedAnalyzerError`
+    unless ``allow_untrusted`` is True (``--allow-untrusted-analyzers``) or
+    ``ATTACKMAP_ALLOW_UNTRUSTED_ANALYZERS=1``.
+    """
     discovered: list[Analyzer] = []
     try:
         all_entry_points = entry_points()
@@ -479,25 +517,29 @@ def discover_installed_analyzers(
         catalog.errors.append({"stage": "entry_points", "error_type": _log_exception_type(exc)})
         return discovered
 
-    trusted_only = trusted_analyzers_only()
+    if allow_untrusted is None:
+        allow_untrusted = allow_untrusted_analyzers()
     for analyzer_entry_point in sorted(candidates, key=lambda candidate: candidate.name):
         # Any installed distribution can register an analyzer and run inside
-        # every scan (#237): flag ones that aren't official plugins, and skip
-        # them entirely in trusted-only mode (the GitHub Action's default).
+        # every scan (#237): official, lock-pinned plugins load by default;
+        # everything else is refused unless explicitly allowed (AR006).
         distribution = _entry_point_distribution(analyzer_entry_point)
         record = catalog.entry_point(analyzer_entry_point, distribution, group) if catalog is not None else None
         if distribution not in _OFFICIAL_BY_PACKAGE:
             entry_name = _log_identity(getattr(analyzer_entry_point, "name", None))
-            if trusted_only:
-                logger.warning(
-                    "Skipping analyzer '%s' from '%s': not an official AttackMap plugin "
-                    "(trusted-analyzers-only).", entry_name, _log_identity(distribution)
-                )
+            if not allow_untrusted:
                 if record is not None:
-                    record["status"] = "skipped_policy"
-                continue
+                    record["status"] = "refused_policy"
+                raise UntrustedAnalyzerError(
+                    analyzer=entry_name,
+                    reason=(
+                        f"not an official AttackMap plugin (installed via "
+                        f"'{_log_identity(distribution)}')"
+                    ),
+                )
             logger.warning(
-                "Loading third-party analyzer '%s' from '%s' (not an official AttackMap plugin).",
+                "Loading third-party analyzer '%s' from '%s' "
+                "(--allow-untrusted-analyzers).",
                 entry_name, _log_identity(distribution),
             )
         if catalog is None:
@@ -588,14 +630,18 @@ def _is_valid_analyzer(candidate: object) -> bool:
     return isinstance(metadata.name, str) and bool(metadata.name.strip())
 
 
-def get_registered_analyzers(*, catalog: AnalyzerDiscoveryCollector | None = None) -> list[Analyzer]:
+def get_registered_analyzers(
+    *,
+    catalog: AnalyzerDiscoveryCollector | None = None,
+    allow_untrusted: bool | None = None,
+) -> list[Analyzer]:
     builtins = get_builtin_repository_analyzers()
     if catalog is None:
-        installed = discover_installed_analyzers()
+        installed = discover_installed_analyzers(allow_untrusted=allow_untrusted)
     else:
         for analyzer in builtins:
             catalog.builtin(analyzer, get_analyzer_metadata(analyzer))
-        installed = discover_installed_analyzers(catalog=catalog)
+        installed = discover_installed_analyzers(catalog=catalog, allow_untrusted=allow_untrusted)
     analyzers = [*builtins, *installed]
     deduplicated: list[Analyzer] = []
     seen_names: set[str] = set()
@@ -803,6 +849,7 @@ def analyze_repository(
     index: object | None = None,
     run_plan: AnalyzerRunPlan | None = None,
     events: EventLog | None = None,
+    allow_untrusted: bool | None = None,
 ) -> AnalyzerResult:
     """Run every active analyzer and merge their results.
 
@@ -826,7 +873,7 @@ def analyze_repository(
         raise ValueError("Captured index does not belong to this repository")
     if run_plan is not None and analyzers is not None:
         raise ValueError("Pass an analyzer run plan or analyzer instances, not both")
-    plan = run_plan if run_plan is not None else resolve_analyzer_run(repo_root, analyzers=analyzers, index=index, progress=progress)
+    plan = run_plan if run_plan is not None else resolve_analyzer_run(repo_root, analyzers=analyzers, index=index, progress=progress, allow_untrusted=allow_untrusted)
     plan.claim(repo_root, index)
     active_analyzers = plan.analyzers
     results: list[AnalyzerResult] = []
@@ -1054,6 +1101,7 @@ def resolve_run_analyzers(
     *,
     run_plan: AnalyzerRunPlan | None = None,
     progress: ScanProgress | None = None,
+    allow_untrusted: bool | None = None,
 ) -> list[Analyzer]:
     """The analyzers to run on ``root``, in ``(priority, name)`` order (#221).
 
@@ -1070,7 +1118,7 @@ def resolve_run_analyzers(
         assert analyzers is not None
         registered = sorted(list(analyzers), key=_run_order_key)
     else:
-        registered = sorted(get_registered_analyzers(), key=_run_order_key)
+        registered = sorted(get_registered_analyzers(allow_untrusted=allow_untrusted), key=_run_order_key)
     selected: list[Analyzer] = []
     selected_records = []
     if run_plan is not None:
@@ -1139,6 +1187,7 @@ def resolve_analyzer_run(
     profile_id: str | None = None,
     opt_in_matches: list[str] | None = None,
     progress: ScanProgress | None = None,
+    allow_untrusted: bool | None = None,
 ) -> AnalyzerRunPlan:
     """Resolve once against one capture; the returned plan can execute once."""
     from .analyzer_run_ledger import AnalyzerRunLedger, AnalyzerRunPlan
@@ -1152,7 +1201,8 @@ def resolve_analyzer_run(
         selection_mode="automatic" if analyzers is None else "explicit",
         inventory_scope="registered_candidates" if analyzers is None else "supplied_candidates",
         profile_id=profile_id))
-    resolve_run_analyzers(repo_root, analyzers=analyzers, opt_in_matches=opt_in_matches, run_plan=plan, progress=progress)
+    resolve_run_analyzers(repo_root, analyzers=analyzers, opt_in_matches=opt_in_matches,
+                          run_plan=plan, progress=progress, allow_untrusted=allow_untrusted)
     return plan
 
 

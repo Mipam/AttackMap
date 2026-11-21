@@ -5,12 +5,15 @@ import os
 import shlex
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
 import typer
 
+from . import __version__
 from .analyzers import (
+    ALLOW_UNTRUSTED_ENV,
     TRUSTED_ONLY_ENV,
     MissingAnalyzersError,
     analyzer_install_command,
@@ -19,20 +22,25 @@ from .analyzers import (
     install_analyzer_module,
     select_requested_analyzers,
 )
-from .progress import PROGRESS_PROTOCOL_VERSION
 from .incremental import INCREMENTAL_ENV
-from .scan_service import ScanRequest, ScanRequestError, execute_scan_request
+from .pipeline import (
+    HUNT_BANNER as HUNT_BANNER,
+)
+from .pipeline import (
+    REMEDIATION_BANNER as REMEDIATION_BANNER,
+)
+from .pipeline import (
+    TRIAGE_BANNER as TRIAGE_BANNER,
+)
+
 # Preserve the CLI's banner imports after orchestration moved to the pipeline.
 from .pipeline import (
     ScanAiLimits,
-    HUNT_BANNER as HUNT_BANNER,
-    REMEDIATION_BANNER as REMEDIATION_BANNER,
-    TRIAGE_BANNER as TRIAGE_BANNER,
 )
-from .review_prompts import HUNT_LENSES
-from . import __version__
-from .safe_fs import UnsafePathError, ensure_output_dir, safe_write_text
 from .report import OUTPUT_FORMATS
+from .review_prompts import HUNT_LENSES
+from .safe_fs import UnsafePathError, ensure_output_dir, safe_write_text
+from .scan_service import ScanRequest, ScanRequestError, execute_scan_request
 from .suggest import detect_ecosystems
 
 app = typer.Typer(help="AttackMap: understand your system and map your attack surface.")
@@ -70,7 +78,7 @@ def _select_modules(module: list[str], install_missing: bool) -> list:
 def _select_analyzer_profile(profile_name: str, module: list[str] | None, install_missing: bool) -> list | None:
     """Expand an offline profile without entering the interactive install path."""
     from .analyzer_profiles import get_analyzer_profiles, resolve_analyzer_profile
-    from .analyzers import get_registered_analyzers, get_analyzer_metadata
+    from .analyzers import get_analyzer_metadata, get_registered_analyzers
 
     if install_missing:
         raise typer.BadParameter("--install-missing cannot be combined with --analyzer-profile.")
@@ -87,7 +95,7 @@ def _select_analyzer_profile(profile_name: str, module: list[str] | None, instal
     registered = get_registered_analyzers()
     try:
         metadata = [get_analyzer_metadata(a) for a in registered]
-        if any(a.name != meta.name for a, meta in zip(registered, metadata)):
+        if any(a.name != meta.name for a, meta in zip(registered, metadata, strict=True)):
             raise ValueError("Analyzer runtime names do not match their declared metadata; profile unavailable.")
         selection = resolve_analyzer_profile(profile_name, metadata)
     except ValueError as exc:
@@ -118,14 +126,13 @@ def _select_modules_for_output(module: list[str], install_missing: bool, output:
             from .artifact_manifest import make_run_id
             from .artifact_publisher import write_diagnostic
             from .diagnostics import startup_diagnostic
-            try:
+            # Diagnostic storage must not replace the original usage error.
+            with suppress(OSError, ValueError):
                 write_diagnostic(Path(output), run_id or make_run_id(), state="failed",
                                  error="Requested analyzer configuration unavailable.",
                                  context=startup_diagnostic("select_analyzers",
                                      duration_milliseconds=selection_duration,
                                      requested_analyzers=module))
-            except (OSError, ValueError):
-                pass  # Diagnostic storage must not replace the original usage error.
         raise
 
 
@@ -331,6 +338,8 @@ def _run_fleet(
     except ScanRequestError as exc:
         raise typer.BadParameter(str(exc)) from exc
     if summary.exit_code:
+        if summary.error:
+            typer.echo(f"Error: {summary.error}", err=True)
         raise typer.Exit(code=summary.exit_code)
 
 
@@ -370,7 +379,13 @@ def analyze(
     trusted_analyzers_only: bool = typer.Option(
         False,
         "--trusted-analyzers-only",
-        help=f"Load only official AttackMap analyzer plugins; skip any other installed package that registers one (also via {TRUSTED_ONLY_ENV}=1).",
+        help=f"Legacy compatibility flag (no effect): non-official analyzers are now refused by default; use --allow-untrusted-analyzers to opt in. Still accepted, also settable via {TRUSTED_ONLY_ENV}=1.",
+    ),
+    allow_untrusted_analyzers: bool = typer.Option(
+        False,
+        "--allow-untrusted-analyzers",
+        help="Load non-official analyzer plugins (secure default refuses them). "
+        f"Also via {ALLOW_UNTRUSTED_ENV}=1. Only official, lock-pinned plugins load otherwise.",
     ),
     llm: bool = typer.Option(
         False,
@@ -679,13 +694,12 @@ def analyze(
             from .artifact_manifest import make_run_id
             from .artifact_publisher import write_diagnostic
             from .diagnostics import startup_diagnostic
-            try:
+            # Keep the original semantic usage error if storage is unavailable.
+            with suppress(OSError, ValueError):
                 write_diagnostic(Path(output), run_id or make_run_id(), state="failed",
                     error="Request configuration unavailable.",
                     context=startup_diagnostic("request_validation",
                         duration_milliseconds=validation_duration))
-            except (OSError, ValueError):
-                pass  # Keep the original semantic usage error if storage is unavailable.
         raise
 
     # Multi-repo fleet mode (#146a): scan each repo independently and assemble a
@@ -740,6 +754,7 @@ def analyze(
         strict_suppressions=strict_suppressions,
         strict_analyzers=strict_analyzers,
         isolated_analyzers=isolated_analyzers,
+        allow_untrusted_analyzers=allow_untrusted_analyzers,
         incremental=incremental or os.environ.get(INCREMENTAL_ENV) == "1",
         progress_format=progress_format,
         no_progress=no_progress,
@@ -773,11 +788,12 @@ def analyze(
     except ScanRequestError as exc:
         raise typer.BadParameter(str(exc)) from exc
     if summary.exit_code:
+        if summary.error:
+            typer.echo(f"Error: {summary.error}", err=True)
         raise typer.Exit(code=summary.exit_code)
 
 
 
-from .desktop_capabilities import CAPABILITIES_SCHEMA_VERSION
 
 
 @app.command("capabilities")
@@ -928,7 +944,7 @@ def suggest(
         typer.echo(f"Installing {s.plugin}…")
         try:
             install_analyzer_module(s.plugin)
-        except Exception as exc:  # noqa: BLE001 — surface pip failures verbatim
+        except Exception as exc:
             typer.echo(f"  Failed: {exc}")
             raise typer.Exit(code=1) from exc
     typer.echo("Done.")
@@ -1092,7 +1108,7 @@ def diagnostics(
             typer.echo(json.dumps(collect_diagnostic_export(output_dir, max_generations=max_generations), indent=2))
     except (OSError, ValueError) as exc:
         typer.echo(f"Diagnostic export failed: {exc}", err=True)
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=2) from exc
 
 
 @app.command("ui")

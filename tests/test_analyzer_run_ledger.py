@@ -1,18 +1,21 @@
 from __future__ import annotations
 
-from copy import copy
 import json
-from pathlib import Path
+from copy import copy
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 
 from attackmap import analyzers as registry
 from attackmap.analyzer_contracts import AnalyzerMetadata
 from attackmap.analyzer_host import HOST_INPUT_INVALID, HOST_TIMEOUT, IsolatedOutcome
-from attackmap.analyzer_run_ledger import AnalyzerLifecycleEvent, AnalyzerRunLedger, analyzer_run_identity
+from attackmap.analyzer_run_ledger import (
+    AnalyzerLifecycleEvent,
+    AnalyzerRunLedger,
+    analyzer_run_identity,
+)
 from attackmap.models import Route, ScanResult
-
 
 PRIVATE = "LEDGER_PRIVATE_SOURCE token=unknown C:/private/source.py"
 
@@ -69,7 +72,7 @@ def test_selection_is_pending_and_flaky_detector_is_not_called_again(tmp_path):
 def test_automatic_decisions_distinguish_opt_in_unmatched_and_detect_error(tmp_path, monkeypatch):
     candidates = [Plugin("opt-in", enabled=False), Plugin("unmatched", detection=False),
                   Plugin("detect-error", detection=ValueError(PRIVATE)), Plugin("good")]
-    monkeypatch.setattr(registry, "get_registered_analyzers", lambda: candidates)
+    monkeypatch.setattr(registry, "get_registered_analyzers", lambda **kwargs: candidates)
     hints = []
 
     plan = registry.resolve_analyzer_run(tmp_path, opt_in_matches=hints)
@@ -275,7 +278,7 @@ def test_monotonic_timing_order_counts_and_safe_live_progress(tmp_path, monkeypa
     ticks = count(0, 0.125)
     monkeypatch.setattr("attackmap.analyzer_run_ledger.time.monotonic", lambda: next(ticks))
     class Progress:
-        labels = []
+        labels: ClassVar[list[str]] = []
         def stage(self, label):
             self.labels.append(label)
         def done(self):
@@ -332,10 +335,11 @@ def test_provenance_failure_is_timed_and_recorded_before_strict_raise(tmp_path, 
 
 def test_detection_and_selection_stage_feed_is_ordered_and_private(tmp_path, monkeypatch):
     from io import StringIO
+
     from attackmap.progress import JsonScanProgress
     candidates = [Plugin("detect-error", detection=ValueError(PRIVATE)), Plugin("good"),
                   Plugin("opt-in", enabled=False), Plugin("unmatched", detection=False)]
-    monkeypatch.setattr(registry, "get_registered_analyzers", lambda: candidates)
+    monkeypatch.setattr(registry, "get_registered_analyzers", lambda **kwargs: candidates)
     stream = StringIO()
     progress = JsonScanProgress(stream=stream)
     plan = registry.resolve_analyzer_run(tmp_path, progress=progress)

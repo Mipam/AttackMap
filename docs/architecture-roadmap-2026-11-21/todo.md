@@ -164,6 +164,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR006 · Secure-by-default analyzer trust
 **Phase** 0 · **Priority** High · **Effort** 0.5 d · **Depends** AR001 · **Blocks** AR069
 **Lease** `analyzers-trust` · **Acceptance** AC-009
+**Status** DONE — `UntrustedAnalyzerError` names analyzer + flag; discovery refuses non-official entry points unless `--allow-untrusted-analyzers` / `ATTACKMAP_ALLOW_UNTRUSTED_ANALYZERS=1`; legacy `ATTACKMAP_TRUSTED_ANALYZERS_ONLY` kept as documented no-op; flag threaded CLI → ScanRequest → AnalyzeOptions → resolve chain; catalog payload gains `policy.allow_untrusted`; CLI now echoes `summary.error` before exiting; `tests/test_analyzer_trust.py` 4/4 (refusal/flag/env/noop)
 
 **Files** `src/attackmap/analyzers.py`, `src/attackmap/cli.py`, `src/attackmap/ui/config.py`
 

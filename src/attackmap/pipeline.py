@@ -165,6 +165,7 @@ class AnalyzeOptions:
     strict_suppressions: bool = False
     strict_analyzers: bool = False
     isolated_analyzers: bool = False
+    allow_untrusted_analyzers: bool = False
     progress_format: str = "auto"
     no_progress: bool = False
     secrets_history: int = 0
@@ -436,6 +437,7 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
             repo_path, analyzers=options.analyzers, opt_in_matches=opt_in_matches,
             run_plan=state.analyzer_run_plan,
             progress=scan_progress,
+            allow_untrusted=options.allow_untrusted_analyzers or None,
         )
 
     try:
