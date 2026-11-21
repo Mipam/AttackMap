@@ -1,3 +1,40 @@
+# Deterministic line endings for text files (AR005).
+# Policy without a global renormalize: this governs future check-ins; the
+# working tree is not rewritten, and no mass EOL churn commit is created.
+* text=auto
+*.py   text eol=lf
+*.pyi  text eol=lf
+*.sh   text eol=lf
+*.md   text
+*.rst  text
+*.txt  text
+*.toml text
+*.cfg  text
+*.ini  text
+*.json text
+*.yaml text
+*.yml  text
+*.html text
+*.css  text
+*.js   text
+*.ts   text
+# Windows scripts keep CRLF; cmd and PowerShell expect it.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+# Binary artifacts never normalized.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.whl binary
+*.exe binary
+*.dll binary
+*.p12 binary
+
 # Prepared cross-platform patches/producer fixtures carry raw-byte SHA-256.
+# (Retained evidence: byte-exact, never renormalized — must stay last.)
 docs/verification/windows-parity/WP028/** -text
 docs/verification/windows-parity/WP032/r3-candidate-20261021-a/** -text

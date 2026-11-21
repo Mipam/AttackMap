@@ -272,7 +272,7 @@
       "phase": 0,
       "priority": "Medium",
       "effort_days": 0.5,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR001"
       ],
@@ -288,7 +288,9 @@
         "tests/unit/test_encoding.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "tests/unit/test_encoding.py 2/2 pass (src+pyproject already had zero U+FFFD, strict-UTF8 added); .gitattributes policy without global renormalize; CI lint job gained the U+FFFD step"
+      ]
     },
     {
       "id": "AR006",

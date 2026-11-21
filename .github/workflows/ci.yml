@@ -66,6 +66,21 @@ jobs:
         continue-on-error: true
         run: ruff check --select "${RUFF_SELECT}" --ignore E501 . --statistics
 
+      - name: Encoding integrity (no U+FFFD, AR005)
+        run: |
+          python -I - <<'PY'
+          import pathlib, sys
+          bad = []
+          files = sorted(pathlib.Path('src').rglob('*.py')) + [pathlib.Path('pyproject.toml')]
+          for p in files:
+              t = p.read_text(encoding='utf-8', errors='strict')
+              if '\ufffd' in t:
+                  bad.append(str(p))
+          for b in bad:
+              print('U+FFFD in', b)
+          sys.exit(1 if bad else 0)
+          PY
+
   types:
     name: mypy (strict island + report)
     runs-on: ubuntu-latest

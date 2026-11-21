@@ -142,6 +142,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR005 · Encoding integrity
 **Phase** 0 · **Priority** Medium · **Effort** 0.5 d · **Depends** AR001 · **Blocks** —
 **Lease** `encoding` · **Acceptance** AC-008
+**Status** DONE — `tests/unit/test_encoding.py` (no U+FFFD + strict UTF-8, both green; `src/` and `pyproject.toml` already clean so no repair needed), `.gitattributes` text policy (LF for py/sh, CRLF for bat/ps1, evidence `-text` exceptions kept, no global renormalize), U+FFFD step added to the CI `lint` job
 
 **Files** `.gitattributes`, `pyproject.toml`, `src/attackmap/review_prompts.py`,
 `src/attackmap/analyzer_contracts.py`, `tests/unit/test_encoding.py`
