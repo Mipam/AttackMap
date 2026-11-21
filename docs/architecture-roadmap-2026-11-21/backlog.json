@@ -167,7 +167,7 @@
       "phase": 0,
       "priority": "High",
       "effort_days": 0.5,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [],
       "blocks": [
         "AR002",
@@ -186,7 +186,9 @@
         ".github/workflows/ci.yml"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit 9e5c01a: ruff+mypy+pytest tool config, CI lint/types/test-fast jobs; baseline debt ruff 1092/391 src, mypy 488"
+      ]
     },
     {
       "id": "AR002",
@@ -194,7 +196,7 @@
       "phase": 0,
       "priority": "High",
       "effort_days": 0.5,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR001"
       ],
@@ -212,7 +214,9 @@
         "tools/arch_report.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "tests/architecture 5/5 pass; cycle gate fails on planted synthetic cycle (negative proof); 49 cycles frozen in cycle_allowlist.json"
+      ]
     },
     {
       "id": "AR003",

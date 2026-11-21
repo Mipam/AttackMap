@@ -54,6 +54,7 @@ python -m tools.report_identity --corpus tests/fixtures/regression.yaml
 ### AR001 · Static analysis gates
 **Phase** 0 · **Priority** High · **Effort** 0.5 d · **Depends** — · **Blocks** AR002, AR009, AR010
 **Lease** `ci-config` · **Acceptance** AC-001, AC-002, AC-003, AC-004
+**Status** DONE (commit 9e5c01a) — ruff/mypy/pytest config + CI lint/types/test-fast; baseline debt recorded by AR009
 
 **Files** `pyproject.toml`, `.github/workflows/ci.yml`
 
@@ -76,6 +77,7 @@ python -m tools.report_identity --corpus tests/fixtures/regression.yaml
 ### AR002 · Architecture boundary test with cycle allowlist
 **Phase** 0 · **Priority** High · **Effort** 0.5 d · **Depends** AR001 · **Blocks** AR030, AR031
 **Lease** `tests-arch` · **Acceptance** AC-005
+**Status** DONE — `tools/arch_report.py` (AST imports, cycles/fan-in/fan-out/broad-excepts/functions), `tests/architecture/test_import_boundaries.py` (no new cycles, no stale entries, length capped), `cycle_allowlist.json` frozen at 49 canonical cycles (review's 44 used different tooling; gate is "never grows"); negative proof: planted `srcpaths → index` cycle failed the gate, then reverted
 
 **Files** `tests/architecture/test_import_boundaries.py`, `tests/architecture/cycle_allowlist.json`, `tools/arch_report.py`
 
