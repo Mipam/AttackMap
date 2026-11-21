@@ -1,0 +1,1552 @@
+{
+  "schema_version": "1.0",
+  "plan": "architecture-product-roadmap-2026-11-21",
+  "baseline_date": "2026-11-21",
+  "baseline_commit": "5ee4d20",
+  "status": "PROPOSED",
+  "authority": {
+    "scope": "engine, architecture, reasoning, product surfaces",
+    "does_not_change": "WP001-WP044 scope, status, or acceptance",
+    "promotion_required": "AGENTS.md documentation-authority update by repository owner"
+  },
+  "documents": {
+    "roadmap": "roadmap.md",
+    "criteria": "criteria.md",
+    "todo": "todo.md",
+    "backlog": "backlog.json"
+  },
+  "execution": {
+    "max_concurrent_tasks": 3,
+    "requires_dependency_completion": true,
+    "requires_disjoint_lease_keys": true,
+    "status_values": [
+      "OPEN",
+      "IN_PROGRESS",
+      "BLOCKED",
+      "DONE",
+      "DEFERRED"
+    ],
+    "definition_of_done": [
+      "task steps complete",
+      "acceptance criteria verified with attached command output",
+      "no new import cycle",
+      "no coverage regression",
+      "todo.md and backlog.json status updated"
+    ]
+  },
+  "phases": {
+    "0": {
+      "name": "Stop the bleeding",
+      "weeks": "3-4",
+      "exit_gate": [
+        "AC-001..AC-012"
+      ],
+      "tasks": [
+        "AR001",
+        "AR002",
+        "AR003",
+        "AR004",
+        "AR005",
+        "AR006",
+        "AR007",
+        "AR008",
+        "AR009",
+        "AR010",
+        "AR011",
+        "AR012"
+      ],
+      "task_count": 12,
+      "effort_days": 9.0,
+      "done": 0
+    },
+    "1": {
+      "name": "Create the seams",
+      "weeks": "6-8",
+      "exit_gate": [
+        "AC-101..AC-111"
+      ],
+      "tasks": [
+        "AR020",
+        "AR021",
+        "AR022",
+        "AR023",
+        "AR024",
+        "AR025",
+        "AR026",
+        "AR027",
+        "AR028",
+        "AR029",
+        "AR030",
+        "AR031",
+        "AR032"
+      ],
+      "task_count": 13,
+      "effort_days": 38.5,
+      "done": 0
+    },
+    "2": {
+      "name": "Turn knowledge into data",
+      "weeks": "8-10",
+      "exit_gate": [
+        "AC-201..AC-208"
+      ],
+      "tasks": [
+        "AR040",
+        "AR041",
+        "AR042",
+        "AR043",
+        "AR044",
+        "AR045",
+        "AR046",
+        "AR047",
+        "AR048",
+        "AR049",
+        "AR050"
+      ],
+      "task_count": 11,
+      "effort_days": 42.0,
+      "done": 0
+    },
+    "3": {
+      "name": "Harden the product edges",
+      "weeks": "8",
+      "exit_gate": [
+        "AC-301..AC-311"
+      ],
+      "tasks": [
+        "AR060",
+        "AR061",
+        "AR062",
+        "AR063",
+        "AR064",
+        "AR065",
+        "AR066",
+        "AR067",
+        "AR068",
+        "AR069",
+        "AR070"
+      ],
+      "task_count": 11,
+      "effort_days": 37.0,
+      "done": 0
+    },
+    "4": {
+      "name": "Expansion",
+      "weeks": "3-4 quarters",
+      "exit_gate": [
+        "AC-401..AC-409"
+      ],
+      "tasks": [
+        "AR080",
+        "AR081",
+        "AR082",
+        "AR083",
+        "AR084",
+        "AR085",
+        "AR086",
+        "AR087",
+        "AR088"
+      ],
+      "task_count": 9,
+      "effort_days": 46.0,
+      "done": 0
+    }
+  },
+  "totals": {
+    "tasks": 56,
+    "effort_days": 172.5,
+    "high": 39,
+    "medium": 14,
+    "low": 3
+  },
+  "active_leases": [],
+  "tasks": [
+    {
+      "id": "AR001",
+      "title": "Static analysis gates",
+      "phase": 0,
+      "priority": "High",
+      "effort_days": 0.5,
+      "status": "OPEN",
+      "depends_on": [],
+      "blocks": [
+        "AR002",
+        "AR009",
+        "AR010"
+      ],
+      "lease_key": "ci-config",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004"
+      ],
+      "files": [
+        "pyproject.toml",
+        ".github/workflows/ci.yml"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR002",
+      "title": "Architecture boundary test with cycle allowlist",
+      "phase": 0,
+      "priority": "High",
+      "effort_days": 0.5,
+      "status": "OPEN",
+      "depends_on": [
+        "AR001"
+      ],
+      "blocks": [
+        "AR030",
+        "AR031"
+      ],
+      "lease_key": "tests-arch",
+      "acceptance_criteria": [
+        "AC-005"
+      ],
+      "files": [
+        "tests/architecture/test_import_boundaries.py",
+        "tests/architecture/cycle_allowlist.json",
+        "tools/arch_report.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR003",
+      "title": "Structured run event log",
+      "phase": 0,
+      "priority": "High",
+      "effort_days": 1.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR001"
+      ],
+      "blocks": [
+        "AR083"
+      ],
+      "lease_key": "progress",
+      "acceptance_criteria": [
+        "AC-006"
+      ],
+      "files": [
+        "src/attackmap/progress.py",
+        "src/attackmap/pipeline.py",
+        "src/attackmap/artifact_publisher.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR004",
+      "title": "Unify policy constants",
+      "phase": 0,
+      "priority": "High",
+      "effort_days": 1.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR001"
+      ],
+      "blocks": [
+        "AR050"
+      ],
+      "lease_key": "core-policy",
+      "acceptance_criteria": [
+        "AC-007"
+      ],
+      "files": [
+        "src/attackmap/policy/constants.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR005",
+      "title": "Encoding integrity",
+      "phase": 0,
+      "priority": "Medium",
+      "effort_days": 0.5,
+      "status": "OPEN",
+      "depends_on": [
+        "AR001"
+      ],
+      "blocks": [],
+      "lease_key": "encoding",
+      "acceptance_criteria": [
+        "AC-008"
+      ],
+      "files": [
+        ".gitattributes",
+        "pyproject.toml",
+        "src/attackmap/review_prompts.py",
+        "tests/unit/test_encoding.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR006",
+      "title": "Secure-by-default analyzer trust",
+      "phase": 0,
+      "priority": "High",
+      "effort_days": 0.5,
+      "status": "OPEN",
+      "depends_on": [
+        "AR001"
+      ],
+      "blocks": [
+        "AR069"
+      ],
+      "lease_key": "analyzers-trust",
+      "acceptance_criteria": [
+        "AC-009"
+      ],
+      "files": [
+        "src/attackmap/analyzers.py",
+        "src/attackmap/cli.py",
+        "src/attackmap/ui/config.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR007",
+      "title": "Intra-stage cancellation checkpoints",
+      "phase": 0,
+      "priority": "Medium",
+      "effort_days": 1.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR001"
+      ],
+      "blocks": [
+        "AR027"
+      ],
+      "lease_key": "budget",
+      "acceptance_criteria": [
+        "AC-010"
+      ],
+      "files": [
+        "src/attackmap/pipeline.py",
+        "src/attackmap/scanner.py",
+        "src/attackmap/analyzers.py",
+        "src/attackmap/index.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR008",
+      "title": "Test suite layout and markers",
+      "phase": 0,
+      "priority": "Medium",
+      "effort_days": 1.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR001"
+      ],
+      "blocks": [
+        "AR010",
+        "AR047"
+      ],
+      "lease_key": "tests-layout",
+      "acceptance_criteria": [
+        "AC-011"
+      ],
+      "files": [
+        "tests/",
+        "tests/conftest.py",
+        "pyproject.toml"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR009",
+      "title": "Baseline and ratchet configuration",
+      "phase": 0,
+      "priority": "High",
+      "effort_days": 0.5,
+      "status": "OPEN",
+      "depends_on": [
+        "AR001",
+        "AR002"
+      ],
+      "blocks": [],
+      "lease_key": "ci-config",
+      "acceptance_criteria": [
+        "AC-004",
+        "AC-012"
+      ],
+      "files": [
+        "docs/architecture-roadmap-2026-11-21/baseline.json",
+        "pyproject.toml"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR010",
+      "title": "CI pipeline split",
+      "phase": 0,
+      "priority": "High",
+      "effort_days": 0.5,
+      "status": "OPEN",
+      "depends_on": [
+        "AR001",
+        "AR008"
+      ],
+      "blocks": [],
+      "lease_key": "ci-config",
+      "acceptance_criteria": [
+        "AC-003"
+      ],
+      "files": [
+        ".github/workflows/ci.yml"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR011",
+      "title": "Self supply chain",
+      "phase": 0,
+      "priority": "Medium",
+      "effort_days": 1.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR001"
+      ],
+      "blocks": [
+        "AR085"
+      ],
+      "lease_key": "release",
+      "acceptance_criteria": [
+        "AC-013"
+      ],
+      "files": [
+        ".github/workflows/ci.yml",
+        "tools/generate_release_sbom.py",
+        "pyproject.toml"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR012",
+      "title": "Typed error taxonomy",
+      "phase": 0,
+      "priority": "High",
+      "effort_days": 1.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR001"
+      ],
+      "blocks": [
+        "AR083"
+      ],
+      "lease_key": "errors",
+      "acceptance_criteria": [
+        "AC-012"
+      ],
+      "files": [
+        "src/attackmap/errors.py",
+        "src/attackmap/analyzers.py",
+        "src/attackmap/pipeline.py",
+        "src/attackmap/scan_service.py",
+        "src/attackmap/analyzer_host.py",
+        "src/attackmap/ui/server.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR020",
+      "title": "Foundation de-cycling: safe_fs <-> artifact_manifest",
+      "phase": 1,
+      "priority": "High",
+      "effort_days": 3.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR002"
+      ],
+      "blocks": [
+        "AR022"
+      ],
+      "lease_key": "foundation",
+      "acceptance_criteria": [
+        "AC-101"
+      ],
+      "files": [
+        "src/attackmap/safe_fs.py",
+        "src/attackmap/artifact_manifest.py",
+        "src/attackmap/artifact_publisher.py",
+        "src/attackmap/index.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR021",
+      "title": "Remove the recon_models shim",
+      "phase": 1,
+      "priority": "High",
+      "effort_days": 0.5,
+      "status": "OPEN",
+      "depends_on": [
+        "AR020"
+      ],
+      "blocks": [
+        "AR022"
+      ],
+      "lease_key": "foundation",
+      "acceptance_criteria": [
+        "AC-102"
+      ],
+      "files": [
+        "src/attackmap/recon_models.py",
+        "src/attackmap/analyzer_contracts.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR022",
+      "title": "Split models.py into a model package",
+      "phase": 1,
+      "priority": "High",
+      "effort_days": 5.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR020",
+        "AR021"
+      ],
+      "blocks": [
+        "AR029",
+        "AR060"
+      ],
+      "lease_key": "model",
+      "acceptance_criteria": [
+        "AC-103"
+      ],
+      "files": [
+        "src/attackmap/model/",
+        "src/attackmap/models.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR023",
+      "title": "Move the analyzer ledger out of the model",
+      "phase": 1,
+      "priority": "Medium",
+      "effort_days": 1.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR022"
+      ],
+      "blocks": [
+        "AR032"
+      ],
+      "lease_key": "model",
+      "acceptance_criteria": [
+        "AC-104"
+      ],
+      "files": [
+        "src/attackmap/extraction/ledger.py",
+        "src/attackmap/analyzer_catalog.py",
+        "src/attackmap/analyzer_contracts.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR024",
+      "title": "Introduce RunSpec and adapters",
+      "phase": 1,
+      "priority": "High",
+      "effort_days": 4.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR022"
+      ],
+      "blocks": [
+        "AR025",
+        "AR026",
+        "AR027",
+        "AR062"
+      ],
+      "lease_key": "orchestration",
+      "acceptance_criteria": [
+        "AC-105"
+      ],
+      "files": [
+        "src/attackmap/orchestration/run_spec.py",
+        "src/attackmap/cli.py",
+        "src/attackmap/scan_service.py",
+        "src/attackmap/pipeline.py",
+        "src/attackmap/ui/config.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR025",
+      "title": "Retire AnalyzeOptions",
+      "phase": 1,
+      "priority": "High",
+      "effort_days": 2.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR024"
+      ],
+      "blocks": [
+        "AR029"
+      ],
+      "lease_key": "orchestration",
+      "acceptance_criteria": [
+        "AC-105"
+      ],
+      "files": [
+        "src/attackmap/pipeline.py",
+        "src/attackmap/scan_service.py",
+        "src/attackmap/cli.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR026",
+      "title": "Remove ambient configuration",
+      "phase": 1,
+      "priority": "High",
+      "effort_days": 2.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR024"
+      ],
+      "blocks": [
+        "AR031"
+      ],
+      "lease_key": "orchestration",
+      "acceptance_criteria": [
+        "AC-106"
+      ],
+      "files": [
+        "src/attackmap/cli.py",
+        "src/attackmap/index.py",
+        "src/attackmap/ai_budget.py",
+        "src/attackmap/fleet_admission.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR027",
+      "title": "Parallel analyzer execution",
+      "phase": 1,
+      "priority": "High",
+      "effort_days": 5.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR024",
+        "AR007"
+      ],
+      "blocks": [],
+      "lease_key": "analyzers-runtime",
+      "acceptance_criteria": [
+        "AC-107",
+        "AC-108"
+      ],
+      "files": [
+        "src/attackmap/analyzers.py",
+        "src/attackmap/analyzer_host.py",
+        "src/attackmap/orchestration/scheduler.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR028",
+      "title": "Thread-safe progress, budget, diagnostics",
+      "phase": 1,
+      "priority": "High",
+      "effort_days": 2.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR027"
+      ],
+      "blocks": [
+        "AR083"
+      ],
+      "lease_key": "analyzers-runtime",
+      "acceptance_criteria": [
+        "AC-108"
+      ],
+      "files": [
+        "src/attackmap/progress.py",
+        "src/attackmap/pipeline.py",
+        "src/attackmap/diagnostics.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR029",
+      "title": "Subpackage restructure",
+      "phase": 1,
+      "priority": "High",
+      "effort_days": 5.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR022",
+        "AR025"
+      ],
+      "blocks": [
+        "AR031"
+      ],
+      "lease_key": "structure",
+      "acceptance_criteria": [
+        "AC-103",
+        "AC-109"
+      ],
+      "files": [
+        "src/attackmap/",
+        "pyproject.toml"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR030",
+      "title": "Drive the cycle allowlist to zero",
+      "phase": 1,
+      "priority": "High",
+      "effort_days": 4.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR029"
+      ],
+      "blocks": [
+        "AR031"
+      ],
+      "lease_key": "structure",
+      "acceptance_criteria": [
+        "AC-109"
+      ],
+      "files": [
+        "tests/architecture/cycle_allowlist.json"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR031",
+      "title": "Per-layer import enforcement",
+      "phase": 1,
+      "priority": "High",
+      "effort_days": 2.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR030"
+      ],
+      "blocks": [
+        "AR088"
+      ],
+      "lease_key": "tests-arch",
+      "acceptance_criteria": [
+        "AC-110"
+      ],
+      "files": [
+        "tests/architecture/test_import_boundaries.py",
+        "tools/arch_report.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR032",
+      "title": "Contract tests for SDK, merge, artifacts",
+      "phase": 1,
+      "priority": "High",
+      "effort_days": 3.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR023",
+        "AR024"
+      ],
+      "blocks": [
+        "AR060"
+      ],
+      "lease_key": "contracts",
+      "acceptance_criteria": [
+        "AC-111"
+      ],
+      "files": [
+        "tests/contract/test_sdk_surface.py",
+        "tests/contract/test_merge_schema.py",
+        "tests/contract/test_artifact_compat.py",
+        "tools/report_identity.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR040",
+      "title": "Rule kernel: context, protocol, registry",
+      "phase": 2,
+      "priority": "High",
+      "effort_days": 4.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR029"
+      ],
+      "blocks": [],
+      "lease_key": "reasoning-kernel",
+      "acceptance_criteria": [
+        "AC-201"
+      ],
+      "files": [
+        "src/attackmap/reasoning/rules/base.py",
+        "src/attackmap/reasoning/rules/registry.py",
+        "src/attackmap/reasoning/context.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR041",
+      "title": "Port route/auth rules",
+      "phase": 2,
+      "priority": "High",
+      "effort_days": 5.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR040"
+      ],
+      "blocks": [
+        "AR046"
+      ],
+      "lease_key": "rules-routes",
+      "acceptance_criteria": [
+        "AC-201",
+        "AC-202"
+      ],
+      "files": [
+        "src/attackmap/reasoning/rules/route_auth.py",
+        "tests/rules/test_route_auth.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR042",
+      "title": "Port datastore/edge rules",
+      "phase": 2,
+      "priority": "High",
+      "effort_days": 4.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR040"
+      ],
+      "blocks": [
+        "AR046"
+      ],
+      "lease_key": "rules-edges",
+      "acceptance_criteria": [
+        "AC-201",
+        "AC-202"
+      ],
+      "files": [
+        "src/attackmap/reasoning/rules/datastore_edges.py",
+        "tests/rules/test_datastore_edges.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR043",
+      "title": "Port secrets/config rules",
+      "phase": 2,
+      "priority": "High",
+      "effort_days": 4.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR040"
+      ],
+      "blocks": [
+        "AR046"
+      ],
+      "lease_key": "rules-secrets",
+      "acceptance_criteria": [
+        "AC-201",
+        "AC-202"
+      ],
+      "files": [
+        "src/attackmap/reasoning/rules/secrets.py",
+        "tests/rules/test_secrets.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR044",
+      "title": "Port taint/flow rules",
+      "phase": 2,
+      "priority": "High",
+      "effort_days": 5.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR040"
+      ],
+      "blocks": [
+        "AR046"
+      ],
+      "lease_key": "rules-taint",
+      "acceptance_criteria": [
+        "AC-201",
+        "AC-202"
+      ],
+      "files": [
+        "src/attackmap/reasoning/rules/taint_flow.py",
+        "tests/rules/test_taint_flow.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR045",
+      "title": "Port supply-chain/workflow rules",
+      "phase": 2,
+      "priority": "High",
+      "effort_days": 4.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR040"
+      ],
+      "blocks": [
+        "AR046"
+      ],
+      "lease_key": "rules-supply",
+      "acceptance_criteria": [
+        "AC-201",
+        "AC-202"
+      ],
+      "files": [
+        "src/attackmap/reasoning/rules/supply_chain.py",
+        "tests/rules/test_supply_chain.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR046",
+      "title": "Rule catalog and generated docs",
+      "phase": 2,
+      "priority": "Medium",
+      "effort_days": 2.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR041",
+        "AR042",
+        "AR043",
+        "AR044",
+        "AR045"
+      ],
+      "blocks": [
+        "AR087"
+      ],
+      "lease_key": "rules-docs",
+      "acceptance_criteria": [
+        "AC-204",
+        "AC-205"
+      ],
+      "files": [
+        "tools/gen_rule_docs.py",
+        "docs/reference/rules/"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR047",
+      "title": "Per-rule test harness",
+      "phase": 2,
+      "priority": "High",
+      "effort_days": 3.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR040",
+        "AR008"
+      ],
+      "blocks": [
+        "AR048"
+      ],
+      "lease_key": "rules-tests",
+      "acceptance_criteria": [
+        "AC-202"
+      ],
+      "files": [
+        "tests/rules/conftest.py",
+        "tests/rules/_harness.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR048",
+      "title": "Detection quality harness",
+      "phase": 2,
+      "priority": "High",
+      "effort_days": 5.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR047"
+      ],
+      "blocks": [
+        "AR084"
+      ],
+      "lease_key": "eval",
+      "acceptance_criteria": [
+        "AC-206"
+      ],
+      "files": [
+        "src/attackmap/eval/rules.py",
+        "corpus/reference.yaml",
+        "tools/eval_rules.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR049",
+      "title": "Explainability: rationale and evidence chains",
+      "phase": 2,
+      "priority": "High",
+      "effort_days": 3.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR041",
+        "AR042",
+        "AR043",
+        "AR044",
+        "AR045"
+      ],
+      "blocks": [],
+      "lease_key": "reasoning-output",
+      "acceptance_criteria": [
+        "AC-207"
+      ],
+      "files": [
+        "src/attackmap/model/findings.py",
+        "src/attackmap/report.py",
+        "src/attackmap/defensive_review.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR050",
+      "title": "Single ranking and dedupe module",
+      "phase": 2,
+      "priority": "High",
+      "effort_days": 3.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR004",
+        "AR040"
+      ],
+      "blocks": [],
+      "lease_key": "reasoning-output",
+      "acceptance_criteria": [
+        "AC-208"
+      ],
+      "files": [
+        "src/attackmap/reasoning/ranking.py",
+        "src/attackmap/threat_model.py",
+        "src/attackmap/exploitability.py",
+        "src/attackmap/defensive_review.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR060",
+      "title": "Extraction contract v2 with v1 adapter",
+      "phase": 3,
+      "priority": "High",
+      "effort_days": 6.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR022",
+        "AR032"
+      ],
+      "blocks": [
+        "AR082"
+      ],
+      "lease_key": "sdk",
+      "acceptance_criteria": [
+        "AC-301"
+      ],
+      "files": [
+        "src/attackmap/sdk/contracts.py",
+        "src/attackmap/sdk/__init__.py",
+        "src/attackmap/model/observations.py",
+        "src/attackmap/extraction/adapters.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR061",
+      "title": "Derived SQLite index",
+      "phase": 3,
+      "priority": "High",
+      "effort_days": 4.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR029"
+      ],
+      "blocks": [
+        "AR070"
+      ],
+      "lease_key": "index",
+      "acceptance_criteria": [
+        "AC-302",
+        "AC-303"
+      ],
+      "files": [
+        "src/attackmap/index/sqlite.py",
+        "src/attackmap/index/rebuild.py",
+        "src/attackmap/cli_index.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR062",
+      "title": "Public library API",
+      "phase": 3,
+      "priority": "High",
+      "effort_days": 3.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR024",
+        "AR029"
+      ],
+      "blocks": [],
+      "lease_key": "api",
+      "acceptance_criteria": [
+        "AC-304"
+      ],
+      "files": [
+        "src/attackmap/api.py",
+        "src/attackmap/__init__.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR063",
+      "title": "GUI server decomposition and API schemas",
+      "phase": 3,
+      "priority": "Medium",
+      "effort_days": 4.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR062"
+      ],
+      "blocks": [
+        "AR064",
+        "AR065"
+      ],
+      "lease_key": "ui-server",
+      "acceptance_criteria": [
+        "AC-305"
+      ],
+      "files": [
+        "src/attackmap/surfaces/ui/api/",
+        "src/attackmap/ui/server.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR064",
+      "title": "Dialog main-thread dispatcher",
+      "phase": 3,
+      "priority": "High",
+      "effort_days": 2.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR063"
+      ],
+      "blocks": [],
+      "lease_key": "ui-server",
+      "acceptance_criteria": [
+        "AC-306"
+      ],
+      "files": [
+        "src/attackmap/surfaces/ui/dialogs.py",
+        "src/attackmap/ui/server.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR065",
+      "title": "Frontend ES module split and typed client",
+      "phase": 3,
+      "priority": "Medium",
+      "effort_days": 3.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR063"
+      ],
+      "blocks": [],
+      "lease_key": "ui-web",
+      "acceptance_criteria": [
+        "AC-307"
+      ],
+      "files": [
+        "src/attackmap/ui/web/index.html",
+        "src/attackmap/ui/web/src/"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR066",
+      "title": "PDF export behind a protocol",
+      "phase": 3,
+      "priority": "Low",
+      "effort_days": 2.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR063"
+      ],
+      "blocks": [],
+      "lease_key": "ui-export",
+      "acceptance_criteria": [
+        "AC-312"
+      ],
+      "files": [
+        "src/attackmap/ui/export_md.py",
+        "src/attackmap/surfaces/ui/export/pdf.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR067",
+      "title": "Versioned EvidenceBundle for the AI layer",
+      "phase": 3,
+      "priority": "High",
+      "effort_days": 3.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR022",
+        "AR049"
+      ],
+      "blocks": [
+        "AR083"
+      ],
+      "lease_key": "ai",
+      "acceptance_criteria": [
+        "AC-309"
+      ],
+      "files": [
+        "src/attackmap/ai/evidence_bundle.py",
+        "src/attackmap/llm_review.py",
+        "src/attackmap/review_prompts.py",
+        "src/attackmap/citations.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR068",
+      "title": "Documentation reset",
+      "phase": 3,
+      "priority": "Medium",
+      "effort_days": 3.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR046"
+      ],
+      "blocks": [],
+      "lease_key": "docs",
+      "acceptance_criteria": [
+        "AC-311"
+      ],
+      "files": [
+        "docs/README.md",
+        "docs/archive/",
+        "docs/onboarding.md"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR069",
+      "title": "Fleet feature parity",
+      "phase": 3,
+      "priority": "High",
+      "effort_days": 4.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR024",
+        "AR026",
+        "AR006"
+      ],
+      "blocks": [
+        "AR081"
+      ],
+      "lease_key": "fleet",
+      "acceptance_criteria": [
+        "AC-310"
+      ],
+      "files": [
+        "src/attackmap/scan_service.py",
+        "src/attackmap/fleet.py",
+        "src/attackmap/desktop_fleet.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR070",
+      "title": "GUI performance",
+      "phase": 3,
+      "priority": "Medium",
+      "effort_days": 3.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR061",
+        "AR063"
+      ],
+      "blocks": [],
+      "lease_key": "ui-perf",
+      "acceptance_criteria": [
+        "AC-308"
+      ],
+      "files": [
+        "src/attackmap/surfaces/ui/api/scans.py",
+        "src/attackmap/ui/web/src/state.js"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR080",
+      "title": "Content-addressed incremental store",
+      "phase": 4,
+      "priority": "High",
+      "effort_days": 10.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR027",
+        "AR061"
+      ],
+      "blocks": [],
+      "lease_key": "cas",
+      "acceptance_criteria": [
+        "AC-401"
+      ],
+      "files": [
+        "src/attackmap/extraction/cas.py",
+        "src/attackmap/scanner.py",
+        "src/attackmap/incremental.py",
+        "tools/bench_incremental.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR081",
+      "title": "Portfolio mode",
+      "phase": 4,
+      "priority": "High",
+      "effort_days": 8.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR069",
+        "AR061"
+      ],
+      "blocks": [],
+      "lease_key": "portfolio",
+      "acceptance_criteria": [
+        "AC-402"
+      ],
+      "files": [
+        "src/attackmap/orchestration/portfolio.py",
+        "src/attackmap/cli_portfolio.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR082",
+      "title": "Official analyzers on SDK v2",
+      "phase": 4,
+      "priority": "Medium",
+      "effort_days": 6.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR060"
+      ],
+      "blocks": [],
+      "lease_key": "sdk",
+      "acceptance_criteria": [
+        "AC-403"
+      ],
+      "files": [
+        "pyproject.toml",
+        "tools/check_analyzer_versions.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR083",
+      "title": "Observability: metrics, trace ids, activity feed",
+      "phase": 4,
+      "priority": "Medium",
+      "effort_days": 4.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR003",
+        "AR028",
+        "AR067"
+      ],
+      "blocks": [],
+      "lease_key": "observability",
+      "acceptance_criteria": [
+        "AC-404"
+      ],
+      "files": [
+        "src/attackmap/progress.py",
+        "src/attackmap/diagnostics/metrics.py",
+        "src/attackmap/ui/web/src/views/activity.js"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR084",
+      "title": "Performance regression suite",
+      "phase": 4,
+      "priority": "Medium",
+      "effort_days": 3.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR048"
+      ],
+      "blocks": [],
+      "lease_key": "perf",
+      "acceptance_criteria": [
+        "AC-405"
+      ],
+      "files": [
+        "tests/perf/",
+        "tools/bench_analyzers.py",
+        ".github/workflows/perf.yml"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR085",
+      "title": "Release engineering",
+      "phase": 4,
+      "priority": "Medium",
+      "effort_days": 5.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR011"
+      ],
+      "blocks": [],
+      "lease_key": "release",
+      "acceptance_criteria": [
+        "AC-406"
+      ],
+      "files": [
+        "tools/generate_release_sbom.py",
+        "tools/repro_build.py",
+        ".github/workflows/release.yml"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR086",
+      "title": "Hostile-input hardening",
+      "phase": 4,
+      "priority": "High",
+      "effort_days": 5.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR029"
+      ],
+      "blocks": [],
+      "lease_key": "security",
+      "acceptance_criteria": [
+        "AC-407"
+      ],
+      "files": [
+        "tests/fixtures/hostile/",
+        "tests/integration/test_hostile_inputs.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR087",
+      "title": "Rule authoring guide and template",
+      "phase": 4,
+      "priority": "Low",
+      "effort_days": 2.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR046"
+      ],
+      "blocks": [],
+      "lease_key": "docs",
+      "acceptance_criteria": [
+        "AC-408"
+      ],
+      "files": [
+        "docs/contributing/rules.md",
+        "tools/new_rule.py",
+        "tests/rules/_template.py"
+      ],
+      "owner": null,
+      "evidence": []
+    },
+    {
+      "id": "AR088",
+      "title": "ADRs and architecture drift dashboard",
+      "phase": 4,
+      "priority": "Low",
+      "effort_days": 3.0,
+      "status": "OPEN",
+      "depends_on": [
+        "AR031"
+      ],
+      "blocks": [],
+      "lease_key": "docs",
+      "acceptance_criteria": [
+        "AC-409"
+      ],
+      "files": [
+        "docs/adr/",
+        "tools/arch_drift.py"
+      ],
+      "owner": null,
+      "evidence": []
+    }
+  ]
+}
