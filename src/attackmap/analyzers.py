@@ -36,6 +36,7 @@ from .errors import AttackMapError
 from .errors import UntrustedAnalyzerError as _errors_UntrustedAnalyzerError
 from .merge import MERGE_SCHEMA, initial_seen, merge_into
 from .models import AnalyzerError
+from .orchestration.scheduler import JobOutcome, partition, run_group
 from .plugins_lock import OFFICIAL_PLUGINS
 from .redact import redact_text
 from .safe_fs import walk_repo as walk_repo
@@ -849,6 +850,7 @@ def analyze_repository(
     run_plan: AnalyzerRunPlan | None = None,
     events: EventLog | None = None,
     allow_untrusted: bool | None = None,
+    workers: int = 1,
 ) -> AnalyzerResult:
     """Run every active analyzer and merge their results.
 
@@ -862,6 +864,12 @@ def analyze_repository(
     time/output/memory limits; a breach yields a named partial-coverage
     ``analyzer_errors`` entry instead of aborting the scan. Built-in core
     analyzers always run in-process.
+
+    ``workers`` (AR027) bounds a thread pool that overlaps the isolated
+    subprocess runs. The default of 1 preserves the historical serial
+    behaviour exactly: no pool is spawned. Execution/merge order stays the
+    resolved ``(priority, name)`` plan order regardless of ``workers`` —
+    completion order never reaches the merge.
     """
     from .index import RepoIndex
 
@@ -888,24 +896,66 @@ def analyze_repository(
         shared_input, input_error = nullcontext(None), exc
     budget_expired: BudgetExpired | None = None
     with shared_input as input_bundle:
+        # AR027: partition the resolved plan order into the in-process group
+        # (stays serial on this thread) and the isolated group. With workers
+        # > 1 the isolated subprocess runs overlap through a bounded pool;
+        # outcomes come back keyed by name and are consumed below strictly in
+        # plan order, so completion order never reaches the merge.
+        _in_process_group, isolated_group = partition(
+            active_analyzers,
+            is_isolated=lambda analyzer: isolated_analyzers and not _is_builtin_analyzer(analyzer),
+        )
+        isolated_names = [analyzer.name for analyzer in isolated_group]
+        parallel_isolated = (
+            max(1, int(workers)) > 1
+            and bool(isolated_group)
+            and input_error is None
+            and len(set(isolated_names)) == len(isolated_names)
+        )
+        scheduled: dict[str, JobOutcome] = {}
+        if parallel_isolated:
+            scheduled = run_group(
+                [
+                    (analyzer.name, (lambda a=analyzer: run_isolated_analyzer(
+                        a, repo_root, limits=isolated_limits, index=index, bundle=input_bundle)))
+                    for analyzer in isolated_group
+                ],
+                workers=workers,
+                on_start=(lambda name: events.analyzer(name, "start")) if events is not None else None,
+            )
         for analyzer, ledger_row in zip(active_analyzers, plan._selected_records, strict=True):
+            scheduled_run = scheduled.get(analyzer.name)
             analysis_started = None
             event_started = time.perf_counter() if events is not None else None
+            if scheduled_run is not None and event_started is not None:
+                # The worker emitted this analyzer's "start" event before the
+                # real subprocess run; backdate so the "end"/"error" ms below
+                # report the run duration rather than the wait for the pool.
+                event_started -= scheduled_run.duration_ms / 1000.0
             try:
                 if isolated_analyzers and not _is_builtin_analyzer(analyzer):
                     ledger_row.execution_mode = "isolated"
                     ledger_row.analysis_started = False if input_error is not None else None
                     if input_error is None:
-                        analysis_started = plan.mark()
+                        if scheduled_run is None:
+                            analysis_started = plan.mark()
                         plan.observe(ledger_row, "analysis", "requested")
-                        if events is not None:
+                        if events is not None and scheduled_run is None:
                             events.analyzer(analyzer.name, "start")
                         if progress is not None:
                             progress.stage(f"Analyzer {_log_identity(analyzer.name)} isolated analysis requested")
-                    outcome = (IsolatedOutcome(analyzer=analyzer.name, error_type=HOST_INPUT_INVALID,
-                        message=str(input_error), limitation=f"Analyzer '{analyzer.name}' captured inputs unavailable; partial coverage.")
-                        if input_error is not None else run_isolated_analyzer(analyzer, repo_root,
-                            limits=isolated_limits, index=index, bundle=input_bundle))
+                    if scheduled_run is not None:
+                        # Pre-computed by the AR027 scheduler pool: replay the
+                        # outcome here so ledger/error/merge bookkeeping stays
+                        # strictly in plan order.
+                        if scheduled_run.error is not None:
+                            raise scheduled_run.error
+                        outcome = scheduled_run.value
+                    else:
+                        outcome = (IsolatedOutcome(analyzer=analyzer.name, error_type=HOST_INPUT_INVALID,
+                            message=str(input_error), limitation=f"Analyzer '{analyzer.name}' captured inputs unavailable; partial coverage.")
+                            if input_error is not None else run_isolated_analyzer(analyzer, repo_root,
+                                limits=isolated_limits, index=index, bundle=input_bundle))
                     if outcome.error_type is not None:
                         ledger_row.failed("captured_input" if input_error is not None else "isolated_host", outcome.error_type)
                         plan.observe(ledger_row, "analysis", "failed", error_type=outcome.error_type)
@@ -987,6 +1037,10 @@ def analyze_repository(
             finally:
                 if analysis_started is not None:
                     ledger_row.analysis_duration_ms = plan.duration_ms(analysis_started)
+                elif scheduled_run is not None:
+                    # Scheduled in the AR027 pool: keep the measured run
+                    # duration instead of the near-zero consumption wait.
+                    ledger_row.analysis_duration_ms = scheduled_run.duration_ms
             if events is not None:
                 events.analyzer(analyzer.name, "end",
                                 ms=int((time.perf_counter() - event_started) * 1000))

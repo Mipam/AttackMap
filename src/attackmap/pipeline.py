@@ -412,6 +412,7 @@ def _run_scan(
                     incremental=spec.features.incremental,
                     index=captured_index,
                     events=state.events,
+                    workers=max(1, int(spec.scheduler.workers)),
                 )
 
         def _recover_partial_scan(exc: BudgetExpired) -> None:

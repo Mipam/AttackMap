@@ -57,6 +57,18 @@ class BudgetSpec:
 
 
 @dataclass(frozen=True)
+class SchedulerSpec:
+    """Analyzer execution scheduling (AR027).
+
+    ``workers`` bounds the parallel pool over the isolated (subprocess-host)
+    analyzer group. The default of 1 keeps the historical serial behaviour:
+    no pool is spawned and results merge exactly as before.
+    """
+
+    workers: int = 1
+
+
+@dataclass(frozen=True)
 class AiSpec:
     """LLM feature switches, provider controls and the shared scan allowance."""
 
@@ -102,6 +114,7 @@ class RunSpec:
     analyzer: AnalyzerSelection = AnalyzerSelection()
     features: FeatureFlags = FeatureFlags()
     budget: BudgetSpec = BudgetSpec()
+    scheduler: SchedulerSpec = SchedulerSpec()
     ai: AiSpec = AiSpec()
     fleet: FleetSpec = FleetSpec()
     output_format: str = "all"
@@ -225,6 +238,7 @@ _CLI_FLAG_PATHS: dict[str, str] = {
     "strict_suppressions": "features.strict_suppressions",
     "secrets_history": "features.secrets_history",
     "time_budget_seconds": "budget.time_budget_seconds",
+    "workers": "scheduler.workers",
     "llm": "ai.enabled",
     "llm_provider": "ai.provider",
     "llm_model": "ai.model",
