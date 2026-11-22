@@ -357,7 +357,7 @@
       "phase": 0,
       "priority": "Medium",
       "effort_days": 1.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR001"
       ],
@@ -375,7 +375,9 @@
         "pyproject.toml"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "229 files git-mv to unit/integration/contract/live; path-scoped tier marker conftests; tests-root sys.path hook keeps support-module imports working; __file__ depth corrected for tests-root and repo-root fixture trees; collect 6284 unchanged; tier selection verified; previously-failing files green solo"
+      ]
     },
     {
       "id": "AR009",

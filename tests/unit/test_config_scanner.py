@@ -1,0 +1,686 @@
+"""Tests for the config-file analyzer (#43)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from attackmap.analyzers import BuiltinConfigAnalyzer, analyze_repository
+from attackmap.config_scanner import scan_config_repo, should_scan_config_file
+
+
+# ---------------------------------------------------------------------------
+# File selection
+# ---------------------------------------------------------------------------
+
+
+def test_should_scan_covers_yaml_toml_json_ini_env(tmp_path: Path) -> None:
+    for name in ("app.yaml", "app.yml", "app.toml", "app.json", "app.ini", "app.cfg", ".env"):
+        assert should_scan_config_file(tmp_path / name), f"expected {name} to be scannable"
+
+
+def test_should_scan_excludes_lockfiles_and_editor_configs(tmp_path: Path) -> None:
+    for name in (
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "poetry.lock",
+        "cargo.lock",
+        "tsconfig.json",
+        ".eslintrc.json",
+        "package.json",
+    ):
+        assert not should_scan_config_file(tmp_path / name), f"expected {name} to be excluded"
+
+
+# ---------------------------------------------------------------------------
+# DB URL extraction
+# ---------------------------------------------------------------------------
+
+
+def test_db_url_in_yaml_emits_database_hint(tmp_path: Path) -> None:
+    (tmp_path / "config.yaml").write_text(
+        "database:\n  url: postgresql://user:pass@localhost:5432/mydb\n",
+        encoding="utf-8",
+    )
+    result = scan_config_repo(tmp_path)
+    kinds = {(d.kind, d.file) for d in result.databases}
+    assert ("postgresql", "config.yaml") in kinds
+
+
+def test_db_url_password_becomes_hardcoded_secret_hint(tmp_path: Path) -> None:
+    """The acceptance criterion — `postgresql://user:pass@…` produces
+    both a DatabaseHint and a SecretHint for the embedded password."""
+    (tmp_path / "config.yaml").write_text(
+        "database:\n  url: postgresql://user:s3cretpass@localhost:5432/mydb\n",
+        encoding="utf-8",
+    )
+    result = scan_config_repo(tmp_path)
+    assert any(d.kind == "postgresql" for d in result.databases)
+    secrets = [s for s in result.secret_hints if s.kind == "postgresql_url_password"]
+    assert len(secrets) == 1
+    # Redacted — full password must not leak into the hint name.
+    assert "s3cretpass" not in secrets[0].name
+    assert "…" in secrets[0].name
+
+
+def test_db_url_with_placeholder_password_does_not_fire_secret_hint(tmp_path: Path) -> None:
+    (tmp_path / "config.yaml").write_text(
+        "database:\n  url: postgresql://user:changeme@localhost:5432/mydb\n",
+        encoding="utf-8",
+    )
+    result = scan_config_repo(tmp_path)
+    # DB kind still fires — the URL shape is real.
+    assert any(d.kind == "postgresql" for d in result.databases)
+    # Password is a placeholder — no secret hint.
+    assert not any(s.kind == "postgresql_url_password" for s in result.secret_hints)
+
+
+def test_multiple_db_schemes_each_produce_a_hint(tmp_path: Path) -> None:
+    (tmp_path / "config.toml").write_text(
+        """
+[database]
+primary = "postgresql://user:pass@db-primary:5432/app"
+cache = "redis://cache-host:6379/0"
+docs = "mongodb://user:pass@mongo:27017/docs"
+""",
+        encoding="utf-8",
+    )
+    result = scan_config_repo(tmp_path)
+    kinds = {d.kind for d in result.databases}
+    assert kinds == {"postgresql", "redis", "mongodb"}
+
+
+# ---------------------------------------------------------------------------
+# HTTP target extraction
+# ---------------------------------------------------------------------------
+
+
+def test_service_endpoint_url_becomes_external_call(tmp_path: Path) -> None:
+    (tmp_path / "settings.yaml").write_text(
+        "integrations:\n  webhook_target: https://internal-billing.example-corp.io/reconcile\n",
+        encoding="utf-8",
+    )
+    result = scan_config_repo(tmp_path)
+    assert any("internal-billing.example-corp.io" in c.target for c in result.external_calls)
+
+
+def test_common_non_target_hosts_are_skipped(tmp_path: Path) -> None:
+    """localhost/example.com/github.com/CDNs are metadata, not real
+    outbound calls — don't spam ExternalCall with them."""
+    (tmp_path / "package.info.yaml").write_text(
+        """
+homepage: https://github.com/mlaify/AttackMap
+repository: https://github.com/mlaify/AttackMap.git
+docs: https://example.com/docs
+local: http://localhost:3000
+""",
+        encoding="utf-8",
+    )
+    result = scan_config_repo(tmp_path)
+    assert result.external_calls == []
+
+
+# ---------------------------------------------------------------------------
+# Secret KV extraction
+# ---------------------------------------------------------------------------
+
+
+def test_secret_key_value_pair_emits_hint(tmp_path: Path) -> None:
+    (tmp_path / ".env").write_text(
+        "STRIPE_API_KEY=sk_live_thisisalongenoughvalue\n",
+        encoding="utf-8",
+    )
+    result = scan_config_repo(tmp_path)
+    # STRIPE_API_KEY should fire both via the config-literal secret KV path
+    # AND via the stripe_key hardcoded-secret path — but we're scanning via
+    # the config scanner only, so just check the config-literal side.
+    kinds = {s.kind for s in result.secret_hints}
+    assert "config_literal" in kinds or "stripe_key" in kinds
+
+
+def test_placeholder_values_do_not_fire_secret_hints(tmp_path: Path) -> None:
+    (tmp_path / ".env.example").write_text(
+        """
+API_KEY=changeme
+STRIPE_SECRET=your-secret-here
+DB_PASSWORD=<put-your-password-here>
+INTERPOLATED=${REAL_KEY}
+""",
+        encoding="utf-8",
+    )
+    result = scan_config_repo(tmp_path)
+    # `.env.example` is legitimately a secrets template — never a real
+    # secret. No config-literal hints should fire.
+    assert not any(s.kind == "config_literal" for s in result.secret_hints)
+
+
+def test_yaml_secret_key_value_pair_emits_hint(tmp_path: Path) -> None:
+    (tmp_path / "config.yaml").write_text(
+        """
+auth:
+  api_key: "abcdefghijklmnop"
+""",
+        encoding="utf-8",
+    )
+    result = scan_config_repo(tmp_path)
+    assert any(s.kind == "config_literal" and "api_key" in s.name for s in result.secret_hints)
+
+
+def test_json_secret_key_value_pair_emits_hint(tmp_path: Path) -> None:
+    (tmp_path / "credentials.json").write_text(
+        '{"token": "abcdefghijklmnopqrstuvwxyz"}\n',
+        encoding="utf-8",
+    )
+    result = scan_config_repo(tmp_path)
+    assert any(s.kind == "config_literal" and s.name == "token" for s in result.secret_hints)
+
+
+def test_file_path_values_do_not_fire_secret_hints(tmp_path: Path) -> None:
+    (tmp_path / "config.yaml").write_text(
+        """
+tls:
+  privkey: /etc/ssl/private/site.key
+  cert: /etc/ssl/certs/site.pem
+""",
+        encoding="utf-8",
+    )
+    result = scan_config_repo(tmp_path)
+    # These are keyfile *paths*, not the key material. No hint.
+    assert not any(s.kind == "config_literal" for s in result.secret_hints)
+
+
+# ---------------------------------------------------------------------------
+# Exclusions
+# ---------------------------------------------------------------------------
+
+
+def test_lockfile_content_is_not_scanned(tmp_path: Path) -> None:
+    """A DB URL in a lockfile is registry metadata, not application
+    config — don't flag it."""
+    (tmp_path / "package-lock.json").write_text(
+        '{"dependencies": {"pg": {"resolved": "https://registry.npmjs.org/pg/-/pg-8.11.0.tgz"}}}\n',
+        encoding="utf-8",
+    )
+    result = scan_config_repo(tmp_path)
+    assert result.files_scanned == 0
+
+
+def test_node_modules_directories_are_skipped(tmp_path: Path) -> None:
+    vendored = tmp_path / "node_modules" / "some-dep"
+    vendored.mkdir(parents=True)
+    (vendored / "config.yaml").write_text(
+        "database:\n  url: postgresql://user:pass@x/y\n", encoding="utf-8"
+    )
+    result = scan_config_repo(tmp_path)
+    assert result.files_scanned == 0
+    assert result.databases == []
+
+
+# ---------------------------------------------------------------------------
+# End-to-end integration with analyze_repository
+# ---------------------------------------------------------------------------
+
+
+def test_builtin_config_analyzer_detects_repos_with_yaml(tmp_path: Path) -> None:
+    (tmp_path / "config.yaml").write_text("key: value\n", encoding="utf-8")
+    assert BuiltinConfigAnalyzer().detect(tmp_path) is True
+
+
+def test_builtin_config_analyzer_skips_repos_without_config_files(tmp_path: Path) -> None:
+    (tmp_path / "app.py").write_text("print('hi')\n", encoding="utf-8")
+    assert BuiltinConfigAnalyzer().detect(tmp_path) is False
+
+
+def test_analyze_repository_merges_config_signals_with_source_signals(tmp_path: Path) -> None:
+    """A repo with a config.yaml carrying a DB URL AND app.py referencing
+    the same DB should produce one hint per file — dedup is by (kind, file)
+    so different files are separate signals, but same-file matches don't
+    double-count."""
+    (tmp_path / "config.yaml").write_text(
+        "db:\n  url: postgresql://user:pass@host/mydb\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "app.py").write_text(
+        "import psycopg2\nconn = psycopg2.connect('postgresql://user:pass@host/mydb')\n",
+        encoding="utf-8",
+    )
+    result = analyze_repository(tmp_path)
+    files_with_pg = {d.file for d in result.databases if d.kind == "postgresql"}
+    # Two hints, one per file — each is a distinct piece of evidence.
+    assert "config.yaml" in files_with_pg
+    assert "app.py" in files_with_pg
+
+
+def test_analyze_repository_preserves_provenance_on_config_signals(tmp_path: Path) -> None:
+    """Provenance from #14 must survive through the config analyzer's
+    contribution — every signal should be tagged `config` since that's
+    the analyzer name."""
+    (tmp_path / "app.yaml").write_text(
+        "db:\n  url: postgresql://user:pass@host/mydb\n",
+        encoding="utf-8",
+    )
+    result = analyze_repository(tmp_path)
+    config_dbs = [d for d in result.databases if d.file == "app.yaml"]
+    assert config_dbs
+    assert config_dbs[0].source_analyzer == "config"
+
+
+# ---------------------------------------------------------------------------
+# Large-file / feedback-loop hang regression (config_scanner _line_of O(n^2))
+# ---------------------------------------------------------------------------
+
+import attackmap.config_scanner as _cfg
+from attackmap.config_scanner import _LineIndex
+
+
+def test_line_index_matches_naive_line_numbers() -> None:
+    content = "a\nbb\n\nccc\nd"
+    expected = {0: 1, 1: 1, 2: 2, 4: 2, 5: 3, 6: 4, 9: 4, 10: 5}
+    index = _LineIndex(content)
+    for offset, line in expected.items():
+        assert index.line_of(offset) == line, (offset, index.line_of(offset))
+    assert index.line_of(-5) == 1
+
+
+def test_skips_attackmap_output_dir(tmp_path: Path) -> None:
+    # AttackMap writes reports into .attackmap-gui/ inside scanned repos; scanning
+    # them back is a feedback loop that hung on the multi-MB report (#gui-hang).
+    (tmp_path / "app.json").write_text('{"api": "https://api.real-service.com/v1"}')
+    reports = tmp_path / ".attackmap-gui" / "reports"
+    reports.mkdir(parents=True)
+    (reports / "attackmap-report.json").write_text('{"u": "https://leaked.internal-host.net/x"}')
+
+    files = {c.file for c in scan_config_repo(tmp_path).external_calls}
+    assert not any(".attackmap-gui" in f for f in files)
+    assert any("app.json" in f for f in files)
+
+
+def test_skips_oversized_config_file(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(_cfg, "_MAX_CONFIG_BYTES", 200)
+    (tmp_path / "big.json").write_text('{"u":"https://api.real-service.com/"}' + " " * 500)
+    (tmp_path / "small.json").write_text('{"u":"https://api.real-service.com/"}')
+
+    files = {c.file for c in scan_config_repo(tmp_path).external_calls}
+    assert "big.json" not in files
+    assert "small.json" in files
+
+
+# ---------------------------------------------------------------------------
+# deployment seam extraction (C28)
+# ---------------------------------------------------------------------------
+
+from attackmap.config_scanner import extract_deployment_aliases  # noqa: E402
+
+
+def _service_yaml(name: str, port: int, *, target_port: int | None = None, port_name: str = "web") -> str:
+    target = f"      targetPort: {target_port}\n" if target_port is not None else ""
+    return (
+        "apiVersion: v1\n"
+        "kind: Service\n"
+        "metadata:\n"
+        f"  name: {name}\n"
+        "spec:\n"
+        "  ports:\n"
+        f"    - name: {port_name}\n"
+        f"      port: {port}\n"
+        f"{target}"
+    )
+
+
+def test_k8s_service_declares_listen_port_with_file_provenance(tmp_path: Path) -> None:
+    repo = tmp_path / "auth-api"
+    (repo / "k8s").mkdir(parents=True)
+    (repo / "k8s" / "service.yaml").write_text(
+        _service_yaml("auth-api", 8443, target_port=8443, port_name="https"),
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.service_ports == {"auth-api": 8443}
+    assert aliases.source_files["service_ports:auth-api:8443"] == "auth-api/k8s/service.yaml"
+    # A port *named* https is metadata, not a TLS observation — no scheme is
+    # invented (C28).
+    assert aliases.service_protocols == {}
+    assert aliases.proxies == {}
+    assert notes == []
+
+
+def test_k8s_service_port_wins_over_deployment_containerport(tmp_path: Path) -> None:
+    repo = tmp_path / "auth-api"
+    (repo / "k8s").mkdir(parents=True)
+    (repo / "k8s" / "01-deployment.yaml").write_text(
+        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: auth-api\nspec:\n"
+        "  template:\n    spec:\n      containers:\n        - name: auth-api\n"
+        "          ports:\n            - containerPort: 8080\n",
+        encoding="utf-8",
+    )
+    (repo / "k8s" / "02-service.yaml").write_text(_service_yaml("auth-api", 8443), encoding="utf-8")
+    aliases, notes = extract_deployment_aliases([repo])
+    # The Service port is the seam callers dial; the Deployment fills nothing here.
+    assert aliases.service_ports == {"auth-api": 8443}
+    assert aliases.source_files["service_ports:auth-api:8443"] == "auth-api/k8s/02-service.yaml"
+    assert any("overrides port 8080" in n for n in notes)
+
+
+def test_k8s_deployment_containerport_declares_when_no_service(tmp_path: Path) -> None:
+    repo = tmp_path / "worker"
+    repo.mkdir()
+    (repo / "deployment.yaml").write_text(
+        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: worker\nspec:\n"
+        "  template:\n    spec:\n      containers:\n        - name: worker\n"
+        "          ports:\n            - containerPort: 7000\n",
+        encoding="utf-8",
+    )
+    aliases, _ = extract_deployment_aliases([repo])
+    assert aliases.service_ports == {"worker": 7000}
+
+
+def test_k8s_multi_port_service_skipped_with_note(tmp_path: Path) -> None:
+    repo = tmp_path / "gateway"
+    repo.mkdir()
+    (repo / "svc.yaml").write_text(
+        _service_yaml("gateway", 80) + "    - name: admin\n      port: 8081\n",
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.service_ports == {}
+    assert any("gateway" in n and "ambiguous" in n for n in notes)
+
+
+def test_compose_declares_container_port_keyed_by_service_name(tmp_path: Path) -> None:
+    repo = tmp_path / "feed-generator"
+    repo.mkdir()
+    (repo / "docker-compose.yml").write_text(
+        "services:\n  feed-generator:\n    ports:\n      - \"9000:9000\"\n"
+        "  portal:\n    ports:\n      - \"8080:80\"\n"
+        "  busy:\n    ports:\n      - \"8001:8001\"\n      - \"8002:8002\"\n",
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    # The container port is the declared listen port; the published host port
+    # (8080) is a different seam. Multiple distinct listen ports stay ambiguous.
+    assert aliases.service_ports == {"feed-generator": 9000, "portal": 80}
+    assert aliases.source_files["service_ports:feed-generator:9000"] == (
+        "feed-generator/docker-compose.yml"
+    )
+    assert any("busy" in n and "ambiguous" in n for n in notes)
+
+
+def test_nginx_single_backend_upstream_declares_proxy(tmp_path: Path) -> None:
+    repo = tmp_path / "edge"
+    repo.mkdir()
+    (repo / "nginx.conf").write_text(
+        "upstream auth_backend {\n    server auth-api:8443;\n}\n"
+        "server {\n    listen 80;\n    server_name edge.internal;\n"
+        "    location / {\n        proxy_pass http://auth_backend;\n    }\n}\n",
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.proxies == {"edge.internal": "auth-api"}
+    assert aliases.source_files["proxies:edge.internal"] == "edge/nginx.conf"
+    assert notes == []
+
+
+def test_nginx_multi_backend_upstream_skipped_with_note(tmp_path: Path) -> None:
+    repo = tmp_path / "edge"
+    repo.mkdir()
+    (repo / "edge.conf").write_text(
+        "upstream multi_backend {\n    server auth-api:8443;\n    server feed-generator:9000;\n}\n"
+        "server {\n    listen 80;\n    server_name edge-multiple.internal;\n"
+        "    location / {\n        proxy_pass http://multi_backend;\n    }\n}\n",
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.proxies == {}
+    assert any("multi_backend" in n and "not modeled" in n for n in notes)
+
+
+def test_malformed_yaml_skipped_with_note_no_declarations(tmp_path: Path) -> None:
+    repo = tmp_path / "auth-api"
+    (repo / "k8s").mkdir(parents=True)
+    (repo / "k8s" / "broken.yaml").write_text(
+        "kind: Service\nmetadata:\n  name: broken\n   bad_indent: [\nspec:\n  ports:\n    - port: 1234\n",
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.service_ports == {}
+    assert any("broken.yaml" in n and "malformed" in n for n in notes)
+
+
+def test_conflicting_same_kind_port_declarations_dropped(tmp_path: Path) -> None:
+    repo = tmp_path / "svc"
+    repo.mkdir()
+    (repo / "a.yaml").write_text(_service_yaml("svc", 8000), encoding="utf-8")
+    (repo / "b.yaml").write_text(_service_yaml("svc", 9000), encoding="utf-8")
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.service_ports == {}
+    assert any("conflicting Service ports 8000" in n and "9000" in n for n in notes)
+
+
+def test_deployment_seam_fixture_extraction(tmp_path: Path) -> None:
+    # The checked-in three-service fixture is the config-only counterpart of
+    # the CLI-flag service-seam fixture: k8s + compose + nginx + an Ingress
+    # declare every seam and protocol, and the negative controls (multi-backend
+    # upstream, malformed YAML, multi-port compose service) stay notes, never
+    # declarations.
+    fleet = Path(__file__).parents[1] / "fixtures" / "deployment-seam-fleet"
+    aliases, notes = extract_deployment_aliases(
+        [fleet / "web-app", fleet / "auth-api", fleet / "feed-generator"]
+    )
+    assert aliases.service_ports["auth-api"] == 8443
+    assert aliases.service_ports["feed-generator"] == 9000
+    assert aliases.source_files["service_ports:auth-api:8443"] == "auth-api/k8s/service.yaml"
+    assert aliases.source_files["service_ports:feed-generator:9000"] == (
+        "feed-generator/docker-compose.yml"
+    )
+    assert aliases.proxies == {
+        "edge.internal": "auth-api",
+        "feed-edge.internal": "feed-generator",
+        "auth.ingress.cluster.local": "auth-api",
+    }
+    assert aliases.source_files["proxies:edge.internal"] == "auth-api/deploy/nginx/edge.conf"
+    assert aliases.source_files["proxies:auth.ingress.cluster.local"] == (
+        "auth-api/k8s/ingress.yaml"
+    )
+    # Protocols: the Service's appProtocol declares auth-api's https (the
+    # proxy_pass and Ingress annotation agree and dedupe under it); nginx's
+    # proxy_pass scheme is feed-generator's only declaration.
+    assert aliases.service_protocols == {"auth-api": "https", "feed-generator": "https"}
+    assert aliases.source_files["service_protocols:auth-api:https"] == "auth-api/k8s/service.yaml"
+    assert aliases.source_files["service_protocols:feed-generator:https"] == (
+        "auth-api/deploy/nginx/edge.conf"
+    )
+    assert any("multi_backend" in n for n in notes)
+    assert any("broken-service.yaml" in n and "malformed" in n for n in notes)
+    assert any("worker" in n for n in notes)
+
+
+def test_k8s_service_appprotocol_declares_scheme_with_file_provenance(tmp_path: Path) -> None:
+    repo = tmp_path / "auth-api"
+    repo.mkdir()
+    (repo / "service.yaml").write_text(
+        _service_yaml("auth-api", 8443, port_name="https").replace(
+            "      port: 8443\n", "      port: 8443\n      appProtocol: https\n"
+        ),
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.service_ports == {"auth-api": 8443}
+    assert aliases.service_protocols == {"auth-api": "https"}
+    assert aliases.source_files["service_protocols:auth-api:https"] == "auth-api/service.yaml"
+    assert notes == []
+
+
+def test_k8s_service_appprotocol_unmodeled_protocol_noted_not_guessed(tmp_path: Path) -> None:
+    repo = tmp_path / "orders"
+    repo.mkdir()
+    (repo / "service.yaml").write_text(
+        _service_yaml("orders", 50051).replace(
+            "      port: 50051\n", "      port: 50051\n      appProtocol: grpc\n"
+        ),
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.service_ports == {"orders": 50051}  # the port still declares
+    assert aliases.service_protocols == {}  # grpc is not modeled — never guessed
+    assert any("appProtocol" in n and "grpc" in n for n in notes)
+
+
+def test_nginx_proxy_pass_scheme_declares_backend_protocol(tmp_path: Path) -> None:
+    repo = tmp_path / "edge"
+    repo.mkdir()
+    (repo / "edge.conf").write_text(
+        "upstream auth_backend {\n    server auth-api:8443;\n}\n"
+        "server {\n    listen 80;\n    server_name edge.internal;\n"
+        "    location / {\n        proxy_pass https://auth_backend;\n    }\n}\n",
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.proxies == {"edge.internal": "auth-api"}
+    assert aliases.service_protocols == {"auth-api": "https"}
+    assert aliases.source_files["service_protocols:auth-api:https"] == "edge/edge.conf"
+    assert notes == []
+
+
+def test_nginx_proxy_pass_scheme_survives_missing_server_name(tmp_path: Path) -> None:
+    # The protocol the edge dials the backend with does not depend on naming
+    # the proxy host: the scheme is declared, the proxy is not.
+    repo = tmp_path / "edge"
+    repo.mkdir()
+    (repo / "edge.conf").write_text(
+        "upstream auth_backend {\n    server auth-api:8443;\n}\n"
+        "server {\n    listen 80;\n    location / {\n        proxy_pass https://auth_backend;\n    }\n}\n",
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.proxies == {}
+    assert aliases.service_protocols == {"auth-api": "https"}
+    assert any("no concrete server_name" in n for n in notes)
+
+
+def test_nginx_proxy_pass_unmodeled_scheme_noted_not_guessed(tmp_path: Path) -> None:
+    repo = tmp_path / "edge"
+    repo.mkdir()
+    (repo / "edge.conf").write_text(
+        "upstream grpc_backend {\n    server orders:50051;\n}\n"
+        "server {\n    listen 80;\n    server_name grpc.internal;\n"
+        "    location / {\n        proxy_pass grpc://grpc_backend;\n    }\n}\n",
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.proxies == {"grpc.internal": "orders"}  # the proxy still declares
+    assert aliases.service_protocols == {}
+    assert aliases.unresolved_service_protocols == ("orders",)
+    assert aliases.source_files["unresolved_service_protocols:orders"] == "edge/edge.conf"
+    assert {(Path(ref.repository_root), ref.file, ref.line)
+            for ref in aliases.declaration_sources["unresolved_service_protocols:orders"]} == {
+        (repo.resolve(), "edge.conf", None)}
+    assert any("proxy_pass grpc://" in n for n in notes)
+
+
+def test_conflicting_proxy_pass_schemes_drop_the_protocol(tmp_path: Path) -> None:
+    repo = tmp_path / "edge"
+    repo.mkdir()
+    (repo / "edge.conf").write_text(
+        "upstream auth_backend {\n    server auth-api:8443;\n}\n"
+        "server {\n    server_name a.internal;\n    location / {\n        proxy_pass http://auth_backend;\n    }\n}\n"
+        "server {\n    server_name b.internal;\n    location / {\n        proxy_pass https://auth_backend;\n    }\n}\n",
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.service_protocols == {}  # same rank, different scheme: ambiguous
+    assert any("conflicting" in n and "schemes" in n for n in notes)
+
+
+def test_service_appprotocol_outranks_conflicting_proxy_pass(tmp_path: Path) -> None:
+    repo = tmp_path / "auth-api"
+    repo.mkdir()
+    # walk order (alphabetical) reads the nginx file first, so the higher-
+    # precedence appProtocol arrives second and the override is noted.
+    (repo / "edge.conf").write_text(
+        "upstream auth_backend {\n    server auth-api:8443;\n}\n"
+        "server {\n    server_name edge.internal;\n"
+        "    location / {\n        proxy_pass http://auth_backend;\n    }\n}\n",
+        encoding="utf-8",
+    )
+    (repo / "service.yaml").write_text(
+        _service_yaml("auth-api", 8443).replace(
+            "      port: 8443\n", "      port: 8443\n      appProtocol: https\n"
+        ),
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.service_protocols == {"auth-api": "https"}
+    assert aliases.source_files["service_protocols:auth-api:https"] == "auth-api/service.yaml"
+    assert any("overrides" in n for n in notes)
+
+
+def test_k8s_ingress_declares_proxy_and_backend_protocol(tmp_path: Path) -> None:
+    repo = tmp_path / "auth-api"
+    repo.mkdir()
+    (repo / "ingress.yaml").write_text(
+        "apiVersion: networking.k8s.io/v1\nkind: Ingress\n"
+        "metadata:\n  name: auth-ingress\n"
+        "  annotations:\n    nginx.ingress.kubernetes.io/backend-protocol: \"HTTPS\"\n"
+        "spec:\n  rules:\n    - host: auth.ingress.cluster.local\n      http:\n        paths:\n"
+        "          - path: /\n            pathType: Prefix\n            backend:\n"
+        "              service:\n                name: auth-api\n                port:\n                  number: 8443\n",
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.proxies == {"auth.ingress.cluster.local": "auth-api"}
+    assert aliases.source_files["proxies:auth.ingress.cluster.local"] == "auth-api/ingress.yaml"
+    assert aliases.service_protocols == {"auth-api": "https"}
+    assert aliases.source_files["service_protocols:auth-api:https"] == "auth-api/ingress.yaml"
+    assert notes == []
+
+
+def test_k8s_ingress_multi_backend_host_skipped_with_note(tmp_path: Path) -> None:
+    repo = tmp_path / "edge"
+    repo.mkdir()
+    (repo / "ingress.yaml").write_text(
+        "apiVersion: networking.k8s.io/v1\nkind: Ingress\n"
+        "metadata:\n  name: split-ingress\n"
+        "spec:\n  rules:\n    - host: split.internal\n      http:\n        paths:\n"
+        "          - path: /users\n            backend:\n              service:\n                name: auth-api\n"
+        "          - path: /feeds\n            backend:\n              service:\n                name: feed-generator\n",
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.proxies == {}
+    assert aliases.service_protocols == {}
+    assert any("split.internal" in n and "multi-backend" in n for n in notes)
+
+
+def test_k8s_ingress_hostless_rule_and_unmodeled_annotation_skipped(tmp_path: Path) -> None:
+    repo = tmp_path / "edge"
+    repo.mkdir()
+    (repo / "ingress.yaml").write_text(
+        "apiVersion: networking.k8s.io/v1\nkind: Ingress\n"
+        "metadata:\n  name: catchall\n"
+        "  annotations:\n    nginx.ingress.kubernetes.io/backend-protocol: \"GRPC\"\n"
+        "spec:\n  rules:\n    - http:\n        paths:\n"
+        "          - path: /\n            backend:\n              service:\n                name: orders\n",
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.proxies == {}  # hostless catch-all: no identity to declare
+    assert aliases.service_protocols == {}  # grpc not modeled
+    assert any("hostless" in n for n in notes)
+    assert any("backend-protocol" in n and "GRPC" in n for n in notes)
+
+
+def test_k8s_ingress_backend_protocol_mapping_form_skipped(tmp_path: Path) -> None:
+    repo = tmp_path / "edge"
+    repo.mkdir()
+    (repo / "ingress.yaml").write_text(
+        "apiVersion: networking.k8s.io/v1\nkind: Ingress\n"
+        "metadata:\n  name: mapped\n"
+        "  annotations:\n    nginx.ingress.kubernetes.io/backend-protocol: \"auth-api:HTTPS,orders:GRPC\"\n"
+        "spec:\n  rules:\n    - host: mapped.internal\n      http:\n        paths:\n"
+        "          - path: /\n            backend:\n              service:\n                name: auth-api\n",
+        encoding="utf-8",
+    )
+    aliases, notes = extract_deployment_aliases([repo])
+    assert aliases.proxies == {"mapped.internal": "auth-api"}  # routing still declares
+    assert aliases.service_protocols == {}  # the per-service mapping form is not modeled
+    assert any("mapping form" in n for n in notes)

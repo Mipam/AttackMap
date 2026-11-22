@@ -208,6 +208,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR008 · Test suite layout and markers
 **Phase** 0 · **Priority** Medium · **Effort** 1 d · **Depends** AR001 · **Blocks** AR010, AR047
 **Lease** `tests-layout` · **Acceptance** AC-011
+**Status** DONE — 229 files `git mv` to unit(141)/integration(81)/contract(12)/live(0, placeholder); tier conftests apply path-scoped markers (pure move, no per-file edits); tests/conftest.py preserves top-level support imports; `__file__` depth fixed: shared fixtures/helpers → tests root, tools/src/evals + repo-root `/fixtures` (desktop-workflows, desktop-parity, run-contract, diagnostics, evaluation) → repo root; collect 6284 = baseline; unit 4089 / contract 230 / integration 1965 / live 0; every previously-failing file re-run green solo
 
 **Files** `tests/` (move only), `tests/conftest.py`, `pyproject.toml`
 

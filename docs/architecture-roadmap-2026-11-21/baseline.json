@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "recorded": "2026-11-22",
+  "head": "post-AR012 (b550ae1 + AR008 layout move, pre-AR009)",
+  "notes": [
+    "The baseline may only be TIGHTENED: a metric may move in the improving",
+    "direction freely; ratchet_check.py fails when any metric regresses past",
+    "its recorded value.",
+    "coverage_floor is measured on the fast selection (`pytest -m 'unit or",
+    "contract' --cov=attackmap`) and wired as --cov-fail-under in CI (AR010).",
+    "ruff_total counts `ruff check .` violations repo-wide with the pyproject",
+    "configuration (docs/ excluded); mypy_errors counts `mypy src/attackmap`",
+    "errors under the pyproject configuration.",
+    "The ruff count fell from the plan's 1092 to 383 because AR003/AR006/",
+    "AR007/AR012 cleared lint debt in every file they touched."
+  ],
+  "metrics": {
+    "ruff_total": 383,
+    "mypy_errors": 494,
+    "mypy_files_with_errors": 62,
+    "import_cycles": 49,
+    "broad_excepts": 61,
+    "longest_function_lines": 788,
+    "functions_over_80_lines": 74,
+    "models_fan_in": 63,
+    "modules": 135,
+    "coverage_floor_pct": null
+  }
+}
