@@ -7,14 +7,16 @@
     "in the same change. tests/architecture/test_import_boundaries.py fails on",
     "any cycle not listed here and on stale entries.",
     "The principal-architect review measured 44 cycles with different tooling;",
-    "this tool deterministically measures this many. The gate is 'never grows'."
+    "this tool deterministically measures this many. The gate is 'never grows'.",
+    "AR020+AR021 (2026-11-22): safe_fs/artifact_manifest/artifact_publisher",
+    "de-cycled and the recon_models shim deleted; entries re-measured with",
+    "the same tooling. 49 -> 43 entries; the gate cap stays 49."
   ],
   "schema": 1,
   "cycles": [
     [
       "attackmap.analyzer_catalog",
       "attackmap.analyzer_contracts",
-      "attackmap.recon_models",
       "attackmap.models",
       "attackmap.analyzer_run_ledger",
       "attackmap.analyzer_catalog"
@@ -29,7 +31,6 @@
       "attackmap.analyzers",
       "attackmap.analyzer_host",
       "attackmap.analyzer_contracts",
-      "attackmap.recon_models",
       "attackmap.models",
       "attackmap.analyzer_run_ledger",
       "attackmap.analyzer_catalog"
@@ -39,19 +40,6 @@
       "attackmap.analyzers",
       "attackmap.analyzer_host",
       "attackmap.index",
-      "attackmap.models",
-      "attackmap.analyzer_run_ledger",
-      "attackmap.analyzer_catalog"
-    ],
-    [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.analyzer_host",
-      "attackmap.index",
-      "attackmap.safe_fs",
-      "attackmap.artifact_manifest",
-      "attackmap.artifact_publisher",
-      "attackmap.diagnostics",
       "attackmap.models",
       "attackmap.analyzer_run_ledger",
       "attackmap.analyzer_catalog"
@@ -275,17 +263,6 @@
       "attackmap.analyzers",
       "attackmap.config_scanner",
       "attackmap.scanner",
-      "attackmap.sdk.models",
-      "attackmap.recon_models",
-      "attackmap.models",
-      "attackmap.analyzer_run_ledger",
-      "attackmap.analyzer_catalog"
-    ],
-    [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
       "attackmap.supply_chain",
       "attackmap.models",
       "attackmap.analyzer_run_ledger",
@@ -336,7 +313,6 @@
       "attackmap.analyzers",
       "attackmap.ecosystem_php",
       "attackmap.analyzer_contracts",
-      "attackmap.recon_models",
       "attackmap.models",
       "attackmap.analyzer_run_ledger",
       "attackmap.analyzer_catalog"
@@ -369,14 +345,12 @@
       "attackmap.analyzers",
       "attackmap.sdk.contracts",
       "attackmap.analyzer_contracts",
-      "attackmap.recon_models",
       "attackmap.models",
       "attackmap.analyzer_run_ledger",
       "attackmap.analyzer_catalog"
     ],
     [
       "attackmap.analyzer_contracts",
-      "attackmap.recon_models",
       "attackmap.models",
       "attackmap.analyzer_run_ledger",
       "attackmap.analyzer_contracts"
@@ -385,28 +359,6 @@
       "attackmap.analyzers",
       "attackmap.ecosystem_php",
       "attackmap.analyzers"
-    ],
-    [
-      "attackmap.artifact_manifest",
-      "attackmap.artifact_publisher",
-      "attackmap.artifact_manifest"
-    ],
-    [
-      "attackmap.artifact_manifest",
-      "attackmap.artifact_publisher",
-      "attackmap.safe_fs",
-      "attackmap.artifact_manifest"
-    ],
-    [
-      "attackmap.artifact_manifest",
-      "attackmap.index",
-      "attackmap.safe_fs",
-      "attackmap.artifact_manifest"
-    ],
-    [
-      "attackmap.artifact_manifest",
-      "attackmap.safe_fs",
-      "attackmap.artifact_manifest"
     ],
     [
       "attackmap.authz",

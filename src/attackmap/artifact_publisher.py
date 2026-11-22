@@ -8,44 +8,23 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
-import stat
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
-from .artifact_manifest import ARTIFACT_TYPE, MANIFEST_FILENAME, SCHEMA_VERSION, SECTION_ORDER
-from .safe_fs import UnsafePathError, ensure_output_dir, safe_write_text
-
-CURRENT_POINTER = "current-generation.json"
-DEFAULT_REQUIRED = ("attackmap-report.json", MANIFEST_FILENAME, "run-manifest.json")
-FLEET_REQUIRED = ("fleet-summary.json", MANIFEST_FILENAME, "run-manifest.json")
-
-
-def _component(value: str) -> str:
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value) or value.endswith("."):
-        raise UnsafePathError("Invalid generation or artifact name")
-    if value.split(".")[0].upper() in {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}:
-        raise UnsafePathError("Reserved Windows path component")
-    return value
-
-
-def _safe(path: Path) -> Path:
-    # lstat flags are available on Python 3.11, unlike Path.is_junction().
-    # Check ancestors first so a redirected parent is rejected before traversal.
-    for part in reversed((path.absolute(), *path.absolute().parents)):
-        try:
-            info = part.lstat()
-        except FileNotFoundError:
-            continue  # A not-yet-created destination is allowed.
-        except OSError as exc:
-            raise UnsafePathError("Cannot verify artifact path") from exc
-        if (stat.S_ISLNK(info.st_mode)
-                or getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
-                or getattr(info, "st_reparse_tag", 0)):
-            raise UnsafePathError(f"Refusing redirected artifact path: {part}")
-    return path
+from .artifact_manifest import ARTIFACT_TYPE, MANIFEST_FILENAME, SCHEMA_VERSION
+from .safe_fs import (
+    CURRENT_POINTER,
+    DEFAULT_REQUIRED,
+    _component,
+    _json,
+    _safe,
+    current_generation,
+    ensure_output_dir,
+    safe_write_text,
+    validate_generation,
+)
 
 
 def prepare_output_root(base: Path) -> Path:
@@ -62,115 +41,6 @@ def generation_dir(base: Path, run_id: str) -> Path:
         raise ValueError("Generation already finalized; choose a unique run ID")
     folder.mkdir(exist_ok=True)
     return folder
-
-
-def _json(path: Path) -> dict:
-    _safe(path)
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError(f"Expected JSON object: {path.name}")
-    return data
-
-
-def validate_generation(folder: Path, *, required_files: tuple[str, ...] = DEFAULT_REQUIRED) -> dict:
-    """Verify manifest version, required section shapes, and every recorded byte hash."""
-    folder = _safe(Path(folder))
-    manifest = _json(folder / MANIFEST_FILENAME)
-    fleet = manifest.get("generation_profile") == "fleet"
-    if fleet and required_files == DEFAULT_REQUIRED:
-        required_files = FLEET_REQUIRED
-    for name in required_files:
-        path = _safe(folder / _component(name))
-        if not path.is_file():
-            raise ValueError(f"Missing required artifact: {name}")
-    if (manifest.get("schema_version") != SCHEMA_VERSION
-            or manifest.get("artifact_type") != ARTIFACT_TYPE
-            or manifest.get("generation_id") != folder.name):
-        raise ValueError("Unsupported or foreign artifact manifest")
-    identity = manifest.get("run_identity")
-    if (not isinstance(manifest.get("engine_version"), str)
-            or not isinstance(manifest.get("created_at"), str)
-            or not isinstance(identity, dict)
-            or not isinstance(identity.get("repo_root"), str)
-            or not isinstance(identity.get("repo_name"), str)
-            or not isinstance(identity.get("analyzers"), list)):
-        raise ValueError("Invalid artifact manifest identity")
-    state = manifest.get("exit_state", {})
-    if (not isinstance(state, dict) or type(state.get("exit_code")) is not int
-            or state.get("status") not in {"completed", "success", "succeeded", "ok", "policy_failed"}):
-        raise ValueError("Unsuccessful generation cannot become current")
-    sections = manifest.get("sections")
-    exports = manifest.get("compatibility_exports")
-    if not isinstance(sections, list) or not isinstance(exports, list):
-        raise ValueError("Invalid artifact entries")
-    paths = set()
-    for entry in sections + exports:
-        if not isinstance(entry, dict):
-            raise ValueError("Invalid artifact entry")
-        if not all(isinstance(entry.get(key), str) for key in ("name", "format", "role", "path")):
-            raise ValueError("Invalid artifact entry schema")
-        name = _component(entry.get("path", ""))
-        if name in paths:
-            raise ValueError("Duplicate artifact path")
-        paths.add(name)
-        path = _safe(folder / name)
-        raw = path.read_bytes()
-        if "size_bytes" in entry and entry["size_bytes"] != len(raw):
-            raise ValueError(f"Artifact size mismatch: {name}")
-        if hashlib.sha256(raw).hexdigest() != entry.get("checksum"):
-            raise ValueError(f"Artifact checksum mismatch: {name}")
-        if entry.get("format") == "json":
-            json.loads(raw)
-    for key, filename, _ in ([] if fleet else SECTION_ORDER):
-        if filename not in paths:
-            raise ValueError(f"Missing required section: {filename}")
-        value = json.loads((folder / filename).read_text(encoding="utf-8"))
-        if not isinstance(value, dict if key == "scan" else list):
-            raise ValueError(f"Invalid section schema: {filename}")
-    if not set(required_files).difference({MANIFEST_FILENAME}) <= paths:
-        raise ValueError("Required artifacts must have manifest checksums")
-    if fleet:
-        summary = _json(folder / "fleet-summary.json")
-        if (type(summary.get("repo_count")) is not int or not isinstance(summary.get("repos"), list)
-                or not isinstance(summary.get("cross_repo_links"), list)
-                or type(summary.get("total_findings")) is not int):
-            raise ValueError("Invalid fleet summary schema")
-        children = manifest.get("children")
-        if not isinstance(children, list) or len(children) != summary["repo_count"]:
-            raise ValueError("Missing fleet child generations")
-        seen = set()
-        for child in children:
-            parts = child["path"].split("/")
-            if len(parts) != 2 or child["path"] in seen:
-                raise ValueError("Invalid fleet child path")
-            seen.add(child["path"])
-            target = _safe(folder.joinpath(*(_component(part) for part in parts)))
-            if hashlib.sha256((target / MANIFEST_FILENAME).read_bytes()).hexdigest() != child["manifest_sha256"]:
-                raise ValueError("Fleet child manifest checksum mismatch")
-            validate_generation(target)
-    else:
-        report = _json(folder / "attackmap-report.json")
-        if not isinstance(report.get("scan"), dict) or not isinstance(report["scan"].get("root"), str):
-            raise ValueError("Invalid report schema")
-    timing = _json(folder / "run-manifest.json")
-    if not isinstance(timing.get("stages"), list):
-        raise ValueError("Invalid run timing schema")
-    return manifest
-
-
-def current_generation(base: Path) -> Path | None:
-    """Resolve only a fully validated current generation; corruption fails closed."""
-    try:
-        base = _safe(Path(base))
-        pointer = _json(base / CURRENT_POINTER)
-        folder = _safe(base / _component(pointer["generation"]))
-        manifest_bytes = (folder / MANIFEST_FILENAME).read_bytes()
-        if hashlib.sha256(manifest_bytes).hexdigest() != pointer["manifest_sha256"]:
-            return None
-        validate_generation(folder)
-        return folder
-    except (OSError, ValueError, KeyError, TypeError):
-        return None
 
 
 def publish_generation(base: Path, run_id: str, *,
@@ -278,8 +148,9 @@ def _safe_scan_timing(value):
 
 def context_from_staged_run(folder: Path, *, outcome: str):
     """Read bounded stage metadata, not a claim of final artifact/hash integrity."""
-    from .diagnostics import DiagnosticContext, context_from_run_manifest, merge_diagnostic_context
     from pydantic import ValidationError
+
+    from .diagnostics import DiagnosticContext, context_from_run_manifest, merge_diagnostic_context
     folder = _safe(Path(folder))
     manifest_path = folder / MANIFEST_FILENAME
     if manifest_path.exists():
@@ -359,7 +230,7 @@ def export_compatibility(base: Path, generation: Path, *, output_format: str = "
     Existing user files are never overwritten. A failed export does not undo
     the committed generation; consumers requiring consistency use the pointer.
     """
-    from .artifact_manifest import _MANIFEST_OUTPUT_NAMES, generated_artifact_names
+    from .safe_fs import _MANIFEST_OUTPUT_NAMES, generated_artifact_names
     if output_format not in {"all", "json", "markdown"}:
         raise ValueError("Unknown compatibility output format")
     base, generation = _safe(Path(base)), _safe(Path(generation))
@@ -423,7 +294,7 @@ def export_compatibility(base: Path, generation: Path, *, output_format: str = "
 def write_fleet_manifest(folder: Path, run_id: str, *, engine_version: str,
                          repo_roots: list[str], status: str = "succeeded", exit_code: int = 0) -> Path:
     """Index fleet artifacts and bind each already published child generation."""
-    from datetime import datetime, timezone
+    from datetime import UTC, datetime
     folder = _safe(Path(folder))
     if folder.name != _component(run_id):
         raise ValueError("Fleet generation identity mismatch")
@@ -444,7 +315,7 @@ def write_fleet_manifest(folder: Path, run_id: str, *, engine_version: str,
                 "role": "fleet-artifact", "checksum": hashlib.sha256(path.read_bytes()).hexdigest()})
     manifest = {"schema_version": SCHEMA_VERSION, "artifact_type": ARTIFACT_TYPE,
         "generation_id": run_id, "generation_profile": "fleet", "engine_version": engine_version,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "exit_state": {"status": status, "exit_code": exit_code},
         "run_identity": {"repo_root": "fleet", "repo_name": "fleet", "analyzers": [], "repo_roots": repo_roots},
         "sections": entries, "compatibility_exports": [], "children": children}

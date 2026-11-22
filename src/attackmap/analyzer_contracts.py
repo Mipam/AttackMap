@@ -7,7 +7,7 @@ from typing import Protocol
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .recon_models import ScanResult
+from .models import ScanResult
 
 # Phase-1 shared repository analyzer contract.
 # Keep AnalyzerResult mapped to ScanResult for backward compatibility.
@@ -171,11 +171,11 @@ class AnalyzerProtocol(Protocol):
 
 
 __all__ = [
-    "AnalyzerResult",
-    "AnalyzerMetadata",
-    "AnalyzerRepositoryModule",
-    "AnalyzerProtocol",
     "EXTRACTION_PROTOCOL_VERSION",
+    "AnalyzerMetadata",
+    "AnalyzerProtocol",
+    "AnalyzerRepositoryModule",
+    "AnalyzerResult",
     "ExtractionCompatibility",
     "check_extraction_compatibility",
     "describe_extraction_protocol",

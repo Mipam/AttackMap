@@ -67,7 +67,6 @@ _ENGINE_MODULES = (
     "redact",
     "models",
     "sdk/models",
-    "recon_models",
     "incremental",
 )
 
@@ -110,8 +109,9 @@ def _sha256(text: str) -> str:
 
 def engine_identity() -> str:
     """Content hash of the source or frozen code producing per-file results."""
-    import attackmap
     import pydantic
+
+    import attackmap
 
     parts: list[str] = [CACHE_SCHEMA, f"python:{sys.version}", f"pydantic:{pydantic.__version__}"]
     package = Path(attackmap.__file__).parent
@@ -210,7 +210,7 @@ class PerFileCache:
 
     @classmethod
     def open(cls, path: str | Path, *, engine: str | None = None,
-             policy: str | None = None, max_entries: int | None = None) -> "PerFileCache":
+             policy: str | None = None, max_entries: int | None = None) -> PerFileCache:
         return cls(
             Path(path),
             engine=engine if engine is not None else engine_identity(),

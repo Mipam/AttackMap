@@ -1,60 +1,48 @@
-"""Versioned artifact manifest and section files for AttackMap scan output."""
+"""Versioned artifact manifest and section files for AttackMap scan output.
+
+A pure serializer: every filename constant, artifact-recognition primitive and
+generation validator lives in :mod:`attackmap.safe_fs` so walkers and the
+publisher can share them without importing this module back.
+"""
 
 from __future__ import annotations
 
 import hashlib
 import json
-import re
 import uuid
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .safe_fs import UnsafePathError, ensure_output_dir, max_file_bytes, safe_write_text
-
-
-SCHEMA_VERSION = "1.0.0"
-ARTIFACT_TYPE = "attackmap_artifact_manifest"
-MANIFEST_FILENAME = "artifact-manifest.json"
-PINS_FILENAME = "pinned-generations.json"
-
-_LEGACY_JSON_FILES = frozenset({
-    "attackmap-report.json", "run-manifest.json", "defensive-review.json",
-    "review-context-pack.json", "fleet-summary.json",
-    "defensive-review-llm.meta.json", "benchmark-results.json",
-    "attackmap-diagnostics.json",
-})
-
-_MARKDOWN_EXPORTS = (
-    "architecture.md", "attack-surface.md", "defensive-review.md",
-    "attackmap-exploitability.md", "attackmap-paths.md", "attackmap-topology.md",
-    "attackmap-paths.dot", "attackmap-topology.dot",
+from .safe_fs import (
+    _MARKDOWN_EXPORTS,
+    _OPTIONAL_EXPORTS,
+    ARTIFACT_TYPE,
+    MANIFEST_FILENAME,
+    PINS_FILENAME,
+    SCHEMA_VERSION,
+    SECTION_ORDER,
+    _artifact_json,
+    ensure_output_dir,
+    generated_artifact_names,
+    max_file_bytes,
+    safe_write_text,
 )
 
-_OPTIONAL_EXPORTS = (
-    "attackmap-diff.md", "defensive-review-llm.md", "defensive-review-llm.meta.json",
-    "vulnerability-hypotheses.md", "vulnerability-hypotheses.meta.json",
-    "remediation.md", "remediation.meta.json", "triage.md", "triage.meta.json",
-    "pr-review.md", "pr-review.json",
-)
-
-# Sections extracted from the legacy monolithic report JSON.
-SECTION_ORDER: list[tuple[str, str, str]] = [
-    ("scan", "scan.json", "structured-scan-result"),
-    ("findings", "findings.json", "findings-array"),
-    ("attack_paths", "attack_paths.json", "attack-paths-array"),
-    ("attack_surfaces", "attack_surfaces.json", "attack-surfaces-array"),
-    ("exploitability", "exploitability.json", "exploitability-array"),
-    ("suppressed_findings", "suppressed_findings.json", "suppressed-findings-array"),
+__all__ = [
+    "ARTIFACT_TYPE",
+    "MANIFEST_FILENAME",
+    "PINS_FILENAME",
+    "SCHEMA_VERSION",
+    "SECTION_ORDER",
+    "ArtifactManifest",
+    "ArtifactSection",
+    "generated_artifact_names",
+    "load_artifact_manifest",
+    "make_run_id",
+    "write_artifact_manifest",
 ]
-
-_MANIFEST_OUTPUT_NAMES = frozenset(
-    filename for _, filename, _ in SECTION_ORDER
-) | frozenset(_MARKDOWN_EXPORTS) | frozenset(_OPTIONAL_EXPORTS) | {
-    "defensive-review.json", "review-context-pack.json", "run-manifest.json",
-    "attackmap-report.json", "attackmap-report.sarif",
-}
 
 
 @dataclass(frozen=True)
@@ -214,12 +202,12 @@ def _snapshot_publication_block(
 
 
 def _iso_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def make_run_id() -> str:
     """Return an opaque unique id, independent of wall-clock resolution."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return f"{now.strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex}"
 
 
@@ -346,98 +334,6 @@ def write_artifact_manifest(
     manifest_path = out / MANIFEST_FILENAME
     safe_write_text(out, manifest_path, json.dumps(manifest.to_dict(), indent=2) + "\n")
     return manifest_path
-
-
-def _artifact_json(path: Path, limit: int) -> dict[str, Any] | None:
-    try:
-        if path.is_symlink() or path.stat().st_size > limit:
-            return None
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else None
-    except (OSError, UnicodeError, ValueError, RecursionError):
-        return None
-
-
-def _is_legacy_artifact(name: str, data: dict[str, Any]) -> bool:
-    """Recognize old report structures without reserving their basenames."""
-    shapes = {
-        "attackmap-report.json": {"scan": dict, "findings": list, "attack_paths": list, "attack_surfaces": list},
-        "run-manifest.json": {"engine_version": str, "analyzers": list, "stages": list, "files_scanned": int, "findings_by_severity": dict},
-        "defensive-review.json": {"schema_version": str, "target_metadata": dict, "raw_structured_signals": dict, "limitations_meta": dict},
-        "fleet-summary.json": {"repo_count": int, "repos": list, "cross_repo_links": list, "total_findings": int},
-        "defensive-review-llm.meta.json": {"backend": str, "model": str, "usage": dict},
-        "attackmap-diagnostics.json": {"schema_version": str, "export_type": str, "generated_at": str, "generations": list},
-    }
-    if name == "review-context-pack.json":
-        return data.get("artifact_type") == "attackmap_review_context_pack"
-    if name == "benchmark-results.json":
-        overall = data.get("overall")
-        return isinstance(data.get("cases"), list) and isinstance(overall, dict) and bool(overall) and all(
-            isinstance(value, dict) and {"tp", "fp", "precision", "recall", "missed_expected"} <= value.keys()
-            for value in overall.values()
-        )
-    required = shapes.get(name)
-    return bool(required) and all(isinstance(data.get(key), kind) for key, kind in required.items())
-
-
-def _is_pins_payload(data: dict[str, Any]) -> bool:
-    """Recognize our pin store structurally; a user file with this name stays input."""
-    pinned = data.get("pinned")
-    return (data.get("schema_version") == "1.0" and isinstance(pinned, list)
-            and len(pinned) <= 10_000 and len(set(pinned)) == len(pinned)
-            and all(isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", name)
-                    and not name.endswith(".") for name in pinned))
-
-
-def generated_artifact_names(directory: Path, filenames: list[str]) -> set[str]:
-    """Identify local generated files using manifest checksums or legacy shapes.
-
-    Invalid metadata and replaced files remain scan inputs. Only flat paths are
-    accepted: current publishers write flat manifests, and a repository-supplied
-    manifest must not hide arbitrary files in other directories.
-    """
-    names = set(filenames)
-    generated: set[str] = set()
-    claimed: set[str] = set()
-    if "current-generation.json" in names:
-        from .artifact_publisher import current_generation
-        if current_generation(directory) is not None:
-            generated.add("current-generation.json")
-    if PINS_FILENAME in names:
-        payload = _artifact_json(directory / PINS_FILENAME, min(max_file_bytes(), 100_000))
-        if payload is not None and _is_pins_payload(payload):
-            generated.add(PINS_FILENAME)
-    manifest = (
-        _artifact_json(directory / MANIFEST_FILENAME, min(max_file_bytes(), 1_000_000))
-        if MANIFEST_FILENAME in names else None
-    )
-    if (manifest and manifest.get("artifact_type") == ARTIFACT_TYPE
-            and isinstance(manifest.get("generation_id"), str)
-            and isinstance(manifest.get("sections"), list)
-            and isinstance(manifest.get("compatibility_exports"), list)):
-        generated.add(MANIFEST_FILENAME)
-        for section in manifest["sections"] + manifest["compatibility_exports"]:
-            if not isinstance(section, dict):
-                continue
-            name = section.get("path")
-            if (not isinstance(name, str) or name not in names
-                    or name not in _MANIFEST_OUTPUT_NAMES or Path(name).name != name):
-                continue
-            claimed.add(name)
-            path = directory / name
-            try:
-                if not path.is_symlink() and path.stat().st_size <= max_file_bytes():
-                    if section.get("checksum") == hashlib.sha256(path.read_bytes()).hexdigest():
-                        generated.add(name)
-            except (OSError, UnicodeError):
-                continue
-    for name in sorted((names & _LEGACY_JSON_FILES) - claimed, key=lambda value: (value.endswith(".meta.json"), value)):
-        data = _artifact_json(directory / name, max_file_bytes())
-        if name == "defensive-review-llm.meta.json" and not generated & {"attackmap-report.json", "run-manifest.json"}:
-            continue
-        if data is not None and _is_legacy_artifact(name, data):
-            generated.add(name)
-    return generated
 
 
 def _load_section(data: dict[str, Any]) -> ArtifactSection:
