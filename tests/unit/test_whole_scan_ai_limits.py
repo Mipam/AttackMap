@@ -172,8 +172,11 @@ def test_requested_limits_reach_serial_and_parallel_child_cli(tmp_path, monkeypa
     assert (child_ai.max_calls, child_ai.output_tokens, child_ai.timeout_seconds) == (1, 9, 7)
 
 
-def test_fleet_ai_remains_explicitly_unsupported(tmp_path):
-    from attackmap.scan_service import _fleet_incompatible_flags
+def test_fleet_ai_switches_reach_worker_argv(tmp_path):
+    """AR069 fleet parity: every AI switch rides the fleet child's argv."""
+    from attackmap.scan_service import _fleet_feature_admission, _run_fleet_repo_argv
     request = ScanRequest(repo_paths=[tmp_path, tmp_path / "other"], output=tmp_path / "out",
                           spec=RunSpec(ai=AiSpec(enabled=True, hunt=True, remediate=True, triage=True)))
-    assert {"--llm", "--hunt", "--remediate", "--triage"} <= set(_fleet_incompatible_flags(request))
+    assert _fleet_feature_admission(request) == []
+    argv = _run_fleet_repo_argv(request, tmp_path, tmp_path / "out", [])
+    assert {"--llm", "--hunt", "--remediate", "--triage"} <= set(argv)

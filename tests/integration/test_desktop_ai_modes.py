@@ -16,7 +16,7 @@ from attackmap.llm_review import generate_llm_review
 from attackmap.models import Finding, ScanResult
 from attackmap.provider_options import ProviderOptions, ProviderOptionsV13
 from attackmap.run_contract import CURRENT_SCHEMA_VERSION, RunRequest
-from attackmap.scan_service import _fleet_incompatible_flags, scan_request_from_run
+from attackmap.scan_service import _fleet_feature_admission, scan_request_from_run
 
 
 def payload(tmp_path, mode="review", schema="1.3", **changes):
@@ -201,8 +201,15 @@ def test_single_pass_verify_and_openai_effort_mapping_are_explicit(engine):
     assert parameters["jury_votes"]==1
 
 
-@pytest.mark.parametrize("mode", [m for m in MODES if m!="none"])
-def test_each_ai_mode_remains_rejected_for_fleet(tmp_path,mode):
+@pytest.mark.parametrize("mode,flags", [("review", ("--llm",)), ("hunt", ("--hunt",)),
+    ("hunt_verify", ("--hunt", "--verify")), ("remediate", ("--remediate",)),
+    ("triage", ("--triage",))])
+def test_each_ai_mode_is_wired_into_fleet_worker_argv(tmp_path,mode,flags):
+    """AR069 fleet parity: desktop AI modes travel on the fleet child's argv."""
     request=scan_request_from_run(validate_desktop_request(payload(tmp_path,mode)))
     request.repo_paths.append(tmp_path/"other")
-    assert _fleet_incompatible_flags(request)
+    from attackmap.scan_service import _run_fleet_repo_argv
+    argv=_run_fleet_repo_argv(request,tmp_path/"repo",tmp_path/"child-out",[])
+    for flag in flags:
+        assert flag in argv
+    assert _fleet_feature_admission(request)==[]

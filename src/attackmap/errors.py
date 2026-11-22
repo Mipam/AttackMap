@@ -94,13 +94,20 @@ class BudgetExpired(AttackMapError):
 
 
 class UnsupportedInFleet(AttackMapError, RuntimeError):
-    """A flag or mode cannot run inside a fleet worker subprocess."""
+    """A flag or mode cannot run inside a fleet worker subprocess (AR069, AC-310)."""
 
     code = "unsupported_in_fleet"
     remediation = (
         "Run the flag on a single-repository scan, or drop it from the fleet "
-        "request; the fleet-incompatible flag list names it."
+        "request; the typed error names the feature and the reason."
     )
+
+    def __init__(self, feature: str, reason: str | None = None, *, code: str | None = None,
+                 remediation: str | None = None) -> None:
+        self.feature = feature
+        self.reason = reason
+        detail = feature if reason is None else f"{feature} is not supported in fleet mode: {reason}"
+        super().__init__(detail, code=code, remediation=remediation)
 
 
 class ArtifactIntegrityError(AttackMapError, ValueError):

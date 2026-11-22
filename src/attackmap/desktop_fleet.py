@@ -253,6 +253,7 @@ def write_index(request: FleetRunRequest, folder: Path, children: list[FleetChil
 
 def run_engine(request: FleetRunRequest) -> int:
     from .analyzers import select_requested_analyzers
+    from .errors import UnsupportedInFleet
     from .fleet import fleet_repo_ids
     from .run_contract import RunRequest
     from .scan_service import ScanRequestError, execute_scan_request, scan_request_from_run
@@ -312,7 +313,9 @@ def run_engine(request: FleetRunRequest) -> int:
     try:
         try:
             result = execute_scan_request(service)
-        except ScanRequestError:
+        except (ScanRequestError, UnsupportedInFleet):
+            # Typed fleet admission refusals (AR069/AC-310) fail the broker the
+            # same way as request validation; nothing was scanned.
             raise ValueError("Desktop fleet application request failed validation") from None
         return 130 if cancellation.is_set() else result.exit_code
     finally:

@@ -118,13 +118,16 @@ def test_fleet_runs_all_repos(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     assert summary.fleet_summary_path is not None
 
 
-def test_fleet_rejects_single_repo_only_flags(tmp_path: Path) -> None:
+def test_fleet_refused_flags_raise_typed_admission_error(tmp_path: Path) -> None:
+    """AR069: baseline is admitted per child; report-compared flags refuse typed."""
+    from attackmap.errors import UnsupportedInFleet
+
     a, b = tmp_path / "a", tmp_path / "b"
     a.mkdir()
     b.mkdir()
-    with pytest.raises(ScanRequestError, match="not yet supported in multi-repo mode"):
+    with pytest.raises(UnsupportedInFleet, match="--diff-output"):
         execute_scan_request(
-            ScanRequest(repo_paths=[a, b], output=tmp_path / "out", spec=RunSpec(baseline="foo.json"))
+            ScanRequest(repo_paths=[a, b], output=tmp_path / "out", spec=RunSpec(diff_output="d.md"))
         )
 
 

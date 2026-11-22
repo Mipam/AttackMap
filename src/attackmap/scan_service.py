@@ -30,7 +30,7 @@ from .crossrepo import (
     find_cross_repo_anomalies,
     find_trust_gaps,
 )
-from .errors import AttackMapError
+from .errors import AttackMapError, UnsupportedInFleet
 from .fleet import (
     FleetRepoResult,
     FleetScan,
@@ -165,30 +165,59 @@ def _request_spec(request: ScanRequest) -> RunSpec:
     return request.spec
 
 
-def _fleet_incompatible_flags(request: ScanRequest) -> list[str]:
+# AR069 fleet feature parity (AC-310). Every ScanRequest feature either
+# genuinely works in each fleet worker child — it is wired onto the child's
+# own argv — or is refused at admission with a typed UnsupportedInFleet naming
+# the feature and the reason; nothing is silently dropped mid-run.
+#
+# Per-child output layout (serial and parallel workers alike): each repository
+# writes into its own ``<output>/<repo_id>/`` directory, so feature artifacts
+# never share a path across children:
+#   baseline        read-only shared input, passed through unchanged; each
+#                   child writes its diff to ``<child output>/attackmap-diff.md``.
+#   pr_comment      the requested path is a single shared file, so each child
+#                   re-scopes it to ``<child output>/pr-comment.md``; the
+#                   requested path is never written by a fleet run.
+#   secrets_history no files at all: each child scans its own repository's git
+#                   history and embeds the hits in its own report.
+_FLEET_PR_COMMENT_NAME = "pr-comment.md"
+
+
+def _fleet_feature_admission(request: ScanRequest) -> list[UnsupportedInFleet]:
+    """Return typed refusals for features no fleet child can honor (AC-310).
+
+    Supported per child and wired through :func:`_run_fleet_repo_argv`:
+    ``llm``, ``hunt`` (+ the ``verify`` jury), ``remediate``, ``triage`` — the
+    child carries its own budget-gated ``AiSpec`` and spends its own allowance —
+    plus ``baseline``, ``pr_comment`` and ``secrets_history`` with the per-child
+    output layout documented on this module. The remaining baseline-comparison
+    controls would either collide on one shared file or fail the child after its
+    scan, so they are refused here, before any repository is scanned.
+    """
     spec = _request_spec(request)
-    active: list[str] = []
-    if spec.baseline is not None:
-        active.append("--baseline")
+    refusals: list[UnsupportedInFleet] = []
     if spec.diff_output is not None:
-        active.append("--diff-output")
+        refusals.append(UnsupportedInFleet(
+            "--diff-output",
+            "every fleet child writes its baseline diff into its own output "
+            "directory (attackmap-diff.md); a single shared diff path would "
+            "collide across children",
+        ))
     if spec.fail_on_new_high:
-        active.append("--fail-on-new-high")
+        refusals.append(UnsupportedInFleet(
+            "--fail-on-new-high",
+            "the gate fails the child process after its scan, so the fleet "
+            "would report the repository as failed instead of gating it; "
+            "run it per repository against each child report",
+        ))
     if spec.fail_on_new_suppression:
-        active.append("--fail-on-new-suppression")
-    if spec.pr_comment is not None:
-        active.append("--pr-comment")
-    if spec.ai.enabled:
-        active.append("--llm")
-    if spec.ai.hunt:
-        active.append("--hunt")
-    if spec.ai.remediate:
-        active.append("--remediate")
-    if spec.ai.triage:
-        active.append("--triage")
-    if spec.features.secrets_history > 0:
-        active.append("--secrets-history")
-    return active
+        refusals.append(UnsupportedInFleet(
+            "--fail-on-new-suppression",
+            "the gate fails the child process after its scan, so the fleet "
+            "would report the repository as failed instead of gating it; "
+            "run it per repository against each child report",
+        ))
+    return refusals
 
 
 def _write_artifact(path: Path, text: str) -> None:
@@ -299,7 +328,16 @@ def _run_fleet_repo_argv(
     repo_out: Path,
     analyzer_names: list[str],
 ) -> list[str]:
-    """Build the CLI argv for a per-repo subprocess worker."""
+    """Build the CLI argv for a per-repo subprocess worker.
+
+    AR069 fleet parity: every supported ScanRequest feature travels on this
+    argv so the child rebuilds an equivalent spec. The AI group is
+    budget-gated per child — each worker spends its own
+    ``--ai-max-calls``/``--ai-output-tokens`` allowance. ``pr_comment`` is
+    re-scoped into this child's own output directory (see the module
+    docstring for the per-child layout); ``baseline`` passes through as a
+    read-only shared input.
+    """
     spec = _request_spec(request)
     ai = spec.ai
     prefix = (
@@ -317,6 +355,40 @@ def _run_fleet_repo_argv(
     argv.extend(["--ai-max-calls", str(ai.max_calls),
                  "--ai-output-tokens", str(ai.output_tokens),
                  "--ai-timeout-seconds", str(ai.timeout_seconds)])
+    if ai.enabled:
+        argv.append("--llm")
+    if ai.provider != "claude":
+        argv.extend(["--llm-provider", ai.provider])
+    if ai.model is not None:
+        argv.extend(["--llm-model", ai.model])
+    if ai.effort is not None:
+        argv.extend(["--llm-effort", ai.effort])
+    if ai.backend != "auto":
+        argv.extend(["--llm-backend", ai.backend])
+    if ai.speed != "standard":
+        argv.extend(["--llm-speed", ai.speed])
+    if ai.hunt:
+        argv.append("--hunt")
+    if ai.verify:
+        argv.append("--verify")
+        if ai.verify_votes != 3:
+            argv.extend(["--verify-votes", str(ai.verify_votes)])
+        if ai.hunt_lenses != 1:
+            argv.extend(["--hunt-lenses", str(ai.hunt_lenses)])
+        if ai.hunt_rounds != 1:
+            argv.extend(["--hunt-rounds", str(ai.hunt_rounds)])
+        if ai.hunt_budget > 0:
+            argv.extend(["--hunt-budget", str(ai.hunt_budget)])
+    if ai.remediate:
+        argv.append("--remediate")
+    if ai.triage:
+        argv.append("--triage")
+    if spec.features.secrets_history:
+        argv.extend(["--secrets-history", str(spec.features.secrets_history)])
+    if spec.baseline is not None:
+        argv.extend(["--baseline", spec.baseline])
+    if spec.pr_comment is not None:
+        argv.extend(["--pr-comment", str(Path(repo_out) / _FLEET_PR_COMMENT_NAME)])
     if request.run_id is not None:
         argv.extend(["--run-id", request.run_id])
     if spec.analyzer.profile_id is not None:
@@ -539,7 +611,13 @@ def _run_fleet_serial(
     fleet: FleetScan,
     output_root: Path,
 ) -> None:
-    """Sequential per-repo scan used when max_workers == 1."""
+    """Sequential per-repo scan used when max_workers == 1.
+
+    Feature parity matches the parallel workers (AR069): the baseline passes
+    through as a read-only shared input, and ``pr_comment`` is re-scoped into
+    each repository's own output directory so children never share a written
+    path (see the module docstring for the per-child layout).
+    """
     for repo_id, repo_path in zip(fleet_repo_ids(request.repo_paths), request.repo_paths, strict=True):
         if request.cancel_check is not None and request.cancel_check():
             break
@@ -547,7 +625,10 @@ def _run_fleet_serial(
         request.echo(f"── {repo_id}  ({repo_path}) ──")
         try:
             repo_out = output_root / repo_id
-            state = run_scan(_request_spec(request), repo_path=repo_path, output=repo_out,
+            spec = _request_spec(request)
+            if spec.pr_comment is not None:
+                spec = replace(spec, pr_comment=str(repo_out / _FLEET_PR_COMMENT_NAME))
+            state = run_scan(spec, repo_path=repo_path, output=repo_out,
                              analyzers=analyzers, echo=request.echo)
             if state.exit_code != 0:
                 raise RuntimeError(f"scan exited with code {state.exit_code}")
@@ -866,12 +947,6 @@ def _run_fleet_generation(request: ScanRequest, analyzers: list | None) -> RunSu
     if unverified_fleet_cleanup():
         raise ScanRequestError("Previous fleet process-tree cleanup remains unverified; no new fleet can start")
     output_root = Path(request.output)
-    incompatible = _fleet_incompatible_flags(request)
-    if incompatible:
-        raise ScanRequestError(
-            f"{', '.join(sorted(incompatible))} not yet supported in multi-repo mode — "
-            "run one repository at a time for these (fleet-aware wiring lands in #146b+)."
-        )
 
     fleet = FleetScan()
     fleet_started = time.perf_counter()
@@ -1064,4 +1139,9 @@ def execute_scan_request(request: ScanRequest) -> RunSummary:
 
     if len(request.repo_paths) == 1:
         return _run_single_repo(request, analyzers)
+    # Fleet admission (AR069/AC-310): refuse unsupported features before any
+    # repository is scanned, as a typed error naming the feature and reason.
+    refusals = _fleet_feature_admission(request)
+    if refusals:
+        raise refusals[0]
     return _run_fleet(request, analyzers)
