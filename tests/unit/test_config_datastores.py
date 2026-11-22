@@ -12,7 +12,8 @@ from attackmap.extraction.config_scanner import scan_config_repo
 from attackmap.extraction.index import RepoIndex
 from attackmap.foundation.fleet_resource_identity import extract_shared_datastore_declarations
 from attackmap.models import ScanResult
-from attackmap.orchestration.fleet import FleetRepoResult, FleetScan, fleet_summary_json
+from attackmap.orchestration.fleet import FleetRepoResult, FleetScan
+from attackmap.orchestration.fleet_architecture import fleet_summary_json
 from attackmap.reasoning.signal_provenance import stamp_scan_provenance
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "shared_datastores"

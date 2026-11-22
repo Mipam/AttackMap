@@ -1,43 +1,27 @@
 {
   "_comment": [
-    "Frozen at AR002 (2026-11-21, HEAD after commit 9e5c01a) via",
-    "tools.arch_report.build_graph + find_cycles on src/attackmap.",
+    "Frozen at AR002 (2026-11-21) via tools.arch_report on src/attackmap.",
     "Each entry is one canonical import cycle (first module == last module).",
     "The list may only SHRINK: removing a cycle requires deleting its entry",
     "in the same change. tests/architecture/test_import_boundaries.py fails on",
     "any cycle not listed here and on stale entries.",
-    "AR020+AR021 (2026-11-22): 49 -> 43. AR029: 43 -> 41 (node renames).",
-    "AR030 wave 1 (2026-11-22): 41 -> 4. The ledger/scanner/merge hub broke",
-    "36 cycles at once: analyzer_run_plan + analyzer_run_identity moved into",
-    "orchestration (ledger keeps record models), run_repo_passes/scan_repo",
-    "into orchestration.repo_passes, merge_analyzer_results into",
-    "extraction.merge (schema into model.merge_schema), get_analyzer_catalog",
-    "into orchestration.analyzers, and the analyzer contracts / signal",
-    "provenance / evidence labels into sdk/model per the AR031 layer map.",
-    "Remaining: ecosystem_php <-> analyzers, desktop_actions <-> surfaces.cli,",
-    "desktop_fleet <-> run_contract, fleet <-> fleet_architecture."
+    "AR020+AR021: 49 -> 43. AR029: 43 -> 41 (node renames).",
+    "AR030 wave 1: 41 -> 4 (hub moves).",
+    "AR030 wave 2: 4 -> 1. parse_run_message moved into desktop_fleet (the",
+    "1.4 envelope models are fleet-owned; run_contract importing them closed",
+    "desktop_fleet <-> run_contract). fleet_summary_json moved into",
+    "fleet_architecture (it renders that module's output; fleet importing",
+    "architecture closed fleet <-> fleet_architecture). ecosystem_php now",
+    "merges via extraction.merge (merge_analyzer_results moved down in",
+    "wave 1), closing ecosystem_php <-> analyzers.",
+    "Remaining: desktop_actions <-> surfaces.cli."
   ],
   "schema": 1,
   "cycles": [
     [
-      "attackmap.extraction.ecosystems.ecosystem_php",
-      "attackmap.orchestration.analyzers",
-      "attackmap.extraction.ecosystems.ecosystem_php"
-    ],
-    [
       "attackmap.orchestration.desktop_actions",
       "attackmap.surfaces.cli",
       "attackmap.orchestration.desktop_actions"
-    ],
-    [
-      "attackmap.orchestration.desktop_fleet",
-      "attackmap.orchestration.run_contract",
-      "attackmap.orchestration.desktop_fleet"
-    ],
-    [
-      "attackmap.orchestration.fleet",
-      "attackmap.orchestration.fleet_architecture",
-      "attackmap.orchestration.fleet"
     ]
   ]
 }

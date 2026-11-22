@@ -197,26 +197,6 @@ class RunArtifactManifest(RunEnvelope):
         return self
 
 
-def parse_run_message(payload: dict[str, Any]) -> RunEnvelope:
-    """Decode explicit versioned envelopes; never infer a version for legacy data."""
-    if "schema_version" not in payload:
-        raise ValueError("Missing schema_version; use import_legacy_report() for legacy reports")
-    models = {"request": RunRequest, "progress": RunProgress,
-              "terminal": RunTerminal, "manifest": RunArtifactManifest}
-    if payload.get("schema_version") == "1.4":
-        from attackmap.orchestration.desktop_fleet import (
-            FleetChildEvent,
-            FleetRunRequest,
-            FleetTerminal,
-        )
-        models.update(fleet_request=FleetRunRequest, fleet_child=FleetChildEvent,
-                      fleet_terminal=FleetTerminal)
-    model = models.get(payload.get("kind"))
-    if model is None:
-        raise ValueError("Unknown run message kind; expected request, progress, terminal, or manifest")
-    return model.model_validate(payload)
-
-
 def accepts_update(current: RunEnvelope, incoming: RunEnvelope) -> bool:
     """Reject duplicates, reordered events, cross-run identity and terminal regression."""
     return (

@@ -1233,8 +1233,8 @@ class PhpWebAnalyzer:
         return has_php_source(root)
 
     def analyze(self, root: str | Path, index: object | None = None, incremental: bool | None = None) -> AnalyzerResult:
+        from attackmap.extraction.merge import merge_analyzer_results
         from attackmap.extraction.scanner import scan_files
-        from attackmap.orchestration.analyzers import merge_analyzer_results
 
         base = scan_files(root, suffixes={PHP_SUFFIX}, index=index, incremental=incremental)
         extra = scan_php_web_repo(root, index=index)

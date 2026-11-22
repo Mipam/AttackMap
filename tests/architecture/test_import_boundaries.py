@@ -70,10 +70,11 @@ def test_allowlist_never_grows() -> None:
     AR002 froze 49 canonical cycles. AR020+AR021 shrank the measured set to
     43; AR029's restructure re-measured 41. AR030 wave 1 moved the
     ledger/scanner/merge hub orchestration-side and the contracts/provenance
-    data model-side, breaking 37 of them; the cap tightens accordingly.
+    data model-side (41 -> 4); wave 2 moved parse_run_message into
+    desktop_fleet and fleet_summary_json into fleet_architecture (4 -> 1).
     """
     allowlist, _ = _load_allowlist()
-    frozen_max = 4
+    frozen_max = 1
     assert len(allowlist) <= frozen_max, (
         f"cycle allowlist grew to {len(allowlist)}; the freeze is {frozen_max}"
     )

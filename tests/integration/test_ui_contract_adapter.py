@@ -1,8 +1,8 @@
 from attackmap import __version__
+from attackmap.orchestration.desktop_fleet import parse_run_message
 from attackmap.orchestration.run_contract import (
     CURRENT_SCHEMA_VERSION,
     SUPPORTED_SCHEMA_VERSIONS,
-    parse_run_message,
 )
 from attackmap.surfaces.ui.contract_adapter import LegacyRunContractAdapter
 

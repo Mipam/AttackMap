@@ -570,3 +570,106 @@ def aggregate_fleet_architecture(architecture: Mapping[str, Any]) -> dict:
 
 
 __all__ = ["build_fleet_architecture", "aggregate_fleet_architecture"]
+
+
+def fleet_summary_json(fleet: FleetScan) -> dict:
+    """Machine-readable fleet index (for GUI / tooling front-ends).
+
+    AR030: moved here from orchestration.fleet — it renders
+    build_fleet_architecture output, and fleet importing architecture
+    closed a fleet <-> fleet_architecture import cycle.
+    """
+
+    return {
+        "fleet_architecture": build_fleet_architecture(fleet),
+        "repo_count": fleet.repo_count,
+        "total_findings": fleet.total_findings(),
+        "failed": list(fleet.failed),
+        "repos": [
+            {
+                "repo_id": r.repo_id,
+                "root": r.root,
+                "report_dir": r.report_dir,
+                "findings": len(r.findings),
+                "suppressed": r.suppressed_count,
+                "severity_counts": r.severity_counts(),
+            }
+            for r in fleet.results
+        ],
+        "cross_repo_links": [
+            {
+                "client_repo": lk.client_repo,
+                "server_repo": lk.server_repo,
+                "method": lk.method,
+                "path_template": lk.path_template,
+                "client_target": lk.client_target,
+                "destination": lk.destination,
+                "resolution": lk.resolution,
+                "resolution_reason": lk.resolution_reason,
+                "scheme": lk.scheme,
+                "alias_provenance": lk.alias_provenance,
+                "proxy_host": lk.proxy_host,
+                "server_namespace": lk.server_namespace,
+                "server_service_name": lk.server_service_name,
+                "server_port": lk.server_port,
+                "server_protocol": lk.server_protocol,
+                "declaration_refs": [asdict(ref) for ref in lk.declaration_refs],
+                "client_location": f"{lk.client_file}:{lk.client_line}"
+                if lk.client_line
+                else lk.client_file,
+                "server_route_path": lk.server_route_path,
+                "server_location": f"{lk.server_file}:{lk.server_line}"
+                if lk.server_line
+                else lk.server_file,
+            }
+            for lk in fleet.links
+        ],
+        "cross_boundary_flows": [
+            {
+                "client_repo": cb.client_repo,
+                "server_repo": cb.server_repo,
+                "method": cb.method,
+                "route": cb.route,
+                "basis": cb.basis,
+                "detail": cb.detail,
+                "severity": cb.severity,
+                "speculative": True,
+                "client_location": f"{cb.client_file}:{cb.client_line}"
+                if cb.client_line
+                else cb.client_file,
+                "server_location": f"{cb.server_file}:{cb.server_line}"
+                if cb.server_line
+                else cb.server_file,
+            }
+            for cb in fleet.cross_boundary
+        ],
+        "trust_gaps": [
+            {
+                "client_repo": g.client_repo,
+                "server_repo": g.server_repo,
+                "method": g.method,
+                "route": g.route,
+                "severity": g.severity,
+                "speculative": True,
+                "client_location": f"{g.client_file}:{g.client_line}"
+                if g.client_line
+                else g.client_file,
+                "server_location": f"{g.server_file}:{g.server_line}"
+                if g.server_line
+                else g.server_file,
+            }
+            for g in fleet.trust_gaps
+        ],
+        "cross_repo_anomalies": [
+            {
+                "repo": a.repo,
+                "method": a.method,
+                "route": a.route,
+                "template": a.template,
+                "peers": list(a.peers),
+                "severity": a.severity,
+                "speculative": True,
+            }
+            for a in fleet.cross_repo_anomalies
+        ],
+    }

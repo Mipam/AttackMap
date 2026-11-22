@@ -36,10 +36,10 @@ from attackmap.orchestration.fleet import (
     FleetRepoResult,
     FleetScan,
     fleet_repo_ids,
-    fleet_summary_json,
     render_fleet_graph_mermaid,
     render_fleet_summary,
 )
+from attackmap.orchestration.fleet_architecture import fleet_summary_json
 from attackmap.orchestration.fleet_admission import (
     FleetAdmissionError,
     FleetMemoryLedger,

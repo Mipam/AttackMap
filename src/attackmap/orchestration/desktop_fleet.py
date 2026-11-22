@@ -18,8 +18,10 @@ from typing import Literal, TextIO
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from attackmap.orchestration.run_contract import (
+    RunArtifactManifest,
     RunEnvelope,
     RunProgress,
+    RunRequest,
     RunTerminal,
     ScanOptionsV15,
 )
@@ -461,3 +463,23 @@ def serve(request: FleetRunRequest, *, control: TextIO, events: TextIO) -> int:
     threading.Thread(target=controls, daemon=True).start()
     finished.wait()
     return 0
+
+
+def parse_run_message(payload: dict[str, Any]) -> RunEnvelope:
+    """Decode explicit versioned envelopes; never infer a version for legacy data.
+
+    AR030: moved here from orchestration.run_contract — the 1.4 envelope
+    models are fleet-owned, and run_contract importing them closed a
+    desktop_fleet <-> run_contract import cycle.
+    """
+    if "schema_version" not in payload:
+        raise ValueError("Missing schema_version; use import_legacy_report() for legacy reports")
+    models = {"request": RunRequest, "progress": RunProgress,
+              "terminal": RunTerminal, "manifest": RunArtifactManifest}
+    if payload.get("schema_version") == "1.4":
+        models.update(fleet_request=FleetRunRequest, fleet_child=FleetChildEvent,
+                      fleet_terminal=FleetTerminal)
+    model = models.get(payload.get("kind"))
+    if model is None:
+        raise ValueError("Unknown run message kind; expected request, progress, terminal, or manifest")
+    return model.model_validate(payload)

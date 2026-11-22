@@ -18,7 +18,8 @@ from attackmap.foundation.fleet_resource_identity import (
     project_producer_consumer,
 )
 from attackmap.models import ScanResult, SignalConflict, SignalOrigin
-from attackmap.orchestration.fleet import FleetRepoResult, FleetScan, fleet_summary_json
+from attackmap.orchestration.fleet import FleetRepoResult, FleetScan
+from attackmap.orchestration.fleet_architecture import fleet_summary_json
 from attackmap.orchestration.fleet_architecture import (
     aggregate_fleet_architecture,
     build_fleet_architecture,

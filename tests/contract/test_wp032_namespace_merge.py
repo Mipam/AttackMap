@@ -8,7 +8,8 @@ from attackmap.extraction.contracts import (
     ScopedServiceBinding,
 )
 from attackmap.models import ScanResult
-from attackmap.orchestration.fleet import FleetRepoResult, FleetScan, fleet_summary_json
+from attackmap.orchestration.fleet import FleetRepoResult, FleetScan
+from attackmap.orchestration.fleet_architecture import fleet_summary_json
 from attackmap.orchestration.scan_service import ScanRequest, _effective_deployment_aliases
 
 

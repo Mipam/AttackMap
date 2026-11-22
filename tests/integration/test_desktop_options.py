@@ -242,7 +242,7 @@ def test_broker_echoes_request_schema_for_old_and_new_consumers(schema, tmp_path
     import io
 
     from attackmap.orchestration.desktop_worker import serve
-    from attackmap.orchestration.run_contract import parse_run_message
+    from attackmap.orchestration.desktop_fleet import parse_run_message
     class RejectedLaunch:
         def start(self, argv, *, on_done, **kwargs):
             on_done(1, "")
