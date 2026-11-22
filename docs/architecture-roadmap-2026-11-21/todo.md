@@ -350,6 +350,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR023 · Move the analyzer ledger out of the model
 **Phase** 1 · **Priority** Medium · **Effort** 1 d · **Depends** AR022 · **Blocks** AR032
 **Lease** `model` · **Acceptance** AC-104
+**Status** DONE (commit ac96e53, agent-delivered) — analyzer_run_ledger.py git-mv to extraction/ledger.py verbatim, old path is a deprecation re-export shim (8 names); model/__init__ + analyzers.py retargeted; cycles 43/43; architecture 5/5, ledger tests 36, catalog tests 20; AC-104: exactly one class definition, under extraction/
 
 **Files** new `src/attackmap/extraction/ledger.py`; edits in `analyzer_catalog.py`,
 `analyzer_contracts.py`, `analyzers.py`
@@ -1054,6 +1055,8 @@ when no browser exists.
 
 ### AR085 · Release engineering
 **Phase** 4 · **Priority** Medium · **Effort** 5 d · **Depends** AR011 · **Blocks** AC-406
+**Lease** `release` · **Acceptance** AC-406
+**Status** IN_PROGRESS — slice 1 DONE (commit 13ecf74, agent-delivered): tools/build_release.py (dirty-tree refusal, SOURCE_DATE_EPOCH pinned, --no-isolation pinned build, release-manifest.json), tools/attest_release.py (dependency-free detached sha256 manifest, sha256sum --check compatible), 18 hermetic tests, docs/releases.md flow. Remaining slices: E2E two-build comparison (--twice --compare), CI wiring, real signing
 **Lease** `release` · **Acceptance** AC-406
 
 **Files** `tools/generate_release_sbom.py`, `tools/repro_build.py`,

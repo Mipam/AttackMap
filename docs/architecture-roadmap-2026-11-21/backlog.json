@@ -574,7 +574,7 @@
       "phase": 1,
       "priority": "Medium",
       "effort_days": 1.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR022"
       ],
@@ -591,7 +591,9 @@
         "src/attackmap/analyzer_contracts.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit ac96e53 (agent-delivered): git mv analyzer_run_ledger.py -> extraction/ledger.py verbatim + 3 relative-import adjustments; analyzer_run_ledger.py is a deprecation re-export shim (8 names, shim identity verified); model/__init__ + analyzers.py retargeted; cycles 43/43; architecture tests 5/5; ledger tests 36 passed; catalog tests 20 passed; ruff clean"
+      ]
     },
     {
       "id": "AR024",
