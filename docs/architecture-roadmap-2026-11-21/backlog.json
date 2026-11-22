@@ -633,7 +633,7 @@
       "phase": 1,
       "priority": "High",
       "effort_days": 2.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR024"
       ],
@@ -650,7 +650,9 @@
         "src/attackmap/cli.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit 80e2a15 (agent-delivered): AnalyzeOptions + ScanAiLimits deleted from pipeline (grep AnalyzeOptions src tests = 0); run_scan(spec, ...) reads frozen RunSpec groups; ScanRequest reduced to 19 transport fields (<=20 gate, new test); CLI is a RunSpec.from_cli adapter; 16 option-shaped test files migrated; tests/unit 4111 passed, contract 236, integration 1949/0 failed"
+      ]
     },
     {
       "id": "AR026",
@@ -658,7 +660,7 @@
       "phase": 1,
       "priority": "High",
       "effort_days": 2.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR024"
       ],
@@ -676,7 +678,9 @@
         "src/attackmap/fleet_admission.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit 0af2a45 (agent-delivered): env-flag WRITES removed from cli.py (time budget + incremental travel as argv, trusted-only documented read-only); pipeline threads captured_index explicitly; retained ContextVars documented as library-boundary-unavoidable (ai_budget ledger, fleet_admission reservation - AC-106 exempt); AST governance test asserts zero os.environ writes under src/attackmap; contract 4348 passed, integration 1949/0 failed"
+      ]
     },
     {
       "id": "AR027",

@@ -391,6 +391,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR025 · Retire `AnalyzeOptions`
 **Phase** 1 · **Priority** High · **Effort** 2 d · **Depends** AR024 · **Blocks** AR029
 **Lease** `orchestration` · **Acceptance** AC-105
+**Status** DONE (commit 80e2a15, agent-delivered) — AnalyzeOptions + ScanAiLimits deleted (grep 0); run_scan(spec, …) reads frozen RunSpec groups; ScanRequest reduced to 19 transport fields (≤20 gate test); CLI is a RunSpec.from_cli adapter; 16 option-shaped test files migrated; unit 4111 / contract 236 / integration 1949 green
 
 **Files** `src/attackmap/pipeline.py`, `src/attackmap/scan_service.py`, `src/attackmap/cli.py`
 
@@ -410,6 +411,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR026 · Remove ambient configuration
 **Phase** 1 · **Priority** High · **Effort** 2 d · **Depends** AR024 · **Blocks** AR031
 **Lease** `orchestration` · **Acceptance** AC-106
+**Status** DONE (commit 0af2a45, agent-delivered) — env-flag writes removed from cli.py (budget/incremental travel as argv; trusted-only documented read-only); pipeline threads captured_index explicitly; retained ContextVars documented as library-boundary-unavoidable (ai_budget, fleet_admission — AC-106 exempt); AST governance test asserts zero `os.environ[...] =` writes under src/attackmap
 
 **Files** `src/attackmap/cli.py`, `src/attackmap/index.py`, `src/attackmap/ai_budget.py`,
 `src/attackmap/fleet_admission.py`
