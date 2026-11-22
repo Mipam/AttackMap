@@ -16,6 +16,7 @@ import shutil
 import pytest
 
 from attackmap.fleet_architecture import aggregate_fleet_architecture, build_fleet_architecture
+from attackmap.orchestration.run_spec import AnalyzerSelection, RunSpec
 from attackmap.scan_service import ScanRequest, execute_scan_request
 
 FIXTURE = Path(__file__).parents[1] / "fixtures/wp044_qualified_fleet16"
@@ -47,8 +48,11 @@ def campaign(tmp_path_factory, request):
     for workers in (1, 2):
         captured = []
         result = execute_scan_request(ScanRequest(repo_paths=roots, output=work / f"workers-{workers}",
-            output_format="json", modules=["config", "javascript-web", "python-web"], max_workers=workers,
-            no_progress=True, echo=lambda *args, **kwargs: None,
+            output_format="json",
+            spec=RunSpec(analyzer=AnalyzerSelection(modules=("config", "javascript-web", "python-web")),
+                         no_progress=True),
+            max_workers=workers,
+            echo=lambda *args, **kwargs: None,
             fleet_finished=lambda output, fleet: captured.append(fleet)))
         assert result.exit_code == 0, result.error
         assert len(captured) == 1

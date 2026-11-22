@@ -7,7 +7,6 @@ import sys
 import time
 from contextlib import suppress
 from pathlib import Path
-from typing import Any
 
 import typer
 
@@ -23,6 +22,7 @@ from .analyzers import (
     select_requested_analyzers,
 )
 from .incremental import INCREMENTAL_ENV
+from .orchestration.run_spec import RunSpec
 from .pipeline import (
     HUNT_BANNER as HUNT_BANNER,
 )
@@ -31,11 +31,6 @@ from .pipeline import (
 )
 from .pipeline import (
     TRIAGE_BANNER as TRIAGE_BANNER,
-)
-
-# Preserve the CLI's banner imports after orchestration moved to the pipeline.
-from .pipeline import (
-    ScanAiLimits,
 )
 from .report import OUTPUT_FORMATS
 from .review_prompts import HUNT_LENSES
@@ -289,23 +284,16 @@ def _run_fleet(
     repo_paths: list[Path],
     *,
     output: str,
+    spec: RunSpec,
     module: list[str] | None,
-    recall: bool,
-    cve: bool,
-    no_suppress: bool,
-    suppress_file: str | None,
-    progress_format: str,
-    no_progress: bool,
     fleet_incompatible: dict[str, bool],
     output_format: str = "all",
     install_missing: bool = False,
-    suppress_from_ref: str | None = None,
-    strict_analyzers: bool = False,
     max_workers: int = 1,
     startup_diagnostics: bool = True,
     resolved_analyzers: list | None = None,
     deployment_aliases=None,
-    **single_repo_kwargs: Any,
+    run_id: str | None = None,
 ) -> None:
     """Multi-repo fleet scan adapter around the shared ``execute_scan_request``."""
     _validate_fleet_options(fleet_incompatible)
@@ -313,25 +301,18 @@ def _run_fleet(
     selected_analyzers = resolved_analyzers
     if selected_analyzers is None and module:
         selected_analyzers = _select_modules_for_output(
-            module, install_missing, Path(output), single_repo_kwargs.get("run_id"),
+            module, install_missing, Path(output), run_id,
             diagnostics=startup_diagnostics)
 
     request = ScanRequest(
         repo_paths=repo_paths,
         output=Path(output),
         output_format=output_format,
+        spec=spec,
         analyzers=selected_analyzers,
-        recall=recall,
-        cve=cve,
-        no_suppress=no_suppress,
-        suppress_file=suppress_file,
-        suppress_from_ref=suppress_from_ref,
-        strict_analyzers=strict_analyzers,
-        progress_format=progress_format,
-        no_progress=no_progress,
+        run_id=run_id,
         max_workers=max_workers,
         deployment_aliases=deployment_aliases,
-        **single_repo_kwargs,
     )
     try:
         summary = execute_scan_request(request)
@@ -702,29 +683,67 @@ def analyze(
                         duration_milliseconds=validation_duration))
         raise
 
+    # AR025/AC-105: the CLI is a RunSpec adapter — every flag value maps into
+    # the frozen run configuration exactly once, then travels with the
+    # transport-only request.
+    spec = RunSpec.from_cli({
+        "module": list(module or []),
+        "analyzer_profile": analyzer_profile,
+        "install_missing": install_missing,
+        "allow_untrusted_analyzers": allow_untrusted_analyzers,
+        "strict_analyzers": strict_analyzers,
+        "isolated_analyzers": isolated_analyzers,
+        "recall": recall,
+        "cve": cve,
+        "incremental": incremental or os.environ.get(INCREMENTAL_ENV) == "1",
+        "no_suppress": no_suppress,
+        "suppress_file": suppress_file,
+        "suppress_from_ref": suppress_from_ref,
+        "allow_pr_suppressions": allow_pr_suppressions,
+        "strict_suppressions": strict_suppressions,
+        "secrets_history": secrets_history,
+        "time_budget_seconds": time_budget_seconds,
+        "llm": llm,
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+        "llm_effort": llm_effort,
+        "llm_backend": llm_backend,
+        "llm_speed": llm_speed,
+        "hunt": hunt,
+        "verify": verify,
+        "verify_votes": verify_votes,
+        "hunt_lenses": hunt_lenses,
+        "hunt_rounds": hunt_rounds,
+        "hunt_budget": hunt_budget,
+        "remediate": remediate,
+        "triage": triage,
+        "ai_max_calls": ai_max_calls,
+        "ai_output_tokens": ai_output_tokens,
+        "ai_timeout_seconds": ai_timeout_seconds,
+        "fleet_workers": fleet_workers,
+        "format": format,
+        "progress_format": progress_format,
+        "no_progress": no_progress,
+        "atomic_output": not direct_generation_output,
+        "run_id": run_id,
+        "baseline": baseline,
+        "diff_output": diff_output,
+        "fail_on_new_high": fail_on_new_high,
+        "fail_on_new_suppression": fail_on_new_suppression,
+        "pr_comment": pr_comment,
+    })
+
     # Multi-repo fleet mode (#146a): scan each repo independently and assemble a
     # fleet view. Dispatched here so the single-repo path below is untouched.
     if len(repo_paths) > 1:
         _run_fleet(
             repo_paths,
             output=output,
+            spec=spec,
             module=module,
             resolved_analyzers=profile_analyzers,
-            analyzer_profile_id=analyzer_profile,
-            recall=recall,
-            cve=cve,
-            no_suppress=no_suppress,
-            suppress_file=suppress_file,
-            progress_format=progress_format,
-            no_progress=no_progress,
             output_format=format,
             install_missing=install_missing,
-            suppress_from_ref=suppress_from_ref,
-            strict_analyzers=strict_analyzers,
-            isolated_analyzers=isolated_analyzers,
-            incremental=incremental or os.environ.get(INCREMENTAL_ENV) == "1",
-            allow_pr_suppressions=allow_pr_suppressions,
-            strict_suppressions=strict_suppressions,
             run_id=run_id,
             max_workers=fleet_workers,
             deployment_aliases=deployment_aliases,
@@ -743,45 +762,10 @@ def analyze(
         repo_paths=repo_paths,
         output=Path(output),
         output_format=format,
+        spec=spec,
         analyzers=selected_analyzers,
-        analyzer_profile_id=analyzer_profile,
-        recall=recall,
-        cve=cve,
-        no_suppress=no_suppress,
-        suppress_file=suppress_file,
-        suppress_from_ref=suppress_from_ref,
-        allow_pr_suppressions=allow_pr_suppressions,
-        strict_suppressions=strict_suppressions,
-        strict_analyzers=strict_analyzers,
-        isolated_analyzers=isolated_analyzers,
-        allow_untrusted_analyzers=allow_untrusted_analyzers,
-        incremental=incremental or os.environ.get(INCREMENTAL_ENV) == "1",
-        progress_format=progress_format,
-        no_progress=no_progress,
-        secrets_history=secrets_history,
-        baseline=baseline,
-        diff_output=diff_output,
-        fail_on_new_high=fail_on_new_high,
-        fail_on_new_suppression=fail_on_new_suppression,
-        pr_comment=pr_comment,
         run_id=run_id,
         fleet_result=fleet_result,
-        atomic_output=not direct_generation_output,
-        llm=llm,
-        llm_provider=llm_provider,
-        llm_model=llm_model,
-        llm_effort=llm_effort,
-        llm_backend=llm_backend,
-        llm_speed=llm_speed,
-        hunt=hunt,
-        verify=verify,
-        verify_votes=verify_votes,
-        hunt_lenses=hunt_lenses,
-        hunt_rounds=hunt_rounds,
-        hunt_budget=hunt_budget,
-        remediate=remediate,
-        triage=triage,
-        ai_limits=ScanAiLimits(ai_max_calls, ai_output_tokens, ai_timeout_seconds),
     )
     try:
         summary = execute_scan_request(request)

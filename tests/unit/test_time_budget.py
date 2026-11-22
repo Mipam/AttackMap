@@ -16,7 +16,8 @@ import pytest
 
 from attackmap.errors import BudgetExpired
 from attackmap.index import RepoIndex
-from attackmap.pipeline import AnalyzeOptions, TimeBudget, run_scan
+from attackmap.orchestration.run_spec import BudgetSpec, RunSpec
+from attackmap.pipeline import TimeBudget, run_scan
 from attackmap.run_budget import active_budget, time_budget_scope
 from attackmap.scanner import scan_files
 
@@ -89,9 +90,8 @@ def test_run_with_expired_budget_publishes_partial_within_ceiling(tmp_path: Path
     """AC-010: the run stops soon after expiry and publishes a partial result."""
     base = tmp_path / "reports"
     started = time.perf_counter()
-    options = AnalyzeOptions(repo_path=_big_repo(tmp_path), output=base,
-                             no_progress=True, time_budget_seconds=1)
-    state = run_scan(options)
+    state = run_scan(RunSpec(no_progress=True, budget=BudgetSpec(time_budget_seconds=1)),
+                     repo_path=_big_repo(tmp_path), output=base)
     wall = time.perf_counter() - started
     assert state.exit_code == 0
     # AC-010's formal bound (wall <= 10 s for a 5 s budget) is verified on a

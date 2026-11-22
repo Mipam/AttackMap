@@ -5,7 +5,8 @@ import pytest
 
 from artifact_fixture import write_generation
 from attackmap.artifact_publisher import current_generation, generation_dir, publish_generation, validate_generation
-from attackmap.pipeline import AnalyzeOptions, RunState, run_scan
+from attackmap.orchestration.run_spec import AiSpec, RunSpec
+from attackmap.pipeline import RunState, run_scan
 from attackmap.safe_fs import safe_write_text
 
 
@@ -17,17 +18,16 @@ def test_export_failure_keeps_successful_generation_and_policy(tmp_path, monkeyp
     write_generation(old)
     publish_generation(base, "old")
     warnings = []
-    options = AnalyzeOptions(repo_path=tmp_path, output=base, run_id="new",
-                             echo=lambda text, **kwargs: warnings.append(text))
+    spec = RunSpec(run_id="new")
 
     def fake_scan(staged, **kwargs):
-        write_generation(staged.output)
-        path = staged.output / "artifact-manifest.json"
+        write_generation(kwargs["output"])
+        path = kwargs["output"] / "artifact-manifest.json"
         manifest = json.loads(path.read_text(encoding="utf-8"))
         manifest["exit_state"] = {"exit_code": exit_code,
                                   "status": "policy_failed" if exit_code else "succeeded"}
-        safe_write_text(staged.output, path, json.dumps(manifest))
-        return RunState(options=staged, exit_code=exit_code)
+        safe_write_text(kwargs["output"], path, json.dumps(manifest))
+        return RunState(spec=staged, exit_code=exit_code)
 
     def fail_export(output_base, folder, **kwargs):
         assert current_generation(output_base) == folder
@@ -35,9 +35,10 @@ def test_export_failure_keeps_successful_generation_and_policy(tmp_path, monkeyp
 
     monkeypatch.setattr("attackmap.pipeline._run_scan", fake_scan)
     monkeypatch.setattr("attackmap.artifact_publisher.export_compatibility", fail_export)
-    state = run_scan(options)
+    state = run_scan(spec, repo_path=tmp_path, output=base,
+                     echo=lambda text, **kwargs: warnings.append(text))
     assert state.exit_code == exit_code
-    assert state.options is options
+    assert state.spec is spec
     assert current_generation(base) == base / "new"
     validate_generation(old)
     assert state.errors
@@ -54,31 +55,31 @@ def test_failure_diagnostic_has_engine_scan_interval(tmp_path, monkeypatch, fail
     def fail(options, **kwargs):
         raise failure
     monkeypatch.setattr("attackmap.pipeline._run_scan", fail)
-    options = AnalyzeOptions(repo_path=tmp_path, output=tmp_path / "out", run_id="failed")
+    out = tmp_path / "out"
     with pytest.raises(type(failure)):
-        run_scan(options)
-    doc = json.loads((options.output / "diagnostics/failed/terminal-diagnostic.json").read_text())
+        run_scan(RunSpec(run_id="failed"), repo_path=tmp_path, output=out)
+    doc = json.loads((out / "diagnostics/failed/terminal-diagnostic.json").read_text())
     assert doc["scan_timing"] == {
         "schema_version": "1.0", "clock": "engine_utc", "scope": "analysis_pipeline_before_publication",
         "started_at": "2026-10-15T10:00:00+00:00", "finished_at": "2026-10-15T10:00:02+00:00",
         "outcome": "cancelled" if isinstance(failure, KeyboardInterrupt) else "failed"}
-    assert current_generation(options.output) is None
+    assert current_generation(out) is None
 
 
 def test_publication_failure_preserves_completed_analysis_interval(tmp_path, monkeypatch):
     values = iter(["2026-10-15T10:00:00+00:00", "2026-10-15T10:00:02+00:00"])
     monkeypatch.setattr("attackmap.pipeline._engine_utc_now", lambda: next(values))
-    def complete(options, *, state):
+    def complete(options, *, state, **kwargs):
         state.finish_scan("completed")
         return state
     def fail(*args):
         raise OSError("publication unavailable")
     monkeypatch.setattr("attackmap.pipeline._run_scan", complete)
     monkeypatch.setattr("attackmap.artifact_publisher.publish_generation", fail)
-    options = AnalyzeOptions(repo_path=tmp_path, output=tmp_path / "out", run_id="publish-failed")
+    out = tmp_path / "out"
     with pytest.raises(OSError):
-        run_scan(options)
-    doc = json.loads((options.output / "diagnostics/publish-failed/terminal-diagnostic.json").read_text())
+        run_scan(RunSpec(run_id="publish-failed"), repo_path=tmp_path, output=out)
+    doc = json.loads((out / "diagnostics/publish-failed/terminal-diagnostic.json").read_text())
     assert doc["state"] == "failed"
     assert doc["scan_timing"]["outcome"] == "completed"
     assert doc["scan_timing"]["finished_at"] == "2026-10-15T10:00:02+00:00"
@@ -91,22 +92,22 @@ def test_real_pipeline_failure_retains_timing_and_no_current(tmp_path, monkeypat
             raise KeyboardInterrupt()
         raise RuntimeError("synthetic analyzer failure")
     monkeypatch.setattr("attackmap.pipeline.analyze_repository", fail_analysis)
-    options = AnalyzeOptions(repo_path=tmp_path, output=tmp_path / "out", run_id="analysis-failed", no_progress=True)
+    out = tmp_path / "out"
     with pytest.raises(KeyboardInterrupt if cancel else RuntimeError):
-        run_scan(options)
-    doc = json.loads((options.output / "diagnostics/analysis-failed/terminal-diagnostic.json").read_text())
+        run_scan(RunSpec(run_id="analysis-failed", no_progress=True), repo_path=tmp_path, output=out)
+    doc = json.loads((out / "diagnostics/analysis-failed/terminal-diagnostic.json").read_text())
     assert doc["scan_timing"]["started_at"]
     assert doc["scan_timing"]["finished_at"]
     assert doc["scan_timing"]["outcome"] == ("cancelled" if cancel else "failed")
-    assert current_generation(options.output) is None
+    assert current_generation(out) is None
 
 
 def test_configuration_failure_records_timing_when_output_writable(tmp_path):
     from attackmap.application_errors import AnalysisConfigurationError
-    options = AnalyzeOptions(repo_path=tmp_path, output=tmp_path / "out", run_id="invalid", fail_on_new_high=True)
+    out = tmp_path / "out"
     with pytest.raises(AnalysisConfigurationError):
-        run_scan(options)
-    doc = json.loads((options.output / "diagnostics/invalid/terminal-diagnostic.json").read_text())
+        run_scan(RunSpec(run_id="invalid", fail_on_new_high=True), repo_path=tmp_path, output=out)
+    doc = json.loads((out / "diagnostics/invalid/terminal-diagnostic.json").read_text())
     assert doc["scan_timing"]["outcome"] == "failed"
     assert doc["scan_timing"]["finished_at"]
 
@@ -126,14 +127,15 @@ def test_optional_ai_tail_precedes_scan_end_timestamp(tmp_path, monkeypatch, fai
         return SimpleNamespace(markdown="Synthetic model assessment", usage={}, backend="fake", model="fake", stop_reason="stop")
     monkeypatch.setattr("attackmap.pipeline._engine_utc_now", clock)
     monkeypatch.setattr("attackmap.pipeline.generate_llm_review", review)
-    options = AnalyzeOptions(repo_path=tmp_path, output=tmp_path / "out", run_id="ai-tail", llm=True, no_progress=True)
+    out = tmp_path / "out"
+    spec = RunSpec(run_id="ai-tail", ai=AiSpec(enabled=True), no_progress=True)
     if fail:
         with pytest.raises(RuntimeError):
-            run_scan(options)
-        doc = json.loads((options.output / "diagnostics/ai-tail/terminal-diagnostic.json").read_text())
+            run_scan(spec, repo_path=tmp_path, output=out)
+        doc = json.loads((out / "diagnostics/ai-tail/terminal-diagnostic.json").read_text())
     else:
-        run_scan(options)
-        doc = json.loads((current_generation(options.output) / "run-manifest.json").read_text())
+        run_scan(spec, repo_path=tmp_path, output=out)
+        doc = json.loads((current_generation(out) / "run-manifest.json").read_text())
     assert ai_called
     assert doc["scan_timing"]["started_at"] == "2026-10-15T10:00:00+00:00"
     assert doc["scan_timing"]["finished_at"] == "2026-10-15T10:00:02+00:00"
@@ -154,7 +156,7 @@ def test_atomic_pipeline_rejects_junction_before_stage_or_engine(tmp_path, monke
     monkeypatch.setattr('attackmap.artifact_publisher.generation_dir', lambda *_a: pytest.fail('stage must not allocate'))
     try:
         with pytest.raises(UnsafePathError):
-            run_scan(AnalyzeOptions(repo_path=tmp_path, output=junction / 'reports'))
+            run_scan(RunSpec(), repo_path=tmp_path, output=junction / 'reports')
         assert list(target.iterdir()) == []
     finally:
         os.rmdir(junction)

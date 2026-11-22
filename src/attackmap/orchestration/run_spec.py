@@ -1,11 +1,12 @@
-"""Transport-neutral run specification and construction adapters (AR024, AC-105).
+"""Transport-neutral run specification and construction adapters (AR024/AR025, AC-105).
 
-``RunSpec`` is the frozen, grouped mirror of one scan's configuration. In this
-slice it is a *carrier*: ``execute_scan_request`` builds it from the existing
-``ScanRequest`` and threads it onto ``RunState`` so later slices (AR025/AR026)
-can retire ``AnalyzeOptions`` and ambient configuration. Until then
-``AnalyzeOptions``/``ScanRequest`` remain the source of truth for behavior;
-nothing reads ``RunSpec`` to change a scan.
+``RunSpec`` is the frozen, grouped configuration for exactly one scan; the
+pipeline reads every run decision from it. ``ScanRequest`` is reduced to
+transport (paths, output, hooks, fleet coordination, correlation) and pairs
+with a spec built by an adapter — ``from_cli`` for CLI flag values,
+``from_gui`` for the desktop ``ScanConfig``, ``scan_request_from_run`` for the
+versioned desktop contract, and ``from_scan_request`` as the transport-only
+fallback when a request arrives without one.
 
 This module is pure configuration data and imports nothing from ``attackmap``
 — stdlib only — so the engine's import-cycle set is untouched. The adapters
@@ -116,70 +117,24 @@ class RunSpec:
 
     @classmethod
     def from_scan_request(cls, request: Any) -> RunSpec:
-        """Mirror a neutral ``ScanRequest`` (duck-typed to keep this module pure).
+        """Mirror a transport-only ``ScanRequest`` that arrived without a spec.
 
-        The request stays the transport DTO and the behavioral source of truth;
-        the returned spec is an equal, immutable description of the same run.
+        Since AR025 the request carries only transport (paths, output, hooks,
+        fleet coordination, correlation); every adapter builds the full
+        RunSpec itself and attaches it as ``request.spec``. This fallback maps
+        the transport mirrors and leaves all features at their defaults.
         """
-        limits = request.ai_limits
         return cls(
-            analyzer=AnalyzerSelection(
-                modules=tuple(request.modules),
-                analyzers=_analyzer_names(getattr(request, "analyzers", None)),
-                profile_id=request.analyzer_profile_id,
-                install_missing=request.install_missing,
-                allow_untrusted=request.allow_untrusted_analyzers,
-                strict=request.strict_analyzers,
-                isolated=request.isolated_analyzers,
-            ),
-            features=FeatureFlags(
-                recall=request.recall,
-                cve=request.cve,
-                incremental=request.incremental,
-                no_suppress=request.no_suppress,
-                suppress_file=request.suppress_file,
-                suppress_from_ref=request.suppress_from_ref,
-                allow_pr_suppressions=request.allow_pr_suppressions,
-                strict_suppressions=request.strict_suppressions,
-                secrets_history=request.secrets_history,
-            ),
-            budget=BudgetSpec(time_budget_seconds=request.time_budget_seconds),
-            ai=AiSpec(
-                enabled=request.llm,
-                provider=request.llm_provider,
-                model=request.llm_model,
-                effort=request.llm_effort,
-                backend=request.llm_backend,
-                speed=request.llm_speed,
-                desktop_mode=request.desktop_ai_mode,
-                hunt=request.hunt,
-                verify=request.verify,
-                verify_votes=request.verify_votes,
-                hunt_lenses=request.hunt_lenses,
-                hunt_rounds=request.hunt_rounds,
-                hunt_budget=request.hunt_budget,
-                remediate=request.remediate,
-                triage=request.triage,
-                max_calls=limits.max_calls,
-                output_tokens=limits.output_token_limit,
-                timeout_seconds=limits.timeout_seconds,
-            ),
+            analyzer=AnalyzerSelection(analyzers=_analyzer_names(getattr(request, "analyzers", None))),
             fleet=FleetSpec(
-                max_workers=request.max_workers,
-                supervised=request.fleet_supervised,
-                timeout_seconds=request.fleet_timeout_seconds,
-                input_byte_budget=request.fleet_input_byte_budget,
+                max_workers=getattr(request, "max_workers", 1) or 1,
+                supervised=getattr(request, "fleet_supervised", False),
+                timeout_seconds=getattr(request, "fleet_timeout_seconds", 600),
+                input_byte_budget=getattr(request, "fleet_input_byte_budget", None),
             ),
-            output_format=request.output_format,
-            progress_format=request.progress_format,
-            no_progress=request.no_progress,
-            atomic_output=request.atomic_output,
-            run_id=request.run_id,
-            baseline=request.baseline,
-            diff_output=request.diff_output,
-            fail_on_new_high=request.fail_on_new_high,
-            fail_on_new_suppression=request.fail_on_new_suppression,
-            pr_comment=request.pr_comment,
+            output_format=getattr(request, "output_format", "all"),
+            atomic_output=getattr(request, "atomic_output", True),
+            run_id=getattr(request, "run_id", None),
         )
 
     @classmethod
@@ -291,6 +246,7 @@ _CLI_FLAG_PATHS: dict[str, str] = {
     "format": "output_format",
     "progress_format": "progress_format",
     "no_progress": "no_progress",
+    "atomic_output": "atomic_output",
     "run_id": "run_id",
     "baseline": "baseline",
     "diff_output": "diff_output",

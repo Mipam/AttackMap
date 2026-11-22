@@ -7,7 +7,8 @@ import pytest
 from attackmap import analyzers as registry
 from attackmap.analyzer_contracts import AnalyzerMetadata
 from attackmap.models import ScanResult
-from attackmap.pipeline import AnalyzeOptions, TimeBudget, run_scan
+from attackmap.orchestration.run_spec import AnalyzerSelection, FeatureFlags, RunSpec
+from attackmap.pipeline import TimeBudget, run_scan
 
 
 class CountingPlugin:
@@ -38,9 +39,11 @@ def _run(tmp_path, *, plugins, monkeypatch, explicit=True, profile_id=None):
     (repo / "app.py").write_text("x = 1\n", encoding="utf-8")
     monkeypatch.setattr(registry, "get_registered_analyzers", lambda **kwargs: plugins)
     output = tmp_path / "reports"
-    state = run_scan(AnalyzeOptions(repo_path=repo, output=output, analyzers=plugins if explicit else None,
-        analyzer_profile_id=profile_id, atomic_output=False, output_format="json", no_suppress=True,
-        no_progress=True, progress_format="none", echo=lambda *args, **kwargs: None))
+    state = run_scan(RunSpec(analyzer=AnalyzerSelection(profile_id=profile_id),
+        features=FeatureFlags(no_suppress=True), atomic_output=False, output_format="json",
+        no_progress=True, progress_format="none"),
+        repo_path=repo, output=output, analyzers=plugins if explicit else None,
+        echo=lambda *args, **kwargs: None)
     report = json.loads((output / "attackmap-report.json").read_text(encoding="utf-8"))
     manifest = json.loads((output / "run-manifest.json").read_text(encoding="utf-8"))
     return state, report, manifest

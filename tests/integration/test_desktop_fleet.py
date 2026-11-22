@@ -179,9 +179,11 @@ def test_engine_reuses_neutral_mapping_without_real_scan(tmp_path, monkeypatch):
     run = request(tmp_path, max_workers=2, options={"recall": True, "isolated_analyzers": True, "time_budget_seconds": 12})
     def execute(request):
         assert request.repo_paths == [Path(r.repository_path) for r in run.repositories]
-        assert request.max_workers == 2 and request.fleet_supervised and request.recall
-        assert request.isolated_analyzers and request.time_budget_seconds == 12
-        assert not request.llm and not request.install_missing and not request.atomic_output
+        assert request.max_workers == 2 and request.fleet_supervised
+        assert request.spec.features.recall
+        assert request.spec.analyzer.isolated and request.spec.budget.time_budget_seconds == 12
+        assert not request.spec.ai.enabled and not request.spec.analyzer.install_missing
+        assert not request.spec.atomic_output
         assert len(set(request.fleet_child_run_ids.values())) == 2
         argv = service._run_fleet_repo_argv(request, request.repo_paths[0], tmp_path / "out", [])
         assert "--isolated-analyzers" in argv and "--time-budget-seconds" in argv
@@ -194,8 +196,9 @@ def test_named_profile_isolation_and_allowance_reach_fleet_service(tmp_path, mon
     run = request(tmp_path, max_workers=3, options={"analyzer_profile": "node-atproto@1.0",
         "isolated_analyzers": True, "timeout_seconds": 900, "time_budget_seconds": 120})
     def execute(mapped):
-        assert mapped.analyzer_profile_id == "node-atproto@1.0" and not mapped.modules
-        assert mapped.isolated_analyzers and mapped.time_budget_seconds == 120
+        spec = mapped.spec
+        assert spec.analyzer.profile_id == "node-atproto@1.0" and not spec.analyzer.modules
+        assert spec.analyzer.isolated and spec.budget.time_budget_seconds == 120
         assert mapped.max_workers == 3 and mapped.fleet_timeout_seconds == 900
         argv = service._run_fleet_repo_argv(mapped, mapped.repo_paths[0], tmp_path / "child", [])
         assert argv[argv.index("--analyzer-profile") + 1] == "node-atproto@1.0"

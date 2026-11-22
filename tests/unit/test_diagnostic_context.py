@@ -6,8 +6,14 @@ import pytest
 from pydantic import ValidationError
 
 from attackmap.diagnostics import (
-    DiagnosticContext, DiagnosticCoverage, DiagnosticResources, context_from_run_manifest,
-    fleet_diagnostic, merge_diagnostic_context, scan_diagnostic, startup_diagnostic, unknown_diagnostic,
+    DiagnosticContext,
+    DiagnosticCoverage,
+    DiagnosticResources,
+    context_from_run_manifest,
+    fleet_diagnostic,
+    merge_diagnostic_context,
+    scan_diagnostic,
+    startup_diagnostic,
 )
 from attackmap.models import ResourceLimitEvent, ScanResult
 
@@ -94,7 +100,6 @@ def test_context_schema_fixture_and_additive_outer_legacy_reader():
     fixture = json.loads((root / "fixtures/diagnostics/startup.json").read_text())
     jsonschema.validate(fixture, schema)
     assert DiagnosticContext.model_validate(fixture).context_version == "1.0"
-    from attackmap.artifact_publisher import write_diagnostic
     # Old top-level readers still use schema/run/state/readiness; context is additive.
     outer = {"schema_version": "1.1", "run_id": "one", "state": "failed", "artifact_readiness": "unavailable", "diagnostic_context": fixture}
     assert {key: outer[key] for key in ("schema_version", "run_id", "state", "artifact_readiness")} == {
@@ -123,8 +128,9 @@ def test_real_pipeline_midstage_failure_retains_actual_stage_and_no_exception_te
     monkeypatch.setattr(pipeline, "analyze_repository", fail)
     output = tmp_path / "output"
     with pytest.raises(KeyboardInterrupt if cancel else RuntimeError):
-        pipeline.run_scan(pipeline.AnalyzeOptions(repo_path=tmp_path, output=output, run_id="attempt",
-            analyzers=[Analyzer()], atomic_output=atomic, echo=lambda *args, **kwargs: None))
+        pipeline.run_scan(pipeline.RunSpec(run_id="attempt", atomic_output=atomic),
+            repo_path=tmp_path, output=output, analyzers=[Analyzer()],
+            echo=lambda *args, **kwargs: None)
     diagnostic = json.loads((output / "diagnostics/attempt/terminal-diagnostic.json").read_text())
     context = DiagnosticContext.model_validate(diagnostic["diagnostic_context"])
     stage = next(stage for stage in context.stages if stage.stage_id == "scan_and_merge")
@@ -137,14 +143,15 @@ def test_real_pipeline_midstage_failure_retains_actual_stage_and_no_exception_te
 
 def test_real_fake_ai_tail_cancel_is_not_mislabeled_publish(tmp_path, monkeypatch):
     from attackmap import pipeline
+    from attackmap.orchestration.run_spec import AiSpec
     def cancel(*args, **kwargs):
         raise KeyboardInterrupt("AI_SECRET_SENTINEL")
     monkeypatch.setattr(pipeline, "generate_llm_review", cancel)
     (tmp_path / "app.py").write_text("print('local synthetic fixture')\n")
     output = tmp_path / "output"
     with pytest.raises(KeyboardInterrupt):
-        pipeline.run_scan(pipeline.AnalyzeOptions(repo_path=tmp_path, output=output, run_id="tail", llm=True,
-            echo=lambda *args, **kwargs: None))
+        pipeline.run_scan(pipeline.RunSpec(run_id="tail", ai=AiSpec(enabled=True)),
+            repo_path=tmp_path, output=output, echo=lambda *args, **kwargs: None)
     diagnostic = json.loads((output / "diagnostics/tail/terminal-diagnostic.json").read_text())
     stages = diagnostic["diagnostic_context"]["stages"]
     assert any(stage["stage_id"] == "llm" and stage["outcome"] == "cancelled" for stage in stages)
@@ -153,8 +160,9 @@ def test_real_fake_ai_tail_cancel_is_not_mislabeled_publish(tmp_path, monkeypatc
 
 
 def test_completed_policy_failure_is_not_execution_failure(tmp_path):
-    from attackmap.pipeline import AnalyzeOptions, RunState, _diagnostic_context, write_run_manifest
-    state = RunState(options=AnalyzeOptions(repo_path=tmp_path, output=tmp_path), exit_code=1)
+    from attackmap.orchestration.run_spec import RunSpec
+    from attackmap.pipeline import RunState, _diagnostic_context, write_run_manifest
+    state = RunState(spec=RunSpec(), exit_code=1)
     state.finish_scan("completed")
     context = _diagnostic_context(state, "completed")
     assert context.outcome == "completed" and context.policy_outcome == "failed"
@@ -170,8 +178,9 @@ def test_schema_exactly_matches_current_typed_model():
 
 
 def test_actual_policy_threshold_publishes_completed_context(tmp_path):
-    from attackmap.pipeline import AnalyzeOptions, run_scan
     from attackmap.artifact_publisher import current_generation, validate_generation
+    from attackmap.orchestration.run_spec import RunSpec
+    from attackmap.pipeline import run_scan
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "app.py").write_text("from flask import Flask, request\nfrom worker import run\napp=Flask(__name__)\n@app.route('/admin/users', methods=['DELETE'])\ndef delete_user():\n    return run(request.get_json())\n")
@@ -179,8 +188,8 @@ def test_actual_policy_threshold_publishes_completed_context(tmp_path):
     baseline = tmp_path / "baseline.json"
     baseline.write_text('{"findings": []}')
     output = tmp_path / "reports"
-    state = run_scan(AnalyzeOptions(repo_path=repo, output=output, run_id="policy", baseline=str(baseline),
-                                  fail_on_new_high=True, echo=lambda *args, **kwargs: None))
+    state = run_scan(RunSpec(run_id="policy", baseline=str(baseline), fail_on_new_high=True),
+                     repo_path=repo, output=output, echo=lambda *args, **kwargs: None)
     assert state.exit_code != 0
     generation = current_generation(output)
     assert generation is not None
@@ -197,9 +206,11 @@ def test_terminal_outcome_matrix_distinguishes_execution_failure_degraded_covera
     manifest and no source excerpts or exception text."""
     from attackmap.analyzers import BuiltinPythonWebAnalyzer
     from attackmap.artifact_publisher import current_generation
-    from attackmap.pipeline import AnalyzeOptions, run_scan
+    from attackmap.orchestration.run_spec import RunSpec
+    from attackmap.pipeline import run_scan
 
-    echo = lambda *args, **kwargs: None
+    def echo(*args, **kwargs):
+        return None
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "app.py").write_text("from flask import Flask\napp = Flask(__name__)\n", encoding="utf-8")
@@ -210,7 +221,7 @@ def test_terminal_outcome_matrix_distinguishes_execution_failure_degraded_covera
     monkeypatch.setattr("attackmap.pipeline.analyze_repository", explode)
     execution_output = tmp_path / "execution"
     with pytest.raises(RuntimeError):
-        run_scan(AnalyzeOptions(repo_path=repo, output=execution_output, run_id="execution", echo=echo))
+        run_scan(RunSpec(run_id="execution"), repo_path=repo, output=execution_output, echo=echo)
     monkeypatch.undo()
     execution = json.loads((execution_output / "diagnostics/execution/terminal-diagnostic.json")
                            .read_text(encoding="utf-8"))
@@ -230,8 +241,9 @@ def test_terminal_outcome_matrix_distinguishes_execution_failure_degraded_covera
         def detect(self, root): return True
         def analyze(self, root): raise RuntimeError("DEGRADED_COVERAGE_SENTINEL")
     degraded_output = tmp_path / "degraded"
-    degraded_state = run_scan(AnalyzeOptions(repo_path=repo, output=degraded_output, run_id="degraded",
-        analyzers=[BrokenAnalyzer(), BuiltinPythonWebAnalyzer()], echo=echo))
+    degraded_state = run_scan(RunSpec(run_id="degraded"),
+        repo_path=repo, output=degraded_output,
+        analyzers=[BrokenAnalyzer(), BuiltinPythonWebAnalyzer()], echo=echo)
     assert degraded_state.exit_code == 0
     degraded_context = json.loads((current_generation(degraded_output) / "run-manifest.json")
                                   .read_text(encoding="utf-8"))["diagnostic_context"]
@@ -251,8 +263,8 @@ def test_terminal_outcome_matrix_distinguishes_execution_failure_degraded_covera
     baseline = tmp_path / "baseline.json"
     baseline.write_text('{"findings": []}')
     policy_output = tmp_path / "policy-reports"
-    policy_state = run_scan(AnalyzeOptions(repo_path=policy_repo, output=policy_output, run_id="matrix-policy",
-        baseline=str(baseline), fail_on_new_high=True, echo=echo))
+    policy_state = run_scan(RunSpec(run_id="matrix-policy", baseline=str(baseline), fail_on_new_high=True),
+        repo_path=policy_repo, output=policy_output, echo=echo)
     assert policy_state.exit_code != 0
     policy_context = json.loads((current_generation(policy_output) / "run-manifest.json")
                                 .read_text(encoding="utf-8"))["diagnostic_context"]

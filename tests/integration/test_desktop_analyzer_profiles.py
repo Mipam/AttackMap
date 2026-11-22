@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from attackmap import analyzers, scan_service
+from attackmap.orchestration import run_spec
 from attackmap.cli import app
 from attackmap.desktop_capabilities import build_capabilities, preflight_capabilities, validate_desktop_request
 from attackmap.run_contract import RunRequest, ScanOptionsV15
@@ -42,14 +43,14 @@ def test_profile_reaches_application_and_pipeline_once(tmp_path, monkeypatch):
         return analyzers.get_builtin_repository_analyzers()
     monkeypatch.setattr(analyzers, "get_registered_analyzers", registry)
     def run(request, selected):
-        pipeline_calls.append(scan_service._analyze_options(request, tmp_path, request.output, selected))
+        pipeline_calls.append((scan_service._request_spec(request), selected))
         return scan_service.RunSummary(exit_code=0)
     monkeypatch.setattr(scan_service, "_run_single_repo", run)
     request = scan_service.scan_request_from_run(validate_desktop_request(payload(tmp_path)))
     assert scan_service.execute_scan_request(request).exit_code == 0
     assert len(registry_calls) == 1
-    assert pipeline_calls[0].analyzer_profile_id == "php-laminas-omeka@1.0"
-    assert [a.name for a in pipeline_calls[0].analyzers] == ["php-web", "config", "php-laminas", "default", "omeka-s"]
+    assert pipeline_calls[0][0].analyzer.profile_id == "php-laminas-omeka@1.0"
+    assert [a.name for a in pipeline_calls[0][1]] == ["php-web", "config", "php-laminas", "default", "omeka-s"]
 
 
 def test_automatic_keeps_discovery_at_pipeline(tmp_path, monkeypatch):
@@ -84,9 +85,11 @@ def test_preflight_binds_profile_membership_and_availability(tmp_path):
 
 def test_profile_fleet_worker_keeps_profile_identity(tmp_path):
     request = scan_service.ScanRequest(repo_paths=[tmp_path], output=tmp_path / "out",
-                                      analyzer_profile_id="php-laminas-omeka@1.0")
+                                      spec=run_spec.RunSpec(
+                                          analyzer=run_spec.AnalyzerSelection(
+                                              profile_id="php-laminas-omeka@1.0")))
     argv = scan_service._run_fleet_repo_argv(request, tmp_path, tmp_path / "child", ["php-laminas"])
-    assert argv[argv.index("--analyzer-profile") + 1] == request.analyzer_profile_id
+    assert argv[argv.index("--analyzer-profile") + 1] == request.spec.analyzer.profile_id
     assert "--module" not in argv
 
 

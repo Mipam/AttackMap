@@ -486,7 +486,8 @@ def test_translate_recon_threads_index_into_fingerprints(tmp_path: Path, monkeyp
 
 
 def test_pipeline_passes_captured_index_to_fingerprints(tmp_path: Path, monkeypatch) -> None:
-    from attackmap.pipeline import AnalyzeOptions, run_scan
+    from attackmap.orchestration.run_spec import RunSpec
+    from attackmap.pipeline import run_scan
     from attackmap.index import pinned_repo_index
 
     repo = _deps_repo(tmp_path)
@@ -497,9 +498,8 @@ def test_pipeline_passes_captured_index_to_fingerprints(tmp_path: Path, monkeypa
         seen.append(index)
 
     monkeypatch.setattr("attackmap.recon_to_analysis.assign_fingerprints", fake_assign)
-    run_scan(AnalyzeOptions(repo_path=repo, output=out, atomic_output=False,
-                            output_format="all", no_progress=True,
-                            echo=lambda *a, **k: None))
+    run_scan(RunSpec(atomic_output=False, output_format="all", no_progress=True),
+             repo_path=repo, output=out, echo=lambda *a, **k: None)
     assert seen and seen[0] is not None
     assert Path(seen[0].root).resolve() == repo.resolve()  # type: ignore[attr-defined]
     # The run is over: the thread's pin is released, not left stale.

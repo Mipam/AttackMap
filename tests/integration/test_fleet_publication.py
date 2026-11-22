@@ -16,12 +16,12 @@ def fleet_inputs(tmp_path, monkeypatch):
     for repo in repos:
         repo.mkdir()
     failed = set()
-    def fake_scan(options, **kwargs):
-        if options.repo_path.name in failed:
+    def fake_scan(spec, **kwargs):
+        if kwargs["repo_path"].name in failed:
             raise RuntimeError("injected sibling failure")
-        scan = ScanResult(root=str(options.repo_path))
-        write_generation(options.output, {"scan": scan.model_dump(mode="json")})
-        return RunState(options=options, scan=scan)
+        scan = ScanResult(root=str(kwargs["repo_path"]))
+        write_generation(kwargs["output"], {"scan": scan.model_dump(mode="json")})
+        return RunState(spec=spec, scan=scan)
     monkeypatch.setattr("attackmap.pipeline._run_scan", fake_scan)
     return tmp_path / "reports", repos, failed
 

@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -11,8 +10,9 @@ from attackmap.artifact_publisher import current_generation, validate_generation
 from attackmap.cli import app
 from attackmap.llm_review import generate_llm_review
 from attackmap.models import ScanResult
-from attackmap.pipeline import AnalyzeOptions, ScanAiLimits, run_scan
-from attackmap.scan_service import ScanRequest, _analyze_options
+from attackmap.orchestration.run_spec import AiSpec, RunSpec
+from attackmap.pipeline import run_scan
+from attackmap.scan_service import ScanRequest
 
 
 class FakeSdk:
@@ -36,10 +36,16 @@ def setup_scan(tmp_path, monkeypatch):
     repo.mkdir()
     monkeypatch.setattr(pipeline, "resolve_run_analyzers", lambda *args, **kwargs: [])
     monkeypatch.setattr(pipeline, "analyze_repository", lambda *args, **kwargs: ScanResult(root=str(repo)))
-    def options(**kwargs):
-        return AnalyzeOptions(repo_path=repo, output=tmp_path / "reports", no_progress=True,
-                              echo=lambda *args, **kwargs: None, **kwargs)
-    return options
+
+    def scan(**kwargs):
+        """Build the spec, run it quietly; returns (state, output directory)."""
+        output = tmp_path / "reports"
+        spec = RunSpec(no_progress=True, **kwargs)
+        state = run_scan(spec, repo_path=repo, output=output,
+                         echo=lambda *args, **kwargs2: None)
+        return state, output
+
+    return scan
 
 
 @pytest.mark.parametrize("second", ["hunt", "remediate", "triage"])
@@ -51,12 +57,11 @@ def test_one_provider_attempt_shared_across_features(setup_scan, monkeypatch, se
     extra = {second: True}
     if second == "hunt":
         extra.update(verify=True, verify_votes=3, hunt_lenses=2, hunt_rounds=2)
-    options = setup_scan(llm=True, llm_provider="openai", llm_backend="api",
-                         ai_limits=ScanAiLimits(max_calls=1), **extra)
-    state = run_scan(options)
-    assert state.exit_code == 0
+    _state, output = setup_scan(ai=AiSpec(enabled=True, provider="openai", backend="api",
+                                          max_calls=1, **extra))
+    assert _state.exit_code == 0
     assert len(client.calls) == 1
-    folder = current_generation(options.output)
+    folder = current_generation(output)
     validate_generation(folder)
     allowance = json.loads((folder / "run-manifest.json").read_text())["ai_allowance"]
     assert allowance["max_calls"] == allowance["calls_reserved"] == 1
@@ -68,10 +73,9 @@ def test_unknown_usage_retains_reservation_and_manifest_before_hash_commit(setup
     client = FakeSdk(missing_usage=True)
     monkeypatch.setattr(pipeline, "generate_llm_review", lambda *args, **kwargs:
         generate_llm_review(*args, **kwargs, openai_client=client))
-    options = setup_scan(llm=True, remediate=True, llm_provider="openai", llm_backend="api",
-                         ai_limits=ScanAiLimits(output_token_limit=5))
-    run_scan(options)
-    folder = current_generation(options.output)
+    _state, output = setup_scan(ai=AiSpec(enabled=True, remediate=True, provider="openai",
+                                          backend="api", output_tokens=5))
+    folder = current_generation(output)
     validate_generation(folder)
     allowance = json.loads((folder / "run-manifest.json").read_text())["ai_allowance"]
     assert len(client.calls) == 1
@@ -91,9 +95,8 @@ def test_external_ledger_inherited_and_deadline_blocks_all_dispatch(setup_scan, 
     ledger = AiBudget(max_calls=1, max_seconds=1, output_token_limit=5, clock=lambda: now[0])
     now[0] = 2.0
     with budget_scope(ledger):
-        options = setup_scan(llm=True, hunt=True, remediate=True, triage=True,
-                             llm_provider="openai", llm_backend="api")
-        run_scan(options)
+        setup_scan(ai=AiSpec(enabled=True, hunt=True, remediate=True, triage=True,
+                             provider="openai", backend="api"))
         assert current_budget() is ledger
     assert seen and all(value is ledger for value in seen)
     assert not client.calls
@@ -102,22 +105,17 @@ def test_external_ledger_inherited_and_deadline_blocks_all_dispatch(setup_scan, 
 def test_no_ai_does_not_create_budget_or_sdk_side_effects(setup_scan, monkeypatch):
     monkeypatch.setattr(pipeline, "AiBudget", lambda **kwargs: pytest.fail("Budget created without AI"))
     monkeypatch.setattr(pipeline, "generate_llm_review", lambda *args, **kwargs: pytest.fail("Provider called without AI"))
-    options = setup_scan()
-    run_scan(options)
-    manifest = json.loads((current_generation(options.output) / "run-manifest.json").read_text())
+    _state, output = setup_scan()
+    manifest = json.loads((current_generation(output) / "run-manifest.json").read_text())
     assert "ai_allowance" not in manifest
 
 
-def test_typed_limits_propagate_neutral_application_boundary(tmp_path):
-    limits = ScanAiLimits(2, 7, 9)
-    request = ScanRequest(repo_paths=[tmp_path], output=tmp_path / "out", ai_limits=limits)
-    assert _analyze_options(request, tmp_path, request.output, []).ai_limits is limits
-
-
-@pytest.mark.parametrize("kwargs", [{"max_calls": True}, {"max_calls": 0}, {"output_token_limit": 0}, {"timeout_seconds": 0}])
-def test_typed_limit_validation(kwargs):
-    with pytest.raises(pipeline.AnalysisConfigurationError):
-        ScanAiLimits(**kwargs)
+@pytest.mark.parametrize("kwargs", [{"max_calls": True}, {"max_calls": 0}, {"output_tokens": 0}, {"timeout_seconds": 0}])
+def test_typed_limit_validation(tmp_path, kwargs):
+    from attackmap.pipeline import AnalysisConfigurationError
+    with pytest.raises(AnalysisConfigurationError, match="must be an integer from 1 to"):
+        run_scan(RunSpec(ai=AiSpec(enabled=True, **kwargs)), repo_path=tmp_path,
+                 output=tmp_path / "out")
 
 
 def test_cli_whole_allowance_flags_help_and_validation(tmp_path):
@@ -135,9 +133,8 @@ def test_cli_provider_backend_fails_closed_before_dispatch(setup_scan, monkeypat
         pytest.fail("Subscription CLI dispatched despite strict output cap")
     monkeypatch.setattr(pipeline, "generate_llm_review", lambda *args, **kwargs:
         generate_llm_review(*args, **kwargs, codex_runner=forbidden))
-    options = setup_scan(llm=True, llm_provider="openai", llm_backend="cli")
-    run_scan(options)
-    folder = current_generation(options.output)
+    _state, output = setup_scan(ai=AiSpec(enabled=True, provider="openai", backend="cli"))
+    folder = current_generation(output)
     validate_generation(folder)
     allowance = json.loads((folder / "run-manifest.json").read_text())["ai_allowance"]
     assert allowance["calls_reserved"] == 0
@@ -153,15 +150,16 @@ def test_cli_flags_reach_typed_scan_request(tmp_path, monkeypatch):
     result = CliRunner().invoke(app, ["analyze", str(tmp_path), "--llm", "--ai-max-calls", "1",
         "--ai-output-tokens", "9", "--ai-timeout-seconds", "7"])
     assert result.exit_code == 0, result.output
-    assert received[0].ai_limits == ScanAiLimits(1, 9, 7)
+    ai = received[0].spec.ai
+    assert (ai.max_calls, ai.output_tokens, ai.timeout_seconds) == (1, 9, 7)
+    assert ai.enabled
 
 
 def test_requested_limits_reach_serial_and_parallel_child_cli(tmp_path, monkeypatch):
     import attackmap.cli as cli
     from attackmap.scan_service import _run_fleet_repo_argv
-    limits = ScanAiLimits(1, 9, 7)
-    request = ScanRequest(repo_paths=[tmp_path], output=tmp_path / "out", ai_limits=limits)
-    assert _analyze_options(request, tmp_path, request.output, []).ai_limits == limits
+    request = ScanRequest(repo_paths=[tmp_path], output=tmp_path / "out",
+                          spec=RunSpec(ai=AiSpec(max_calls=1, output_tokens=9, timeout_seconds=7)))
     argv = _run_fleet_repo_argv(request, tmp_path, request.output, [])
     assert argv[argv.index("--ai-max-calls") + 1] == "1"
     assert argv[argv.index("--ai-output-tokens") + 1] == "9"
@@ -170,11 +168,12 @@ def test_requested_limits_reach_serial_and_parallel_child_cli(tmp_path, monkeypa
     monkeypatch.setattr(cli, "execute_scan_request", lambda child: (received.append(child), SimpleNamespace(exit_code=0))[1])
     result = CliRunner().invoke(app, argv[argv.index("analyze"):])
     assert result.exit_code == 0, result.output
-    assert received[0].ai_limits == limits
+    child_ai = received[0].spec.ai
+    assert (child_ai.max_calls, child_ai.output_tokens, child_ai.timeout_seconds) == (1, 9, 7)
 
 
 def test_fleet_ai_remains_explicitly_unsupported(tmp_path):
     from attackmap.scan_service import _fleet_incompatible_flags
     request = ScanRequest(repo_paths=[tmp_path, tmp_path / "other"], output=tmp_path / "out",
-                          llm=True, hunt=True, remediate=True, triage=True, ai_limits=ScanAiLimits(1, 9, 7))
+                          spec=RunSpec(ai=AiSpec(enabled=True, hunt=True, remediate=True, triage=True)))
     assert {"--llm", "--hunt", "--remediate", "--triage"} <= set(_fleet_incompatible_flags(request))

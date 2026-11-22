@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 
 from attackmap.application_errors import AnalysisConfigurationError, AnalysisExit
-from attackmap.pipeline import AnalyzeOptions, run_scan
+from attackmap.orchestration.run_spec import RunSpec
+from attackmap.pipeline import run_scan
 from attackmap.scan_service import ScanRequest, execute_scan_request
 
 
@@ -147,12 +148,12 @@ def test_presentation_adapters_translate_while_the_service_stays_neutral():
 
 def test_invalid_configuration_is_neutral(tmp_path):
     with pytest.raises(AnalysisConfigurationError, match="requires --baseline"):
-        run_scan(AnalyzeOptions(repo_path=tmp_path, output=tmp_path / "reports",
-                                fail_on_new_high=True))
+        run_scan(RunSpec(fail_on_new_high=True), repo_path=tmp_path,
+                 output=tmp_path / "reports")
 
 
 def test_controlled_engine_exit_translates_to_application_result(tmp_path, monkeypatch):
-    def stop(_options):
+    def stop(_spec, **kwargs):
         raise AnalysisExit(2)
     monkeypatch.setattr("attackmap.scan_service.run_scan", stop)
     result = execute_scan_request(ScanRequest(repo_paths=[tmp_path], output=tmp_path / "reports"))
@@ -162,6 +163,7 @@ def test_controlled_engine_exit_translates_to_application_result(tmp_path, monke
 def test_atomic_service_rejects_junction_before_output_marking_or_engine(tmp_path, monkeypatch):
     import os
     import subprocess
+
     from attackmap.scan_service import ScanRequestError
     target = tmp_path / 'outside'
     target.mkdir()

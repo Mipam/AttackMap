@@ -1,10 +1,10 @@
 """Finite fleet input quotas; these are not working-set memory qualification."""
 import json
 import os
-from dataclasses import fields
-from pathlib import Path
 import subprocess
 import sys
+from dataclasses import fields
+from pathlib import Path
 
 import pytest
 
@@ -165,7 +165,7 @@ def test_legacy_positional_request_keeps_final_deployment_aliases(tmp_path, monk
     aliases = DeploymentAliases(hosts={"api.example.test": "b"})
     original = service.ScanRequest(
         [tmp_path / "a", tmp_path / "b"], tmp_path / "out",
-        deployment_aliases=aliases, atomic_output=False, echo=lambda *a, **k: None)
+        deployment_aliases=aliases, echo=lambda *a, **k: None)
     # Before the input-budget option, deployment_aliases was the final argument.
     legacy_values = [getattr(original, item.name) for item in fields(original)
                      if item.name != "fleet_input_byte_budget"]
@@ -248,9 +248,11 @@ def test_actual_subprocess_capture_preserves_skip_events_and_partial_scope(tmp_p
 def test_actual_scanner_serial_opt_in_publishes_partial_diagnostics(tmp_path, monkeypatch, total):
     monkeypatch.delenv("ATTACKMAP_INDEX_BYTE_BUDGET", raising=False)
     completed = []
-    req = request(tmp_path, total, max_workers=1, no_progress=True, no_suppress=True,
+    req = request(tmp_path, total, max_workers=1,
+                  spec=service.RunSpec(atomic_output=False, no_progress=True,
+                                       features=service.FeatureFlags(no_suppress=True)),
                   analyzers=[BuiltinPythonWebAnalyzer()],
-                  fleet_finished=lambda output, fleet: completed.append(fleet), atomic_output=False)
+                  fleet_finished=lambda output, fleet: completed.append(fleet))
     for repo in req.repo_paths:
         repo.mkdir()
         (repo / "a.py").write_bytes(b"print('one')\n")

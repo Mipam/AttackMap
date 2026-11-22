@@ -20,10 +20,10 @@ from attackmap.application_errors import AnalysisConfigurationError
 from attackmap.artifact_publisher import current_generation
 from attackmap.graph import build_graph, resolve_max_graph_edges
 from attackmap.models import ExternalCall, ScanResult
+from attackmap.orchestration.run_spec import RunSpec
 from attackmap.pipeline import (
     DEFAULT_TIME_BUDGET_SECONDS,
     TIME_BUDGET_ENV,
-    AnalyzeOptions,
     TimeBudget,
     resolve_time_budget_seconds,
     run_scan,
@@ -54,10 +54,15 @@ def _flask_repo(tmp_path: Path) -> Path:
 
 
 def _run(repo: Path, output: Path, **kwargs) -> tuple[pipeline.RunState, dict]:
-    state = run_scan(AnalyzeOptions(
-        repo_path=repo, output=output, atomic_output=False, no_progress=True,
-        analyzers=[BuiltinPythonWebAnalyzer()], echo=lambda *a, **k: None, **kwargs,
-    ))
+    from dataclasses import replace
+    base = RunSpec(atomic_output=False, no_progress=True)
+    if "time_budget_seconds" in kwargs:
+        base = replace(base, budget=replace(base.budget,
+                                           time_budget_seconds=kwargs.pop("time_budget_seconds")))
+    state = run_scan(base,
+        repo_path=repo, output=output, analyzers=[BuiltinPythonWebAnalyzer()],
+        echo=lambda *a, **k: None, **kwargs,
+    )
     manifest = json.loads((output / "run-manifest.json").read_text(encoding="utf-8"))
     return state, manifest
 

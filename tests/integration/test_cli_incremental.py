@@ -24,6 +24,7 @@ import attackmap.scanner as scanner_mod
 from attackmap import incremental
 from attackmap.cli import app
 from attackmap.incremental import default_cache_dir
+from attackmap.orchestration.run_spec import FeatureFlags, RunSpec
 from attackmap.scan_service import ScanRequest, _run_fleet_repo_argv
 
 APP_PY = (
@@ -200,7 +201,7 @@ def test_operator_env_activates_without_flag(tmp_path: Path, monkeypatch) -> Non
 
 def test_fleet_worker_argv_propagates_the_flag(tmp_path: Path) -> None:
     on = ScanRequest(repo_paths=[tmp_path / "a", tmp_path / "b"], output=tmp_path / "out",
-                     incremental=True)
+                     spec=RunSpec(features=FeatureFlags(incremental=True)))
     argv = _run_fleet_repo_argv(on, tmp_path / "a", tmp_path / "out" / "a", [])
     assert "--incremental" in argv
 

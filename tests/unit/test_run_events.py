@@ -10,7 +10,8 @@ from __future__ import annotations
 import json
 import threading
 
-from attackmap.pipeline import AnalyzeOptions, run_scan
+from attackmap.orchestration.run_spec import RunSpec
+from attackmap.pipeline import run_scan
 from attackmap.progress import EventLog
 
 REQUIRED_FIELDS = {"ts", "run_id", "stage", "event", "status"}
@@ -84,8 +85,7 @@ def test_event_log_is_thread_safe():
 def test_published_generation_contains_events_jsonl(tmp_path):
     """AC-006: a published generation explains what ran and how it ended."""
     base = tmp_path / "reports"
-    options = AnalyzeOptions(repo_path=_repo(tmp_path), output=base, no_progress=True)
-    state = run_scan(options)
+    state = run_scan(RunSpec(no_progress=True), repo_path=_repo(tmp_path), output=base)
     assert state.exit_code == 0
     pointer = json.loads((base / "current-generation.json").read_text(encoding="utf-8"))
     generation = base / pointer["generation"]
@@ -124,7 +124,6 @@ def test_failed_publication_still_writes_events(tmp_path, monkeypatch):
     from attackmap import artifact_publisher
 
     base = tmp_path / "reports"
-    options = AnalyzeOptions(repo_path=_repo(tmp_path), output=base, no_progress=True)
 
     def explode(b, r, **kwargs):
         raise ValueError("publication boom")
@@ -132,7 +131,7 @@ def test_failed_publication_still_writes_events(tmp_path, monkeypatch):
     monkeypatch.setattr(artifact_publisher, "publish_generation", explode)
     import pytest
     with pytest.raises(ValueError):
-        run_scan(options)
+        run_scan(RunSpec(no_progress=True), repo_path=_repo(tmp_path), output=base)
     # The staged generation folder (never committed) still has the log.
     logs = list(base.glob("*/events.jsonl"))
     assert logs, "failed run wrote no events.jsonl"

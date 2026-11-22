@@ -10,31 +10,32 @@ from typing import Any
 import pytest
 
 from attackmap import scan_service
-from attackmap.pipeline import AnalyzeOptions, RunState
+from attackmap.orchestration.run_spec import AnalyzerSelection, RunSpec
+from attackmap.pipeline import RunState
 from attackmap.scan_service import ScanRequest, ScanRequestError, execute_scan_request
 
 
-def _make_state(options: AnalyzeOptions) -> RunState:
-    state = RunState(options=options)
+def _make_state(spec: RunSpec, repo_path: Path, output: Path) -> RunState:
+    state = RunState(spec=spec)
     from attackmap.models import ScanResult
 
-    state.scan = ScanResult(root=str(options.repo_path), files_scanned=1)
+    state.scan = ScanResult(root=str(repo_path), files_scanned=1)
     from artifact_fixture import write_generation
     from attackmap.artifact_publisher import generation_dir, publish_generation
-    folder = generation_dir(Path(options.output), "fixture-run")
+    folder = generation_dir(output, "fixture-run")
     write_generation(folder, {"scan": state.scan.model_dump(mode="json")})
-    publish_generation(Path(options.output), folder.name)
+    publish_generation(output, folder.name)
     return state
 
 
 def test_single_repo_runs_once(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    calls: list[AnalyzeOptions] = []
+    calls: list[dict] = []
 
-    def fake_run(options: AnalyzeOptions) -> RunState:
-        calls.append(options)
-        return _make_state(options)
+    def fake_run(spec, **kwargs):
+        calls.append(kwargs)
+        return _make_state(spec, kwargs["repo_path"], kwargs["output"])
 
     monkeypatch.setattr(scan_service, "run_scan", fake_run)
     summary = execute_scan_request(ScanRequest(repo_paths=[repo], output=tmp_path / "out"))
@@ -49,23 +50,24 @@ def test_modules_passed_as_resolved_analyzers(
     repo = tmp_path / "repo"
     repo.mkdir()
     resolved = [object()]  # opaque analyzer placeholders
-    calls: list[AnalyzeOptions] = []
+    calls: list[dict] = []
 
     def fake_select(modules: Any, *, auto_install: bool = False) -> list:
         assert modules == ["php-web"]
         return resolved
 
-    def fake_run(options: AnalyzeOptions) -> RunState:
-        calls.append(options)
-        return _make_state(options)
+    def fake_run(spec, **kwargs):
+        calls.append(kwargs)
+        return _make_state(spec, kwargs["repo_path"], kwargs["output"])
 
     monkeypatch.setattr(scan_service, "select_requested_analyzers", fake_select)
     monkeypatch.setattr(scan_service, "run_scan", fake_run)
     execute_scan_request(
-        ScanRequest(repo_paths=[repo], output=tmp_path / "out", modules=["php-web"])
+        ScanRequest(repo_paths=[repo], output=tmp_path / "out",
+                    spec=RunSpec(analyzer=AnalyzerSelection(modules=("php-web",))))
     )
     assert len(calls) == 1
-    assert calls[0].analyzers is resolved
+    assert calls[0]["analyzers"] is resolved
 
 
 def test_pre_resolved_analyzers_skip_module_lookup(
@@ -81,8 +83,8 @@ def test_pre_resolved_analyzers_skip_module_lookup(
         select_called = True
         return []
 
-    def fake_run(options: AnalyzeOptions) -> RunState:
-        return _make_state(options)
+    def fake_run(spec, **kwargs):
+        return _make_state(spec, kwargs["repo_path"], kwargs["output"])
 
     monkeypatch.setattr(scan_service, "select_requested_analyzers", fake_select)
     monkeypatch.setattr(scan_service, "run_scan", fake_run)
@@ -90,8 +92,8 @@ def test_pre_resolved_analyzers_skip_module_lookup(
         ScanRequest(
             repo_paths=[repo],
             output=tmp_path / "out",
-            modules=["php-web"],
             analyzers=resolved,
+            spec=RunSpec(analyzer=AnalyzerSelection(modules=("php-web",))),
         )
     )
     assert not select_called
@@ -103,9 +105,9 @@ def test_fleet_runs_all_repos(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     b.mkdir()
     calls: list[Path] = []
 
-    def fake_run(options: AnalyzeOptions) -> RunState:
-        calls.append(options.repo_path)
-        return _make_state(options)
+    def fake_run(spec, **kwargs):
+        calls.append(kwargs["repo_path"])
+        return _make_state(spec, kwargs["repo_path"], kwargs["output"])
 
     monkeypatch.setattr(scan_service, "run_scan", fake_run)
     summary = execute_scan_request(
@@ -122,7 +124,7 @@ def test_fleet_rejects_single_repo_only_flags(tmp_path: Path) -> None:
     b.mkdir()
     with pytest.raises(ScanRequestError, match="not yet supported in multi-repo mode"):
         execute_scan_request(
-            ScanRequest(repo_paths=[a, b], output=tmp_path / "out", baseline="foo.json")
+            ScanRequest(repo_paths=[a, b], output=tmp_path / "out", spec=RunSpec(baseline="foo.json"))
         )
 
 
@@ -131,7 +133,8 @@ def test_bad_module_raises_scan_request_error(tmp_path: Path) -> None:
     repo.mkdir()
     with pytest.raises(ScanRequestError):
         execute_scan_request(
-            ScanRequest(repo_paths=[repo], output=tmp_path / "out", modules=["not-real"])
+            ScanRequest(repo_paths=[repo], output=tmp_path / "out",
+                        spec=RunSpec(analyzer=AnalyzerSelection(modules=("not-real",))))
         )
 
 
@@ -151,7 +154,8 @@ def test_analyzer_startup_failure_writes_redacted_diagnostic_preserving_current(
         raise ValueError("sentinel-credential-provider-detail")
     monkeypatch.setattr(scan_service, "select_requested_analyzers", fail)
     with pytest.raises(ScanRequestError, match="sentinel-credential-provider-detail"):
-        execute_scan_request(ScanRequest(repo_paths=[repo], output=out, modules=["missing"], run_id=run_id))
+        execute_scan_request(ScanRequest(repo_paths=[repo], output=out, run_id=run_id,
+        spec=RunSpec(analyzer=AnalyzerSelection(modules=("missing",)))))
     diagnostics = list((out / "diagnostics").glob("*/terminal-diagnostic.json"))
     assert len(diagnostics) == 1
     data = json.loads(diagnostics[0].read_text())
@@ -171,7 +175,8 @@ def test_analyzer_startup_invalid_run_identity_cannot_escape_output(tmp_path, mo
     monkeypatch.setattr(scan_service, "select_requested_analyzers", fail)
     out = tmp_path / "out"
     with pytest.raises(ScanRequestError, match="missing analyzer"):
-        execute_scan_request(ScanRequest(repo_paths=[tmp_path], output=out, modules=["missing"], run_id="../escape"))
+        execute_scan_request(ScanRequest(repo_paths=[tmp_path], output=out, run_id="../escape",
+        spec=RunSpec(analyzer=AnalyzerSelection(modules=("missing",)))))
     assert not (tmp_path / "escape").exists()
     assert not list(out.glob("**/terminal-diagnostic.json"))
 
@@ -187,9 +192,9 @@ def test_fleet_deployment_aliases_resolve_observed_links(
     a.mkdir()
     b.mkdir()
 
-    def fake_run(options: AnalyzeOptions) -> RunState:
-        state = RunState(options=options)
-        if options.repo_path == a:
+    def fake_run(spec, **kwargs):
+        state = RunState(spec=spec)
+        if kwargs["repo_path"] == a:
             state.scan = ScanResult(
                 root=str(a), files_scanned=1,
                 external_calls=[ExternalCall(target="http://auth.bsky.social/users/1", method="GET", file="c.py", line=1)],
@@ -201,9 +206,9 @@ def test_fleet_deployment_aliases_resolve_observed_links(
             )
         from artifact_fixture import write_generation
         from attackmap.artifact_publisher import generation_dir, publish_generation
-        folder = generation_dir(Path(options.output), "fixture-run")
+        folder = generation_dir(kwargs["output"], "fixture-run")
         write_generation(folder, {"scan": state.scan.model_dump(mode="json")})
-        publish_generation(Path(options.output), folder.name)
+        publish_generation(kwargs["output"], folder.name)
         return state
 
     monkeypatch.setattr(scan_service, "run_scan", fake_run)

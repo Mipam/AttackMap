@@ -9,7 +9,8 @@ from typer.testing import CliRunner
 
 from attackmap import __version__
 from attackmap.cli import app
-from attackmap.pipeline import AnalyzeOptions, run_scan
+from attackmap.orchestration.run_spec import RunSpec
+from attackmap.pipeline import run_scan
 
 runner = CliRunner()
 
@@ -91,13 +92,9 @@ def test_run_scan_returns_state_without_typer(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     out = tmp_path / "reports"
     state = run_scan(
-        AnalyzeOptions(
-            repo_path=repo,
-            output=out,
-            output_format="json",
-            progress_format="none",
-            no_progress=True,
-        )
+        RunSpec(output_format="json", progress_format="none", no_progress=True),
+        repo_path=repo,
+        output=out,
     )
     assert state.scan is not None
     assert state.scan.files_scanned >= 1

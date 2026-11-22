@@ -88,7 +88,7 @@ def test_generate_wrapper_persists_selected_reference_warning_and_original_prose
     from attackmap.artifact_publisher import current_generation, validate_generation
     from attackmap.llm_review import generate_llm_review
     from attackmap.models import Finding, ScanResult
-    from attackmap.pipeline import AnalyzeOptions, ScanAiLimits
+    from attackmap.orchestration.run_spec import AiSpec, FeatureFlags, RunSpec
 
     repo = tmp_path / 'repo'
     repo.mkdir()
@@ -118,10 +118,10 @@ def test_generate_wrapper_persists_selected_reference_warning_and_original_prose
         generated.append(result)
         return result
     monkeypatch.setattr(pipeline, 'generate_llm_review', actual_generation)
-    options = AnalyzeOptions(repo_path=repo, output=tmp_path / 'reports', llm=True,
-        llm_provider='openai', llm_backend='api', no_suppress=True, no_progress=True,
-        ai_limits=ScanAiLimits(max_calls=1), echo=lambda *_a, **_k: None)
-    assert pipeline.run_scan(options).exit_code == 0
+    spec = RunSpec(features=FeatureFlags(no_suppress=True), no_progress=True,
+        ai=AiSpec(enabled=True, provider='openai', backend='api', max_calls=1))
+    assert pipeline.run_scan(spec, repo_path=repo, output=tmp_path / 'reports',
+        echo=lambda *_a, **_k: None).exit_code == 0
     assert len(calls) == len(generated) == 1
     assert '"finding:2"' in calls[0]['input']
     result = generated[0]
@@ -129,7 +129,7 @@ def test_generate_wrapper_persists_selected_reference_warning_and_original_prose
     assert 'Unresolved evidence IDs' in result.markdown
     assert result.reference_validation['valid_references'] == ['finding:2']
     assert result.reference_validation['invalid_references'] == ['find:2']
-    folder = current_generation(options.output)
+    folder = current_generation(tmp_path / 'reports')
     validate_generation(folder)
     persisted = json.loads((folder / 'defensive-review-llm.meta.json').read_text(encoding='utf-8'))
     assert persisted['reference_validation'] == result.reference_validation

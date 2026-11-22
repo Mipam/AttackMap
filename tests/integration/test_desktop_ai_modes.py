@@ -1,5 +1,6 @@
 """WP014 transport→service→provider matrix. Fake SDK only; no live HTTP or CLI execution."""
 import hashlib
+import dataclasses
 import json
 from types import SimpleNamespace
 
@@ -15,7 +16,7 @@ from attackmap.llm_review import generate_llm_review
 from attackmap.models import Finding, ScanResult
 from attackmap.provider_options import ProviderOptions, ProviderOptionsV13
 from attackmap.run_contract import CURRENT_SCHEMA_VERSION, RunRequest
-from attackmap.scan_service import _analyze_options, _fleet_incompatible_flags, scan_request_from_run
+from attackmap.scan_service import _fleet_incompatible_flags, scan_request_from_run
 
 
 def payload(tmp_path, mode="review", schema="1.3", **changes):
@@ -32,7 +33,8 @@ def test_legacy_provider_bytes_defaults_and_mode_gate_unchanged(tmp_path,schema)
     raw=payload(tmp_path,schema=schema);raw["options"]["provider"]=legacy.model_dump()
     request=validate_desktop_request(raw)
     assert request.options.provider.model_dump_json()==expected
-    assert scan_request_from_run(request).llm and scan_request_from_run(request).desktop_ai_mode is None
+    spec=scan_request_from_run(request).spec
+    assert spec.ai.enabled and spec.ai.desktop_mode is None
     assert CURRENT_SCHEMA_VERSION=="1.2"
     with pytest.raises(ValueError):validate_desktop_request(payload(tmp_path,schema=schema))
 
@@ -72,7 +74,7 @@ def test_worker_engine_entry_maps_mode_and_inherits_typed_allowance(tmp_path,mon
         return SimpleNamespace(exit_code=0)
     monkeypatch.setattr(service,"execute_scan_request",execute)
     assert run_request_file(path,engine=True)==0
-    assert received[0].desktop_ai_mode==mode
+    assert received[0].spec.ai.desktop_mode==mode
     assert current_budget() is None
 
 
@@ -114,11 +116,12 @@ def engine(tmp_path,monkeypatch):
     monkeypatch.setattr(pipeline,"generate_llm_review",generate)
     def scan(mode,**changes):
         request=scan_request_from_run(validate_desktop_request(payload(tmp_path,mode,**changes)))
-        request.atomic_output=True
-        options=_analyze_options(request,repo,request.output,[]);options.no_progress=True;options.no_suppress=True;options.echo=lambda *_a,**_k:None
-        result=pipeline.run_scan(options)
+        spec=dataclasses.replace(request.spec,atomic_output=True,no_progress=True,
+            features=dataclasses.replace(request.spec.features,no_suppress=True))
+        result=pipeline.run_scan(spec,repo_path=repo,output=request.output,analyzers=[],
+            echo=lambda *_a,**_k:None)
         assert result.exit_code==0
-        folder=current_generation(options.output);validate_generation(folder)
+        folder=current_generation(request.output);validate_generation(folder)
         return folder,json.loads((folder/"run-manifest.json").read_text())
     return client,scan
 

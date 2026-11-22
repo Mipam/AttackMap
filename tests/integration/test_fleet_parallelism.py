@@ -13,7 +13,8 @@ from typing import Any
 import pytest
 
 from attackmap import scan_service
-from attackmap.pipeline import AnalyzeOptions, RunState
+from attackmap.orchestration.run_spec import RunSpec
+from attackmap.pipeline import RunState
 from attackmap.scan_service import ScanRequest, execute_scan_request
 from artifact_fixture import write_generation
 from attackmap.artifact_publisher import current_generation, publish_generation
@@ -131,12 +132,12 @@ def test_sibling_failure_preserves_previous_fleet_pointer_and_exports(monkeypatc
         repo.mkdir()
     fail = False
 
-    def fake_scan(options):
-        if fail and options.repo_path.name == "bad":
-            state = RunState(options=options)
+    def fake_scan(spec, **kwargs):
+        if fail and kwargs["repo_path"].name == "bad":
+            state = RunState(spec=spec)
             state.exit_code = 1
             return state
-        return _make_state(options)
+        return _make_state(spec, kwargs["repo_path"], kwargs["output"])
 
     def fake_worker(argv, **kwargs):
         if fail and Path(argv[argv.index("--output") - 1]).name == "bad":
@@ -182,12 +183,12 @@ def _write_worker_payload(argv):
     Path(argv[argv.index("--fleet-result") + 1]).write_text(json.dumps(scan), encoding="utf-8")
 
 
-def _make_state(options: AnalyzeOptions) -> RunState:
-    state = RunState(options=options)
+def _make_state(spec, repo_path, output) -> RunState:
+    state = RunState(spec=spec)
     from attackmap.models import ScanResult
 
-    state.scan = ScanResult(root=str(options.repo_path), files_scanned=1)
-    _write_child_generation(Path(options.output), state.scan.model_dump(mode="json"))
+    state.scan = ScanResult(root=str(repo_path), files_scanned=1)
+    _write_child_generation(Path(output), state.scan.model_dump(mode="json"))
     return state
 
 
@@ -197,9 +198,9 @@ def test_fleet_default_runs_serially(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     b.mkdir()
     calls: list[Path] = []
 
-    def fake_run(options: AnalyzeOptions) -> RunState:
-        calls.append(options.repo_path)
-        return _make_state(options)
+    def fake_run(spec, **kwargs):
+        calls.append(kwargs["repo_path"])
+        return _make_state(spec, kwargs["repo_path"], kwargs["output"])
 
     monkeypatch.setattr(scan_service, "run_scan", fake_run)
     summary = execute_scan_request(
@@ -368,7 +369,8 @@ def test_fleet_real_workers_match_serial(tmp_path: Path, output_format: str) -> 
         for workers in (1, 2):
             summary = execute_scan_request(ScanRequest(
                 repo_paths=repos, output=tmp_path / f"out-{workers}",
-                output_format=output_format, max_workers=workers, no_progress=True,
+                output_format=output_format, max_workers=workers,
+                spec=RunSpec(no_progress=True),
             ))
             assert summary.exit_code == 0
     assert len(fleets) == 2
@@ -400,14 +402,14 @@ def test_fleet_preserves_sibling_after_repository_failure(monkeypatch, tmp_path:
     for repo in repos:
         repo.mkdir()
 
-    def fake_scan(options):
-        if options.repo_path.name == "bad":
+    def fake_scan(spec, **kwargs):
+        if kwargs["repo_path"].name == "bad":
             if failure == "exception":
                 raise scan_service.AnalysisExit(2)
-            state = RunState(options=options)
+            state = RunState(spec=spec)
             state.exit_code = 1
             return state
-        return _make_state(options)
+        return _make_state(spec, kwargs["repo_path"], kwargs["output"])
 
     def fake_child(argv, **kwargs):
         repo = Path(argv[argv.index("--output") - 1])
@@ -614,9 +616,9 @@ def test_cli_serial_fleet_preserves_isolation_policy(monkeypatch, tmp_path, isol
         repo.mkdir()
     options_seen = []
 
-    def fake_scan(options):
-        options_seen.append(options)
-        return _make_state(options)
+    def fake_scan(spec, **kwargs):
+        options_seen.append(spec)
+        return _make_state(spec, kwargs["repo_path"], kwargs["output"])
 
     def unexpected_worker(*args, **kwargs):
         raise AssertionError("Ordinary serial fleet must retain its in-process scan path")
@@ -630,5 +632,5 @@ def test_cli_serial_fleet_preserves_isolation_policy(monkeypatch, tmp_path, isol
     ])
     assert result.exit_code == 0, result.output
     assert len(options_seen) == 2
-    assert all(options.isolated_analyzers is isolated for options in options_seen)
+    assert all(spec.analyzer.isolated is isolated for spec in options_seen)
 

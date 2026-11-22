@@ -78,25 +78,6 @@ TRIAGE_BANNER = (
     "> finding id; no new findings are invented here.\n\n"
 )
 
-
-@dataclass(frozen=True)
-class ScanAiLimits:
-    """One repository's scan: provider attempts, elapsed time and OUTPUT tokens.
-
-    Fleet requests currently reject AI features; this is not a fleet-wide ledger.
-    An already-active caller ledger is inherited, including its original deadline.
-    """
-    max_calls: int = 8
-    output_token_limit: int = 32000
-    timeout_seconds: int = 600
-
-    def __post_init__(self) -> None:
-        for name, maximum in (("max_calls", 64), ("output_token_limit", 256000), ("timeout_seconds", 86400)):
-            value = getattr(self, name)
-            if type(value) is not int or not 1 <= value <= maximum:
-                raise AnalysisConfigurationError(f"AI {name} must be an integer from 1 to {maximum}.")
-
-
 # C35 resource ceilings: the deterministic pipeline (no AI features) is bounded
 # by an elapsed-time budget so a huge repository ends as an explicit PARTIAL
 # analysis instead of an unbounded run.
@@ -123,57 +104,6 @@ def resolve_time_budget_seconds(explicit: int | None = None) -> int:
 
 
 @dataclass
-class AnalyzeOptions:
-    repo_path: Path
-    output: Path
-    output_format: str = "all"
-    atomic_output: bool = True
-    analyzers: list | None = None
-    analyzer_profile_id: str | None = None
-    recall: bool = False
-    incremental: bool | None = None
-    cve: bool = False
-    no_suppress: bool = False
-    suppress_file: str | None = None
-    suppress_from_ref: str | None = None
-    allow_pr_suppressions: bool = False
-    strict_suppressions: bool = False
-    strict_analyzers: bool = False
-    isolated_analyzers: bool = False
-    allow_untrusted_analyzers: bool = False
-    progress_format: str = "auto"
-    no_progress: bool = False
-    secrets_history: int = 0
-    baseline: str | None = None
-    diff_output: str | None = None
-    fail_on_new_high: bool = False
-    fail_on_new_suppression: bool = False
-    pr_comment: str | None = None
-    llm: bool = False
-    llm_provider: str = "claude"
-    llm_model: str | None = None
-    llm_effort: str | None = None
-    llm_backend: str = "auto"
-    llm_speed: str = "standard"
-    desktop_ai_mode: str | None = None
-    hunt: bool = False
-    verify: bool = False
-    verify_votes: int = 3
-    hunt_lenses: int = 1
-    hunt_rounds: int = 1
-    hunt_budget: int = 0
-    remediate: bool = False
-    triage: bool = False
-    ai_limits: ScanAiLimits = field(default_factory=ScanAiLimits)
-    time_budget_seconds: int | None = None
-    run_id: str | None = None
-    echo: Callable[..., None] = field(default=emit_text)
-    # AR024 carrier: the immutable RunSpec built from the request. Nothing in
-    # the pipeline reads it yet — AnalyzeOptions stays the source of truth.
-    run_spec: RunSpec | None = None
-
-
-@dataclass
 class StageTiming:
     name: str
     milliseconds: int
@@ -185,7 +115,9 @@ def _engine_utc_now() -> str:
 
 @dataclass
 class RunState:
-    options: AnalyzeOptions
+    """Mutable per-run accumulator; the frozen ``spec`` is its configuration."""
+
+    spec: RunSpec
     analyzers: list = field(default_factory=list)
     analyzer_run_plan: AnalyzerRunPlan | None = None
     scan: ScanResult | None = None
@@ -206,10 +138,6 @@ class RunState:
     time_budget: TimeBudget | None = None
     attempt_started: float = field(default_factory=time.perf_counter, repr=False)
     events: EventLog | None = field(default=None, repr=False)
-    # AR024: immutable configuration carrier built from the request. Nothing
-    # reads it yet — AnalyzeOptions stays the behavioral source of truth — so
-    # reports are byte-identical with the pre-RunSpec pipeline.
-    run_spec: RunSpec | None = None
 
     def finish_scan(self, outcome: str) -> None:
         if self.scan_finished_at is None:
@@ -312,24 +240,25 @@ def write_run_manifest(state: RunState, output: Path) -> None:
     if analyzer_ledger is None and state.analyzer_run_plan is not None:
         analyzer_ledger = state.analyzer_run_plan.ledger
     payload["analyzer_run_ledger"] = analyzer_ledger.model_dump(mode="json") if analyzer_ledger is not None else None
-    if state.options.llm or state.options.hunt or state.options.remediate or state.options.triage:
+    ai = state.spec.ai
+    if ai.enabled or ai.hunt or ai.remediate or ai.triage:
         ledger = current_budget()
         if ledger is not None:
             payload["ai_allowance"] = ledger.snapshot()
-    if state.options.desktop_ai_mode is not None:
+    if ai.desktop_mode is not None:
         from .desktop_ai import manifest_ai_result
         from .llm_review import DEFAULT_EFFORT, OPENAI_EFFORT_MAP
         ledger = current_budget()
-        payload["desktop_ai"] = manifest_ai_result(state.options.desktop_ai_mode, Path(output),
+        payload["desktop_ai"] = manifest_ai_result(ai.desktop_mode, Path(output),
                                                   ledger.snapshot() if ledger is not None else None, state.ai_outputs)
-        effort = state.options.llm_effort or DEFAULT_EFFORT
+        effort = ai.effort or DEFAULT_EFFORT
         payload["desktop_ai"]["service_parameters"] = {
-            "requested_effort": state.options.llm_effort,
-            "mapped_effort": None if state.options.desktop_ai_mode == "none" else
-                OPENAI_EFFORT_MAP.get(effort, "high") if state.options.llm_provider == "openai" else effort,
-            "provider": state.options.llm_provider, "requested_model": state.options.llm_model,
-            "backend": state.options.llm_backend, "speed": state.options.llm_speed,
-            "jury_votes": state.options.verify_votes if state.options.desktop_ai_mode == "hunt_verify" else None,
+            "requested_effort": ai.effort,
+            "mapped_effort": None if ai.desktop_mode == "none" else
+                OPENAI_EFFORT_MAP.get(effort, "high") if ai.provider == "openai" else effort,
+            "provider": ai.provider, "requested_model": ai.model,
+            "backend": ai.backend, "speed": ai.speed,
+            "jury_votes": ai.verify_votes if ai.desktop_mode == "hunt_verify" else None,
         }
     if state.time_budget is not None:
         payload["time_budget"] = {
@@ -367,36 +296,39 @@ def _echo_opt_in_hint(names: list[str], echo: Callable[..., None]) -> None:
         )
 
 
-def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunState:
+def _run_scan(
+    spec: RunSpec,
+    *,
+    repo_path: Path,
+    output: Path,
+    analyzers: list | None = None,
+    echo: Callable[..., None] = emit_text,
+    state: RunState | None = None,
+) -> RunState:
     """Run one repository through recon, translation, reports, and optional LLM."""
-    state = state if state is not None else RunState(options=options, run_spec=options.run_spec)
-    echo = options.echo
-    repo_path = options.repo_path
-    output = Path(options.output)
+    ai = spec.ai
+    state = state if state is not None else RunState(spec=spec)
+    output = Path(output)
     # AR003: structured run event log. Additive only — stdout progress is
     # untouched, and the log is persisted into the generation directory by
     # _run_scan_published before the pointer swap.
     if state.events is None:
-        state.events = EventLog(run_id=options.run_id or make_run_id())
+        state.events = EventLog(run_id=spec.run_id or make_run_id())
 
     with _diagnostic_phase(state, "request_validation"):
-        if options.fail_on_new_high and options.baseline is None:
+        if spec.fail_on_new_high and spec.baseline is None:
             raise AnalysisConfigurationError("--fail-on-new-high requires --baseline to be set.")
-        if options.fail_on_new_suppression and options.baseline is None:
+        if spec.fail_on_new_suppression and spec.baseline is None:
             raise AnalysisConfigurationError("--fail-on-new-suppression requires --baseline to be set.")
-        if options.baseline is not None:
-            baseline_path = Path(options.baseline)
+        if spec.baseline is not None:
+            baseline_path = Path(spec.baseline)
             if not baseline_path.exists():
                 raise AnalysisConfigurationError(f"Baseline report not found: {baseline_path}")
 
     llm_display = (
-        "OpenAI-compatible provider" if options.llm_backend == "api" else "Codex"
-    ) if options.llm_provider == "openai" else "Claude"
-    if (
-        options.llm_provider == "openai"
-        and options.llm_speed == "fast"
-        and (options.llm or options.hunt or options.remediate)
-    ):
+        "OpenAI-compatible provider" if ai.backend == "api" else "Codex"
+    ) if ai.provider == "openai" else "Claude"
+    if ai.provider == "openai" and ai.speed == "fast" and (ai.enabled or ai.hunt or ai.remediate):
         echo(
             "Note: --llm-speed fast is Claude-only; ignoring it for the OpenAI provider.",
             err=True,
@@ -404,23 +336,23 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
 
     opt_in_matches: list[str] = []
     captured_index: RepoIndex | None = None
-    budget = TimeBudget(resolve_time_budget_seconds(options.time_budget_seconds))
+    budget = TimeBudget(resolve_time_budget_seconds(spec.budget.time_budget_seconds))
     state.time_budget = budget
-    scan_progress = create_progress(options.progress_format, no_progress=options.no_progress)
+    scan_progress = create_progress(spec.progress_format, no_progress=spec.no_progress)
 
     def _select() -> None:
         nonlocal captured_index
         with time_budget_scope(budget):
             captured_index = RepoIndex.build(repo_path)
             state.analyzer_run_plan = AnalyzerRunPlan(Path(repo_path).resolve(), captured_index, AnalyzerRunLedger(
-                selection_mode="automatic" if options.analyzers is None else "explicit",
-                inventory_scope="registered_candidates" if options.analyzers is None else "supplied_candidates",
-                profile_id=options.analyzer_profile_id))
+                selection_mode="automatic" if analyzers is None else "explicit",
+                inventory_scope="registered_candidates" if analyzers is None else "supplied_candidates",
+                profile_id=spec.analyzer.profile_id))
             state.analyzers = resolve_run_analyzers(
-                repo_path, analyzers=options.analyzers, opt_in_matches=opt_in_matches,
+                repo_path, analyzers=analyzers, opt_in_matches=opt_in_matches,
                 run_plan=state.analyzer_run_plan,
                 progress=scan_progress,
-                allow_untrusted=options.allow_untrusted_analyzers or None,
+                allow_untrusted=spec.analyzer.allow_untrusted or None,
             )
 
     try:
@@ -474,10 +406,10 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                     repo_path,
                     run_plan=state.analyzer_run_plan,
                     progress=scan_progress,
-                    recall=options.recall,
-                    strict=options.strict_analyzers,
-                    isolated_analyzers=options.isolated_analyzers,
-                    incremental=options.incremental,
+                    recall=spec.features.recall,
+                    strict=spec.analyzer.strict,
+                    isolated_analyzers=spec.analyzer.isolated,
+                    incremental=spec.features.incremental,
                     index=captured_index,
                     events=state.events,
                 )
@@ -533,19 +465,19 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
     # tree. None when no index was pinned in this thread (stubbed scans).
     run_index = active_index_for(repo_path)
 
-    if options.recall:
+    if spec.features.recall:
         speculative = sum(1 for c in scan.taint_chains if c.speculative)
         echo(
             f"Recall mode: widened taint discovery, {speculative} speculative "
             "chain(s) surfaced (marked low-confidence; adjudicate with --hunt --verify)."
         )
-    if options.secrets_history and not _deadline_hit("secrets_history"):
+    if spec.features.secrets_history and not _deadline_hit("secrets_history"):
         from .secrets_history import scan_secret_history
 
-        echo(f"Scanning the last {options.secrets_history} commit(s) for secrets in git history…")
+        echo(f"Scanning the last {spec.features.secrets_history} commit(s) for secrets in git history…")
 
         def _history() -> None:
-            history_hits, history_notes = scan_secret_history(repo_path, options.secrets_history)
+            history_hits, history_notes = scan_secret_history(repo_path, spec.features.secrets_history)
             scan.secret_history = history_hits
             scan.limitations.extend(history_notes)
             removed = sum(1 for h in history_hits if not h.still_in_head)
@@ -555,7 +487,7 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
 
         _timed(state, "secrets_history", _history)
 
-    if options.cve and scan.dependencies and not _deadline_hit("cve"):
+    if spec.features.cve and scan.dependencies and not _deadline_hit("cve"):
         echo(f"Checking {len(scan.dependencies)} dependencies against OSV.dev…")
 
         def _cve() -> None:
@@ -600,18 +532,18 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
     suppression_governance: dict | None = None
     # Unconditional boundary check: even a minimal run (no optional stages
     # below) must notice a budget that expired during the scan stage.
-    if options.no_suppress or _deadline_hit("suppress"):
-        if options.suppress_file is not None and options.no_suppress:
+    if spec.features.no_suppress or _deadline_hit("suppress"):
+        if spec.features.suppress_file is not None and spec.features.no_suppress:
             echo("Note: --suppress-file is ignored because --no-suppress is set.", err=True)
     else:
-        explicit = Path(options.suppress_file) if options.suppress_file else None
+        explicit = Path(spec.features.suppress_file) if spec.features.suppress_file else None
         if explicit is not None and not explicit.exists():
             raise AnalysisConfigurationError(f"Suppress file not found: {explicit}")
 
         def _suppress() -> None:
             nonlocal findings, suppressed_findings, suppression_governance
             id_aliases = None
-            if options.baseline is not None:
+            if spec.baseline is not None:
                 # Migration aliases from the baseline let suppressions recorded
                 # against pre-migration title ids keep applying (C13). A baseline
                 # that fails to parse here fails authoritatively in the baseline
@@ -619,7 +551,7 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                 try:
                     records = [
                         {"id": snap.id, "title": snap.title, "rule_id": snap.rule_id}
-                        for snap in load_baseline(Path(options.baseline))
+                        for snap in load_baseline(Path(spec.baseline))
                     ]
                 except (OSError, ValueError):
                     records = None
@@ -633,8 +565,8 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                     repo_path,
                     findings,
                     explicit_file=explicit,
-                    trusted_ref=options.suppress_from_ref,
-                    allow_pr_suppressions=options.allow_pr_suppressions,
+                    trusted_ref=spec.features.suppress_from_ref,
+                    allow_pr_suppressions=spec.features.allow_pr_suppressions,
                     id_aliases=id_aliases,
                 )
             except GitRefError as exc:
@@ -651,18 +583,18 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
             suppression_governance = {
                 "pending": [f"{sup.label()} — {sup.reason} ({sup.source})" for sup in suppset.pending],
                 "pending_applied": suppset.pending_applied,
-                "trusted_ref": options.suppress_from_ref,
+                "trusted_ref": spec.features.suppress_from_ref,
                 "by_rule": dict(Counter(s.rule for s in suppressed_findings)),
             }
             if suppset.pending:
                 verb = "applied anyway (--allow-pr-suppressions)" if suppset.pending_applied else "NOT applied"
                 echo(
-                    f"{len(suppset.pending)} suppression(s) added since {options.suppress_from_ref} — {verb}:",
+                    f"{len(suppset.pending)} suppression(s) added since {spec.features.suppress_from_ref} — {verb}:",
                     err=True,
                 )
                 for line in suppression_governance["pending"]:
                     echo(f"  - {line}", err=True)
-            if options.strict_suppressions and suppset.expired:
+            if spec.features.strict_suppressions and suppset.expired:
                 echo(
                     f"Error: {len(suppset.expired)} expired suppression(s) (--strict-suppressions).",
                     err=True,
@@ -710,7 +642,7 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                 attack_paths,
                 analyzer_metadata=analyzer_meta,
                 suppressed=suppressed_findings,
-                output_format=options.output_format,
+                output_format=spec.output_format,
                 overlay=state.overlay,
             )
         except UnsafePathError as exc:
@@ -726,9 +658,9 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
 
     diff_exit_code = 0
     diff = None
-    if options.baseline is not None and not _deadline_hit("baseline"):
+    if spec.baseline is not None and not _deadline_hit("baseline"):
         with _diagnostic_phase(state, "baseline"):
-            baseline_path = Path(options.baseline)
+            baseline_path = Path(spec.baseline)
             try:
                 baseline_snapshots = load_baseline(baseline_path)
             except (OSError, ValueError) as exc:
@@ -760,10 +692,10 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                     "new instances of existing findings can't be detected until it is regenerated.",
                     err=True,
                 )
-            diff_path = Path(options.diff_output) if options.diff_output else output / "attackmap-diff.md"
+            diff_path = Path(spec.diff_output) if spec.diff_output else output / "attackmap-diff.md"
             _write_text(diff_path, render_diff_markdown(diff))
             echo(f"Diff written to: {diff_path.resolve()}")
-            if options.fail_on_new_high and diff.has_new_high:
+            if spec.fail_on_new_high and diff.has_new_high:
                 new_high_titles = [s.title for s in diff.new if s.severity == "high"] + [
                     f"{s.title} (new instance(s): {', '.join(labels[:5])})"
                     for s, labels in diff.new_instances
@@ -777,7 +709,7 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                 for t in new_high_titles:
                     echo(f"  - {t}", err=True)
                 diff_exit_code = 1
-            if options.fail_on_new_suppression and diff.newly_suppressed:
+            if spec.fail_on_new_suppression and diff.newly_suppressed:
                 echo("", err=True)
                 echo(
                     "Findings newly suppressed by this change (failing per --fail-on-new-suppression):",
@@ -787,9 +719,9 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                     echo(f"  - [{s_.severity.upper()}] {s_.title}", err=True)
                 diff_exit_code = 1
 
-    if options.pr_comment is not None and not _deadline_hit("pr_comment"):
+    if spec.pr_comment is not None and not _deadline_hit("pr_comment"):
         with _diagnostic_phase(state, "pr_comment"):
-            pr_path = Path(options.pr_comment)
+            pr_path = Path(spec.pr_comment)
             _write_text(pr_path, render_pr_comment(findings, diff, suppressions=suppression_governance))
             echo(f"PR comment written to: {pr_path.resolve()}")
 
@@ -800,16 +732,16 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
             if isinstance(value, int):
                 state.llm_usage[key] = state.llm_usage.get(key, 0) + value
 
-    if options.llm and not _deadline_hit("llm"):
+    if ai.enabled and not _deadline_hit("llm"):
         with _diagnostic_phase(state, "llm"):
             try:
-                effort_value = options.llm_effort
+                effort_value = ai.effort
                 echo("")
                 echo(
-                    f"Generating narrative review via {llm_display} (backend={options.llm_backend}, may take a minute)..."
+                    f"Generating narrative review via {llm_display} (backend={ai.backend}, may take a minute)..."
                 )
                 scan_progress.stage(
-                    f"{llm_display} is writing the defensive review (backend={options.llm_backend})"
+                    f"{llm_display} is writing the defensive review (backend={ai.backend})"
                 )
                 try:
                     result = generate_llm_review(
@@ -817,11 +749,11 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                         attack_surfaces,
                         findings,
                         attack_paths,
-                        model=options.llm_model,
+                        model=ai.model,
                         effort=effort_value,  # type: ignore[arg-type]
-                        backend=options.llm_backend,  # type: ignore[arg-type]
-                        speed=options.llm_speed,  # type: ignore[arg-type]
-                        provider=options.llm_provider,  # type: ignore[arg-type]
+                        backend=ai.backend,  # type: ignore[arg-type]
+                        speed=ai.speed,  # type: ignore[arg-type]
+                        provider=ai.provider,  # type: ignore[arg-type]
                     )
                 finally:
                     scan_progress.done()
@@ -850,15 +782,15 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                 state.ai_outputs["review"] = bool(result.markdown.strip())
                 echo(f"LLM review written to: {llm_md_path.resolve()} (backend={result.backend})")
 
-    if options.hunt and not _deadline_hit("hunt"):
+    if ai.hunt and not _deadline_hit("hunt"):
         with _diagnostic_phase(state, "hunt"):
-            hunt_effort_value = options.llm_effort
+            hunt_effort_value = ai.effort
             echo("")
-            lens_count = options.hunt_lenses
-            jury_votes = options.verify_votes
-            max_rounds = options.hunt_rounds
-            token_budget = options.hunt_budget if options.hunt_budget > 0 else None
-            use_jury = options.verify and (jury_votes > 1 or lens_count > 1 or max_rounds > 1)
+            lens_count = ai.hunt_lenses
+            jury_votes = ai.verify_votes
+            max_rounds = ai.hunt_rounds
+            token_budget = ai.hunt_budget if ai.hunt_budget > 0 else None
+            use_jury = ai.verify and (jury_votes > 1 or lens_count > 1 or max_rounds > 1)
             lens_names = [name for name, _ in HUNT_LENSES][:lens_count] if lens_count > 1 else None
 
             def _hunt_llm_call(mode: str, hypotheses=None, lens=None, avoid_titles=None, critic_hint=None):
@@ -867,12 +799,12 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                     attack_surfaces,
                     findings,
                     attack_paths,
-                    model=options.llm_model,
+                    model=ai.model,
                     effort=hunt_effort_value,  # type: ignore[arg-type]
-                    backend=options.llm_backend,  # type: ignore[arg-type]
+                    backend=ai.backend,  # type: ignore[arg-type]
                     mode=mode,  # type: ignore[arg-type]
-                    speed=options.llm_speed,  # type: ignore[arg-type]
-                    provider=options.llm_provider,  # type: ignore[arg-type]
+                    speed=ai.speed,  # type: ignore[arg-type]
+                    provider=ai.provider,  # type: ignore[arg-type]
                     hypotheses=hypotheses,
                     lens=lens,
                     avoid_titles=avoid_titles,
@@ -886,11 +818,11 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                     round_note = f", up to {max_rounds} rounds" if max_rounds > 1 else ""
                     echo(
                         f"Hunting + adjudicating via {llm_display} "
-                        f"({jury_votes} independent skeptics{lens_note}{round_note}, backend={options.llm_backend}, may take a few minutes)..."
+                        f"({jury_votes} independent skeptics{lens_note}{round_note}, backend={ai.backend}, may take a few minutes)..."
                     )
                     scan_progress.stage(
                         f"{llm_display} is hunting + majority-vote verifying "
-                        f"({jury_votes} skeptics{lens_note}{round_note}, backend={options.llm_backend})"
+                        f"({jury_votes} skeptics{lens_note}{round_note}, backend={ai.backend})"
                     )
                     try:
                         jury = run_majority_verify(
@@ -921,14 +853,14 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                         },
                     }
                 else:
-                    hunt_mode = "hunt_verify" if options.verify else "hunt"
+                    hunt_mode = "hunt_verify" if ai.verify else "hunt"
                     echo(
                         f"Hunting for vulnerability hypotheses via {llm_display} "
-                        f"({'adjudicated against source, ' if options.verify else ''}backend={options.llm_backend}, may take a minute)..."
+                        f"({'adjudicated against source, ' if ai.verify else ''}backend={ai.backend}, may take a minute)..."
                     )
                     scan_progress.stage(
                         f"{llm_display} is hunting exploit-chain hypotheses"
-                        f"{' + verifying against source' if options.verify else ''} (backend={options.llm_backend})"
+                        f"{' + verifying against source' if ai.verify else ''} (backend={ai.backend})"
                     )
                     try:
                         hunt_result = _hunt_llm_call(hunt_mode)
@@ -959,22 +891,22 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                     )
                     + "\n",
                 )
-                state.ai_outputs["hunt_verify" if options.verify else "hunt"] = bool(hunt_markdown.strip()) and hunt_backend in {"api", "cli"}
+                state.ai_outputs["hunt_verify" if ai.verify else "hunt"] = bool(hunt_markdown.strip()) and hunt_backend in {"api", "cli"}
                 echo(
                     f"Vulnerability hypotheses written to: {hunt_md_path.resolve()} "
                     f"(backend={hunt_backend})"
                 )
 
-    if options.remediate and not _deadline_hit("remediate"):
+    if ai.remediate and not _deadline_hit("remediate"):
         with _diagnostic_phase(state, "remediate"):
             try:
-                rem_effort_value = options.llm_effort
+                rem_effort_value = ai.effort
                 echo("")
                 echo(
-                    f"Generating remediation suggestions via {llm_display} (backend={options.llm_backend}, may take a minute)..."
+                    f"Generating remediation suggestions via {llm_display} (backend={ai.backend}, may take a minute)..."
                 )
                 scan_progress.stage(
-                    f"{llm_display} is drafting remediation suggestions (backend={options.llm_backend})"
+                    f"{llm_display} is drafting remediation suggestions (backend={ai.backend})"
                 )
                 try:
                     rem_result = generate_llm_review(
@@ -982,12 +914,12 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                         attack_surfaces,
                         findings,
                         attack_paths,
-                        model=options.llm_model,
+                        model=ai.model,
                         effort=rem_effort_value,  # type: ignore[arg-type]
-                        backend=options.llm_backend,  # type: ignore[arg-type]
+                        backend=ai.backend,  # type: ignore[arg-type]
                         mode="remediate",
-                        speed=options.llm_speed,  # type: ignore[arg-type]
-                        provider=options.llm_provider,  # type: ignore[arg-type]
+                        speed=ai.speed,  # type: ignore[arg-type]
+                        provider=ai.provider,  # type: ignore[arg-type]
                     )
                 finally:
                     scan_progress.done()
@@ -1019,9 +951,9 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
                     f"(backend={rem_result.backend})"
                 )
 
-    if options.triage and not _deadline_hit("triage"):
+    if ai.triage and not _deadline_hit("triage"):
         with _diagnostic_phase(state, "triage"):
-            tri_effort_value = options.llm_effort
+            tri_effort_value = ai.effort
             tri_md_path = output / "triage.md"
             tri_meta_path = output / "triage.meta.json"
             tri_backend = "deterministic"
@@ -1033,21 +965,21 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
             try:
                 echo("")
                 echo(
-                    f"Triaging findings via {llm_display} (backend={options.llm_backend})..."
+                    f"Triaging findings via {llm_display} (backend={ai.backend})..."
                 )
-                scan_progress.stage(f"{llm_display} is triaging findings (backend={options.llm_backend})")
+                scan_progress.stage(f"{llm_display} is triaging findings (backend={ai.backend})")
                 try:
                     tri_result = generate_llm_review(
                         scan,
                         attack_surfaces,
                         findings,
                         attack_paths,
-                        model=options.llm_model,
+                        model=ai.model,
                         effort=tri_effort_value,  # type: ignore[arg-type]
-                        backend=options.llm_backend,  # type: ignore[arg-type]
+                        backend=ai.backend,  # type: ignore[arg-type]
                         mode="triage",
-                        speed=options.llm_speed,  # type: ignore[arg-type]
-                        provider=options.llm_provider,  # type: ignore[arg-type]
+                        speed=ai.speed,  # type: ignore[arg-type]
+                        provider=ai.provider,  # type: ignore[arg-type]
                     )
                 finally:
                     scan_progress.done()
@@ -1090,10 +1022,10 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
     # captured revision (C33/AM047). The next scan re-pins on its own build.
     clear_pinned_index()
 
-    if scan_report is not None and options.output_format in {"all", "json"}:
+    if scan_report is not None and spec.output_format in {"all", "json"}:
         write_artifact_manifest(
             output,
-            run_id=options.run_id or make_run_id(),
+            run_id=spec.run_id or make_run_id(),
             engine_version=__version__,
             repo_root=str(repo_path),
             repo_name=repo_path.name,
@@ -1101,25 +1033,39 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
             exit_code=state.exit_code,
             status="succeeded" if state.exit_code == 0 else "policy_failed",
             report_data=scan_report,
-            output_format=options.output_format,
+            output_format=spec.output_format,
         )
 
     return state
 
 
-def run_scan(options: AnalyzeOptions) -> RunState:
-    """Share one allowance across every AI feature without replacing caller limits."""
-    if not (options.llm or options.hunt or options.remediate or options.triage):
-        return _run_scan_published(options)
-    if not isinstance(options.ai_limits, ScanAiLimits):
-        raise AnalysisConfigurationError("AI limits must be a typed ScanAiLimits value.")
-    options.ai_limits.__post_init__()
+def run_scan(
+    spec: RunSpec,
+    *,
+    repo_path: Path,
+    output: Path,
+    analyzers: list | None = None,
+    echo: Callable[..., None] = emit_text,
+) -> RunState:
+    """Run one repository configured by ``spec`` (AR025: the only run config).
+
+    Shares one AI allowance across every AI feature without replacing an
+    already-active caller ledger, and validates the AI allowance bounds when
+    any AI feature is enabled.
+    """
+    ai = spec.ai
+    kwargs = {"repo_path": repo_path, "output": output, "analyzers": analyzers, "echo": echo}
+    if not (ai.enabled or ai.hunt or ai.remediate or ai.triage):
+        return _run_scan_published(spec, **kwargs)
+    for name, maximum in (("max_calls", 64), ("output_tokens", 256000), ("timeout_seconds", 86400)):
+        value = getattr(ai, name)
+        if type(value) is not int or not 1 <= value <= maximum:
+            raise AnalysisConfigurationError(f"AI {name} must be an integer from 1 to {maximum}.")
     if current_budget() is not None:
-        return _run_scan_published(options)
-    limits = options.ai_limits
-    with budget_scope(AiBudget(max_calls=limits.max_calls, max_seconds=limits.timeout_seconds,
-                               output_token_limit=limits.output_token_limit)):
-        return _run_scan_published(options)
+        return _run_scan_published(spec, **kwargs)
+    with budget_scope(AiBudget(max_calls=ai.max_calls, max_seconds=ai.timeout_seconds,
+                               output_token_limit=ai.output_tokens)):
+        return _run_scan_published(spec, **kwargs)
 
 
 def _flush_event_log(state: RunState, folder: Path) -> None:
@@ -1136,18 +1082,26 @@ def _flush_event_log(state: RunState, folder: Path) -> None:
                             for r in state.events.records()))
 
 
-def _run_scan_published(options: AnalyzeOptions) -> RunState:
+def _run_scan_published(
+    spec: RunSpec,
+    *,
+    repo_path: Path,
+    output: Path,
+    analyzers: list | None = None,
+    echo: Callable[..., None] = emit_text,
+) -> RunState:
     """Publish one validated generation; flat files are compatibility exports."""
-    if not options.atomic_output:
-        state = RunState(options=options, run_spec=options.run_spec)
+    kwargs = {"repo_path": repo_path, "output": output, "analyzers": analyzers, "echo": echo}
+    if not spec.atomic_output:
+        state = RunState(spec=spec)
         try:
-            return _run_scan(options, state=state)
+            return _run_scan(spec, state=state, **kwargs)
         except BaseException as exc:
             from .artifact_publisher import write_diagnostic
             outcome = "cancelled" if isinstance(exc, KeyboardInterrupt) else "failed"
             state.finish_scan(outcome)
             with suppress(OSError, ValueError):
-                write_diagnostic(Path(options.output), options.run_id or make_run_id(), state=outcome,
+                write_diagnostic(Path(output), spec.run_id or make_run_id(), state=outcome,
                                  scan_timing=state.scan_timing(), context=_diagnostic_context(state, outcome))
             raise
     from .artifact_publisher import (
@@ -1157,15 +1111,14 @@ def _run_scan_published(options: AnalyzeOptions) -> RunState:
         publish_generation,
         write_diagnostic,
     )
-    base = prepare_output_root(Path(options.output))
-    run_id = options.run_id or make_run_id()
+    base = prepare_output_root(Path(output))
+    run_id = spec.run_id or make_run_id()
     folder = generation_dir(base, run_id)
-    staged = replace(options, output=folder, output_format="all", run_id=run_id,
-                     atomic_output=False)
-    state = RunState(options=staged, run_spec=staged.run_spec)
+    staged = replace(spec, output_format="all", run_id=run_id, atomic_output=False)
+    state = RunState(spec=staged)
     try:
         ensure_output_dir(folder, mark=True)
-        state = _run_scan(staged, state=state)
+        state = _run_scan(staged, state=state, output=folder, **{k: v for k, v in kwargs.items() if k != "output"})
         with _diagnostic_phase(state, "publication"):
             _flush_event_log(state, folder)
             publish_generation(base, run_id)
@@ -1184,12 +1137,12 @@ def _run_scan_published(options: AnalyzeOptions) -> RunState:
     # Publication is already committed. A failed convenience export must not
     # turn the authoritative successful generation into a failed execution.
     try:
-        export_compatibility(base, folder, output_format=options.output_format)
+        export_compatibility(base, folder, output_format=spec.output_format)
     except (OSError, ValueError):
         state.errors.append({"stage": "compatibility_export",
                              "error": "Flat export failed; the published generation remains available."})
-        options.echo("Warning: flat export failed; the published generation remains available.", err=True)
+        echo("Warning: flat export failed; the published generation remains available.", err=True)
     from .retention import retain_after_publish
-    retain_after_publish(base, echo=options.echo)
-    state.options = options
+    retain_after_publish(base, echo=echo)
+    state.spec = spec
     return state

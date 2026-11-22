@@ -161,13 +161,14 @@ def test_model_schema_change_invalidates_extractor_identity(monkeypatch):
 def test_explicit_incremental_false_overrides_inherited_cli_environment(tmp_path, monkeypatch):
     import attackmap.scanner as scanner
     from attackmap.analyzers import analyze_repository, BuiltinPythonWebAnalyzer
-    from attackmap.scan_service import ScanRequest, _analyze_options
+    from attackmap.orchestration.run_spec import RunSpec
+    from attackmap.scan_service import ScanRequest
     (tmp_path / "app.py").write_text("from flask import Flask\napp=Flask(__name__)\n@app.route('/items')\ndef items(): return []\n", encoding="utf-8")
     monkeypatch.setenv("ATTACKMAP_INCREMENTAL", "1")
     monkeypatch.setattr(scanner, "_open_incremental_cache", lambda *a, **k: (_ for _ in ()).throw(AssertionError("explicit disabled request opened cache")))
-    options = _analyze_options(ScanRequest(repo_paths=[tmp_path], output=tmp_path.parent / "reports", incremental=False), tmp_path, tmp_path.parent / "reports", None)
-    assert options.incremental is False
-    result = analyze_repository(tmp_path, analyzers=[BuiltinPythonWebAnalyzer()], incremental=options.incremental)
+    spec = RunSpec.from_scan_request(ScanRequest(repo_paths=[tmp_path], output=tmp_path.parent / "reports"))
+    assert spec.features.incremental is False
+    result = analyze_repository(tmp_path, analyzers=[BuiltinPythonWebAnalyzer()], incremental=spec.features.incremental)
     assert result.routes
 
 

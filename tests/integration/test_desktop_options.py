@@ -32,7 +32,7 @@ def test_invalid_options_rejected(fields):
 def test_options_reach_shared_engine(tmp_path, monkeypatch):
     captured = []
     monkeypatch.setattr("attackmap.scan_service.run_scan",
-                        lambda options: captured.append(options) or SimpleNamespace(exit_code=0))
+                        lambda spec, **kwargs: captured.append(spec) or SimpleNamespace(exit_code=0))
     request = RunRequest(run_id="options", repository_id="repo", generation=1,
                          revision=0, repository_path=str(tmp_path),
                          output_path=str(tmp_path / "reports"), options=ScanOptions(
@@ -41,11 +41,11 @@ def test_options_reach_shared_engine(tmp_path, monkeypatch):
     path = tmp_path / "request.json"
     path.write_text(request.model_dump_json(), encoding="utf-8")
     assert run_request_file(path, engine=True) == 0
-    options = captured[0]
-    assert options.recall and options.strict_analyzers and options.no_suppress
-    assert options.cve and options.secrets_history == 12
-    assert not options.llm and not options.hunt
-    assert not options.atomic_output
+    spec = captured[0]
+    assert spec.features.recall and spec.analyzer.strict and spec.features.no_suppress
+    assert spec.features.cve and spec.features.secrets_history == 12
+    assert not spec.ai.enabled and not spec.ai.hunt
+    assert not spec.atomic_output
 
 
 def test_legacy_request_uses_safe_defaults(tmp_path):
@@ -84,7 +84,7 @@ NEW_SENTINELS = {
 
 
 def test_every_new_field_has_nondefault_service_and_pipeline_sentinel(tmp_path):
-    from attackmap.scan_service import scan_request_from_run, _analyze_options
+    from attackmap.scan_service import scan_request_from_run
     assert set(NEW_SENTINELS) == set(ScanOptionsV12.model_fields) - set(ScanOptions.model_fields)
     options = ScanOptionsV12(**NEW_SENTINELS, timeout_seconds=37)
     request = RunRequest(schema_version="1.2", run_id="sentinel", repository_id="opaque-repo",
@@ -93,19 +93,30 @@ def test_every_new_field_has_nondefault_service_and_pipeline_sentinel(tmp_path):
     decoded = RunRequest.model_validate_json(request.model_dump_json())
     assert decoded == request
     service = scan_request_from_run(decoded)
-    pipeline = _analyze_options(service, service.repo_paths[0], service.output, None)
+    spec = service.spec
+
+    def spec_value(name):
+        if name in {"baseline", "fail_on_new_high", "fail_on_new_suppression"}:
+            return getattr(spec, name)
+        if name == "isolated_analyzers":
+            return spec.analyzer.isolated
+        if name == "time_budget_seconds":
+            return spec.budget.time_budget_seconds
+        return getattr(spec.features, name)
+
     for name, sentinel in NEW_SENTINELS.items():
         assert sentinel != getattr(ScanOptionsV12(), name)
         assert getattr(decoded.options, name) == sentinel
-        assert getattr(service, name) == sentinel
-        assert getattr(pipeline, name) == sentinel
+        assert spec_value(name) == sentinel
         metadata = ScanOptionsV12.model_fields[name].json_schema_extra
         assert metadata["network_impact"] == "none" and metadata["supported"] is True
         assert metadata["unit"]
-    assert not service.install_missing and not service.atomic_output
-    assert service.run_id == "sentinel"
+    assert not spec.analyzer.install_missing and not spec.atomic_output
+    assert service.run_id == "sentinel" and spec.run_id == "sentinel"
     assert service.repo_paths == [tmp_path]
-    assert pipeline.ai_limits == service.ai_limits
+    assert (spec.ai.max_calls, spec.ai.output_tokens, spec.ai.timeout_seconds) == (
+        decoded.options.provider.max_calls, decoded.options.provider.output_token_limit,
+        decoded.options.provider.timeout_seconds)
 
 
 @pytest.mark.parametrize("fields", [
@@ -165,8 +176,17 @@ def test_v12_worker_reaches_application_service_with_exact_sentinels(tmp_path, m
     path.write_text(request.model_dump_json())
     assert run_request_file(path, engine=True) == 0
     assert len(captured) == 1
+    spec = captured[0].spec
     for name in NEW_SENTINELS:
-        assert getattr(captured[0], name) == getattr(options, name)
+        if name in {"baseline", "fail_on_new_high", "fail_on_new_suppression"}:
+            sent = getattr(spec, name)
+        elif name == "isolated_analyzers":
+            sent = spec.analyzer.isolated
+        elif name == "time_budget_seconds":
+            sent = spec.budget.time_budget_seconds
+        else:
+            sent = getattr(spec.features, name)
+        assert sent == getattr(options, name)
     provider.assert_not_called()
 
 

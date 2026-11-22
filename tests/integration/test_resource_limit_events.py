@@ -119,15 +119,17 @@ def test_resource_limit_events_reach_published_diagnostic_context(tmp_path, monk
     import json
     from attackmap.analyzers import BuiltinPythonWebAnalyzer
     from attackmap.artifact_publisher import current_generation
-    from attackmap.pipeline import AnalyzeOptions, run_scan
+    from attackmap.orchestration.run_spec import RunSpec
+    from attackmap.pipeline import run_scan
     monkeypatch.setenv("ATTACKMAP_MAX_FILE_BYTES", "100")
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "PRIVATE-SKIPPED.py").write_bytes(b"x" * 101)
     (repo / "app.py").write_text("from flask import Flask\napp = Flask(__name__)\n", encoding="utf-8")
     output = tmp_path / "reports"
-    state = run_scan(AnalyzeOptions(repo_path=repo, output=output, run_id="limits",
-        analyzers=[BuiltinPythonWebAnalyzer()], echo=lambda *args, **kwargs: None))
+    state = run_scan(RunSpec(run_id="limits"),
+        repo_path=repo, output=output,
+        analyzers=[BuiltinPythonWebAnalyzer()], echo=lambda *args, **kwargs: None)
     assert state.exit_code == 0
     context = json.loads((current_generation(output) / "run-manifest.json")
                          .read_text(encoding="utf-8"))["diagnostic_context"]

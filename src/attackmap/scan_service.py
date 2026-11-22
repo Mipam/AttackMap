@@ -48,8 +48,15 @@ from .fleet_admission import (
     unverified_fleet_cleanup,
 )
 from .models import AttackPath, Finding, ScanResult
-from .orchestration.run_spec import RunSpec
-from .pipeline import AnalyzeOptions, ScanAiLimits, run_scan
+from .orchestration.run_spec import (
+    AiSpec,
+    AnalyzerSelection,
+    BudgetSpec,
+    FeatureFlags,
+    FleetSpec,
+    RunSpec,
+)
+from .pipeline import run_scan
 from .run_contract import RunRequest
 from .safe_fs import UnsafePathError, ensure_output_dir, safe_write_text
 
@@ -62,59 +69,26 @@ class ScanRequestError(AttackMapError):
 
 @dataclass
 class ScanRequest:
-    """Neutral scan request consumed by ``execute_scan_request``."""
+    """Transport for one scan; run configuration travels on ``spec`` (AR025/AC-105).
+
+    Only genuinely transport-level fields remain: repository and output paths,
+    the paired immutable :class:`RunSpec` (built by an adapter — CLI, desktop
+    contract, or the ``RunSpec.from_scan_request`` fallback), pre-resolved
+    analyzers, output/echo/cancel hooks and fleet coordination. Feature
+    switches, AI controls, budgets and suppression policy have no home here;
+    they live on the spec.
+    """
 
     repo_paths: list[Path]
     output: Path
-    output_format: str = "all"
-    modules: list[str] = field(default_factory=list)
+    spec: RunSpec | None = None
     analyzers: list | None = None
-    analyzer_profile_id: str | None = None
-    install_missing: bool = False
-    recall: bool = False
-    cve: bool = False
-    no_suppress: bool = False
-    suppress_file: str | None = None
-    suppress_from_ref: str | None = None
-    allow_pr_suppressions: bool = False
-    strict_suppressions: bool = False
-    strict_analyzers: bool = False
-    isolated_analyzers: bool = False
-    # AR006: opt in to loading non-official analyzer plugins (default refused).
-    allow_untrusted_analyzers: bool = False
-    # C34/AM048: activate the per-file incremental cache (default off).
-    incremental: bool = False
-    time_budget_seconds: int | None = None
-    progress_format: str = "auto"
-    no_progress: bool = False
-    secrets_history: int = 0
     run_id: str | None = None
-    baseline: str | None = None
-    diff_output: str | None = None
-    fail_on_new_high: bool = False
-    fail_on_new_suppression: bool = False
-    pr_comment: str | None = None
-    llm: bool = False
-    llm_provider: str = "claude"
-    llm_model: str | None = None
-    llm_effort: str | None = None
-    llm_backend: str = "auto"
-    llm_speed: str = "standard"
-    desktop_ai_mode: str | None = None
-    hunt: bool = False
-    verify: bool = False
-    verify_votes: int = 3
-    hunt_lenses: int = 1
-    hunt_rounds: int = 1
-    hunt_budget: int = 0
-    remediate: bool = False
-    triage: bool = False
-    ai_limits: ScanAiLimits = field(default_factory=ScanAiLimits)
     echo: Callable[..., None] = field(default=emit_text)
     cancel_check: Callable[[], bool] | None = None
     max_workers: int = 1
     fleet_result: Path | None = None
-    atomic_output: bool = True
+    output_format: str = "all"
     # Optional desktop fleet transport; ordinary CLI requests retain their path.
     fleet_supervised: bool = False
     fleet_timeout_seconds: int = 600
@@ -126,7 +100,6 @@ class ScanRequest:
     # Explicit deployment alias declarations for cross-repo link resolution
     # (C28): positive host→repo mappings; never inferred by similarity.
     deployment_aliases: DeploymentAliases | None = None
-    # Append new options after legacy fields to preserve positional callers.
     # Optional aggregate captured-input limit; distinct from working-set memory.
     fleet_input_byte_budget: int | None = None
 
@@ -142,104 +115,80 @@ class RunSummary:
 
 
 def scan_request_from_run(request: RunRequest, *, echo: Callable[..., None] = emit_text) -> ScanRequest:
-    """Translate the versioned single-repository contract without orchestration policy."""
+    """Translate the versioned desktop contract into transport + a full RunSpec."""
     options = request.options
     provider = options.provider
     from .desktop_ai import service_ai_options
     ai = service_ai_options(provider)
-    extended = {name: getattr(options, name, None if name in {"baseline", "suppress_file", "time_budget_seconds"} else False)
-                for name in ("baseline", "suppress_file", "fail_on_new_high", "fail_on_new_suppression",
-                             "strict_suppressions", "isolated_analyzers", "time_budget_seconds")}
+    spec = RunSpec(
+        analyzer=AnalyzerSelection(
+            modules=tuple(request.modules),
+            profile_id=getattr(options, "analyzer_profile", None),
+            strict=options.strict_analyzers,
+            isolated=getattr(options, "isolated_analyzers", False),
+        ),
+        features=FeatureFlags(
+            recall=options.recall,
+            cve=options.cve,
+            no_suppress=options.no_suppress,
+            secrets_history=options.secrets_history,
+            suppress_file=getattr(options, "suppress_file", None),
+            strict_suppressions=getattr(options, "strict_suppressions", False),
+        ),
+        budget=BudgetSpec(time_budget_seconds=getattr(options, "time_budget_seconds", None)),
+        ai=AiSpec(
+            enabled=ai["llm"], hunt=ai["hunt"], verify=ai["verify"],
+            verify_votes=ai["verify_votes"], remediate=ai["remediate"], triage=ai["triage"],
+            provider=ai["llm_provider"], model=ai["llm_model"], effort=ai["llm_effort"],
+            speed=ai["llm_speed"], backend=ai["llm_backend"],
+            desktop_mode=ai["desktop_ai_mode"],
+            max_calls=provider.max_calls, output_tokens=provider.output_token_limit,
+            timeout_seconds=provider.timeout_seconds,
+        ),
+        output_format="all",
+        progress_format="json",
+        atomic_output=False,
+        run_id=request.run_id,
+        baseline=getattr(options, "baseline", None),
+        fail_on_new_high=getattr(options, "fail_on_new_high", False),
+        fail_on_new_suppression=getattr(options, "fail_on_new_suppression", False),
+    )
     return ScanRequest(repo_paths=[Path(request.repository_path)], output=Path(request.output_path),
-        output_format="all", modules=list(request.modules), install_missing=False,
-        analyzer_profile_id=getattr(options, "analyzer_profile", None),
-        recall=options.recall, cve=options.cve, no_suppress=options.no_suppress,
-        strict_analyzers=options.strict_analyzers, secrets_history=options.secrets_history,
-        run_id=request.run_id, progress_format="json", atomic_output=False,
-        **ai, ai_limits=ScanAiLimits(max_calls=provider.max_calls,
-            timeout_seconds=provider.timeout_seconds, output_token_limit=provider.output_token_limit),
-        echo=echo, **extended)
+        spec=spec, run_id=request.run_id, echo=echo)
+
+
+def _request_spec(request: ScanRequest) -> RunSpec:
+    """The request's paired spec, built as a transport mirror when absent."""
+    if request.spec is not None:
+        return request.spec
+    request.spec = RunSpec.from_scan_request(request)
+    return request.spec
 
 
 def _fleet_incompatible_flags(request: ScanRequest) -> list[str]:
+    spec = _request_spec(request)
     active: list[str] = []
-    if request.baseline is not None:
+    if spec.baseline is not None:
         active.append("--baseline")
-    if request.diff_output is not None:
+    if spec.diff_output is not None:
         active.append("--diff-output")
-    if request.fail_on_new_high:
+    if spec.fail_on_new_high:
         active.append("--fail-on-new-high")
-    if request.fail_on_new_suppression:
+    if spec.fail_on_new_suppression:
         active.append("--fail-on-new-suppression")
-    if request.pr_comment is not None:
+    if spec.pr_comment is not None:
         active.append("--pr-comment")
-    if request.llm:
+    if spec.ai.enabled:
         active.append("--llm")
-    if request.hunt:
+    if spec.ai.hunt:
         active.append("--hunt")
-    if request.remediate:
+    if spec.ai.remediate:
         active.append("--remediate")
-    if request.triage:
+    if spec.ai.triage:
         active.append("--triage")
-    if request.secrets_history > 0:
+    if spec.features.secrets_history > 0:
         active.append("--secrets-history")
     return active
-
-
-def _analyze_options(
-    request: ScanRequest,
-    repo_path: Path,
-    output: Path,
-    analyzers: list | None,
-) -> AnalyzeOptions:
-    # Explicit False from a desktop request must override inherited CLI env.
-    extra: dict[str, Any] = {"incremental": request.incremental}
-    return AnalyzeOptions(
-        repo_path=repo_path,
-        output=output,
-        output_format=request.output_format,
-        atomic_output=request.atomic_output,
-        analyzers=analyzers,
-        analyzer_profile_id=request.analyzer_profile_id,
-        recall=request.recall,
-        cve=request.cve,
-        no_suppress=request.no_suppress,
-        suppress_file=request.suppress_file,
-        suppress_from_ref=request.suppress_from_ref,
-        allow_pr_suppressions=request.allow_pr_suppressions,
-        strict_suppressions=request.strict_suppressions,
-        strict_analyzers=request.strict_analyzers,
-        isolated_analyzers=request.isolated_analyzers,
-        allow_untrusted_analyzers=request.allow_untrusted_analyzers,
-        progress_format=request.progress_format,
-        no_progress=request.no_progress,
-        secrets_history=request.secrets_history,
-        baseline=request.baseline,
-        diff_output=request.diff_output,
-        fail_on_new_high=request.fail_on_new_high,
-        fail_on_new_suppression=request.fail_on_new_suppression,
-        pr_comment=request.pr_comment,
-        llm=request.llm,
-        llm_provider=request.llm_provider,
-        llm_model=request.llm_model,
-        llm_effort=request.llm_effort,
-        llm_backend=request.llm_backend,
-        llm_speed=request.llm_speed,
-        desktop_ai_mode=request.desktop_ai_mode,
-        hunt=request.hunt,
-        verify=request.verify,
-        verify_votes=request.verify_votes,
-        hunt_lenses=request.hunt_lenses,
-        hunt_rounds=request.hunt_rounds,
-        hunt_budget=request.hunt_budget,
-        remediate=request.remediate,
-        triage=request.triage,
-        ai_limits=request.ai_limits,
-        time_budget_seconds=request.time_budget_seconds,
-        run_id=request.run_id,
-        echo=request.echo,
-        **extra,
-    )
 
 
 def _write_artifact(path: Path, text: str) -> None:
@@ -252,10 +201,10 @@ def _write_artifact(path: Path, text: str) -> None:
 
 def _run_single_repo(request: ScanRequest, analyzers: list | None) -> RunSummary:
     repo_path = request.repo_paths[0]
+    spec = _request_spec(request)
     try:
-        options = _analyze_options(request, repo_path, request.output, analyzers)
-        options.run_spec = getattr(request, "run_spec", None)
-        state = run_scan(options)
+        state = run_scan(spec, repo_path=repo_path, output=request.output,
+                         analyzers=analyzers, echo=request.echo)
     except AnalysisConfigurationError as exc:
         if request.fleet_result is not None:
             _write_artifact(request.fleet_result, json.dumps({
@@ -282,7 +231,7 @@ def _run_single_repo(request: ScanRequest, analyzers: list | None) -> RunSummary
         _write_artifact(request.fleet_result, json.dumps(payload, ensure_ascii=False))
 
     report_root = Path(request.output)
-    if request.atomic_output:
+    if spec.atomic_output:
         from .artifact_publisher import current_generation
         published = current_generation(report_root)
         if published is None:
@@ -351,6 +300,8 @@ def _run_fleet_repo_argv(
     analyzer_names: list[str],
 ) -> list[str]:
     """Build the CLI argv for a per-repo subprocess worker."""
+    spec = _request_spec(request)
+    ai = spec.ai
     prefix = (
         [sys.executable] if getattr(sys, "frozen", False)
         else [sys.executable, "-m", "attackmap"]
@@ -363,48 +314,48 @@ def _run_fleet_repo_argv(
         str(repo_out),
     ]
     argv.extend(["--format", request.output_format])
-    argv.extend(["--ai-max-calls", str(request.ai_limits.max_calls),
-                 "--ai-output-tokens", str(request.ai_limits.output_token_limit),
-                 "--ai-timeout-seconds", str(request.ai_limits.timeout_seconds)])
+    argv.extend(["--ai-max-calls", str(ai.max_calls),
+                 "--ai-output-tokens", str(ai.output_tokens),
+                 "--ai-timeout-seconds", str(ai.timeout_seconds)])
     if request.run_id is not None:
         argv.extend(["--run-id", request.run_id])
-    if request.analyzer_profile_id is not None:
-        argv.extend(["--analyzer-profile", request.analyzer_profile_id])
+    if spec.analyzer.profile_id is not None:
+        argv.extend(["--analyzer-profile", spec.analyzer.profile_id])
     else:
         for name in analyzer_names:
             argv.extend(["--module", name])
-        for module in request.modules:
-            argv.extend(["--module", module])
-    if request.install_missing:
+    if spec.analyzer.install_missing:
         argv.append("--install-missing")
-    if request.recall:
+    if spec.features.recall:
         argv.append("--recall")
-    if request.cve:
+    if spec.features.cve:
         argv.append("--cve")
-    if request.no_suppress:
+    if spec.features.no_suppress:
         argv.append("--no-suppress")
-    if request.suppress_file is not None:
-        argv.extend(["--suppress-file", request.suppress_file])
-    if request.suppress_from_ref is not None:
-        argv.extend(["--suppress-from-ref", request.suppress_from_ref])
-    if request.allow_pr_suppressions:
+    if spec.features.suppress_file is not None:
+        argv.extend(["--suppress-file", spec.features.suppress_file])
+    if spec.features.suppress_from_ref is not None:
+        argv.extend(["--suppress-from-ref", spec.features.suppress_from_ref])
+    if spec.features.allow_pr_suppressions:
         argv.append("--allow-pr-suppressions")
-    if request.strict_suppressions:
+    if spec.features.strict_suppressions:
         argv.append("--strict-suppressions")
-    if request.strict_analyzers:
+    if spec.analyzer.strict:
         argv.append("--strict-analyzers")
-    if request.isolated_analyzers:
+    if spec.analyzer.isolated:
         argv.append("--isolated-analyzers")
-    if request.fleet_supervised and request.time_budget_seconds is not None:
-        argv.extend(["--time-budget-seconds", str(request.time_budget_seconds)])
-    if request.incremental:
-        # The worker re-parses the flag and sets ATTACKMAP_INCREMENTAL itself,
-        # so the subprocess scan activates the per-file cache (C34/AM048).
+    # Fleet supervision is request transport (desktop callers set it until
+    # dispatch); the budget ceiling itself lives on the spec.
+    if request.fleet_supervised and spec.budget.time_budget_seconds is not None:
+        argv.extend(["--time-budget-seconds", str(spec.budget.time_budget_seconds)])
+    if spec.features.incremental:
+        # The worker re-parses the flag, so the subprocess scan activates the
+        # per-file cache explicitly (C34/AM048); no environment is inherited.
         argv.append("--incremental")
-    if request.no_progress:
+    if spec.no_progress:
         argv.append("--no-progress")
-    elif request.progress_format != "auto":
-        argv.extend(["--progress-format", request.progress_format])
+    elif spec.progress_format != "auto":
+        argv.extend(["--progress-format", spec.progress_format])
     return argv
 
 
@@ -595,9 +546,8 @@ def _run_fleet_serial(
         request.echo(f"── {repo_id}  ({repo_path}) ──")
         try:
             repo_out = output_root / repo_id
-            options = _analyze_options(request, repo_path, repo_out, analyzers)
-            options.run_spec = getattr(request, "run_spec", None)
-            state = run_scan(options)
+            state = run_scan(_request_spec(request), repo_path=repo_path, output=repo_out,
+                             analyzers=analyzers, echo=request.echo)
             if state.exit_code != 0:
                 raise RuntimeError(f"scan exited with code {state.exit_code}")
             assert state.scan is not None
@@ -926,8 +876,7 @@ def _run_fleet_generation(request: ScanRequest, analyzers: list | None) -> RunSu
     fleet_started = time.perf_counter()
     # The parent may itself be staged by a desktop caller, but child results
     # always need independently verified, manifest-bound generations.
-    child_request = replace(request, atomic_output=True)
-    child_request.run_spec = getattr(request, "run_spec", None)  # AR024 carrier
+    child_request = replace(request, spec=replace(_request_spec(request), atomic_output=True))
     if (_effective_max_workers(request) == 1 and not request.fleet_supervised
             and request.fleet_memory_policy is None and request.fleet_input_byte_budget is None):
         _run_fleet_serial(child_request, analyzers, fleet, output_root)
@@ -971,7 +920,7 @@ def _run_fleet_generation(request: ScanRequest, analyzers: list | None) -> RunSu
 
 
 def _run_fleet(request: ScanRequest, analyzers: list | None) -> RunSummary:
-    if not request.atomic_output:
+    if not _request_spec(request).atomic_output:
         return _run_fleet_generation(request, analyzers)
     from .artifact_manifest import make_run_id
     from .artifact_publisher import (
@@ -986,8 +935,8 @@ def _run_fleet(request: ScanRequest, analyzers: list | None) -> RunSummary:
     run_id = request.run_id or make_run_id()
     stage = generation_dir(base, run_id)
     ensure_output_dir(stage, mark=True)
-    staged = replace(request, output=stage, run_id=run_id, atomic_output=False)
-    staged.run_spec = getattr(request, "run_spec", None)  # AR024 carrier; replace() drops it
+    staged = replace(request, output=stage, run_id=run_id)
+    staged.spec = replace(_request_spec(request), run_id=run_id, atomic_output=False)
     def diagnostic(state: str) -> None:
         context = diagnostic_context_from_generation(base, run_id, outcome=state)
         write_diagnostic(base, run_id, state=state,
@@ -1030,7 +979,7 @@ def execute_scan_request(request: ScanRequest) -> RunSummary:
     validation_started = time.perf_counter()
     if not request.repo_paths:
         validation_duration = round((time.perf_counter() - validation_started) * 1000)
-        if request.atomic_output:
+        if _request_spec(request).atomic_output:
             from .artifact_manifest import make_run_id
             from .artifact_publisher import write_diagnostic
             from .diagnostics import startup_diagnostic
@@ -1047,8 +996,18 @@ def execute_scan_request(request: ScanRequest) -> RunSummary:
         if len(request.repo_paths) < 2:
             raise ScanRequestError("Fleet input byte budget requires at least two repository paths")
 
+    spec = _request_spec(request)
+    # Fleet coordination is transport: desktop callers may retune it on the
+    # request until dispatch, so the spec's fleet group is derived here.
+    spec = replace(spec, fleet=FleetSpec(
+        max_workers=request.max_workers,
+        supervised=request.fleet_supervised,
+        timeout_seconds=request.fleet_timeout_seconds,
+        input_byte_budget=request.fleet_input_byte_budget,
+    ))
+    request.spec = spec
     try:
-        if request.atomic_output:
+        if spec.atomic_output:
             from .artifact_publisher import prepare_output_root
             prepare_output_root(request.output)
         else:
@@ -1059,16 +1018,18 @@ def execute_scan_request(request: ScanRequest) -> RunSummary:
     selection_started = time.perf_counter()
     try:
         analyzers = request.analyzers
-        if request.analyzer_profile_id is not None:
+        profile_id = spec.analyzer.profile_id
+        if profile_id is not None:
             from .analyzer_profiles import get_analyzer_profiles, resolve_analyzer_profile
             from .analyzers import get_analyzer_metadata, get_registered_analyzers
-            if request.modules or request.install_missing:
+            if spec.analyzer.modules or spec.analyzer.install_missing:
                 raise ValueError("Analyzer profiles cannot be combined with explicit modules or installation")
             definition = next((p for p in get_analyzer_profiles()
-                               if request.analyzer_profile_id in (p.name, p.qualified_name)), None)
+                               if profile_id in (p.name, p.qualified_name)), None)
             if definition is None:
                 raise ValueError("Unknown analyzer profile")
-            request.analyzer_profile_id = definition.qualified_name
+            spec = replace(spec, analyzer=replace(spec.analyzer, profile_id=definition.qualified_name))
+            request.spec = spec
             if definition.selection_mode == "automatic":
                 if analyzers is not None:
                     raise ValueError("Automatic profile cannot override an explicit analyzer list")
@@ -1080,14 +1041,14 @@ def execute_scan_request(request: ScanRequest) -> RunSummary:
                 selection = resolve_analyzer_profile(definition.qualified_name, metadata)
                 by_name = {a.name: a for a in registered}
                 analyzers = [by_name[name] for name in selection.module_names]
-        if analyzers is None and request.modules:
+        if analyzers is None and spec.analyzer.modules:
             analyzers = select_requested_analyzers(
-                request.modules,
-                auto_install=request.install_missing,
+                list(spec.analyzer.modules),
+                auto_install=spec.analyzer.install_missing,
             )
     except (MissingAnalyzersError, ValueError) as exc:
         selection_duration = round((time.perf_counter() - selection_started) * 1000)
-        if request.atomic_output:
+        if spec.atomic_output:
             from .artifact_manifest import make_run_id
             from .artifact_publisher import write_diagnostic
             from .diagnostics import startup_diagnostic
@@ -1097,16 +1058,9 @@ def execute_scan_request(request: ScanRequest) -> RunSummary:
                                  error="Requested analyzer configuration unavailable.",
                                  context=startup_diagnostic("select_analyzers",
                                      duration_milliseconds=selection_duration,
-                                     requested_analyzers=request.modules))
+                                     requested_analyzers=list(spec.analyzer.modules)))
         raise ScanRequestError(str(exc)) from exc
 
-    # AR024: mirror the validated request into the immutable run specification
-    # and attach it to the request (dynamic attribute, not a dataclass field,
-    # so the declared positional field layout is untouched). The single-repo
-    # and fleet-serial paths copy it onto AnalyzeOptions, and the pipeline
-    # stamps it onto RunState.run_spec. The request/options path stays the
-    # source of truth until AR025/AR026 retire it; nothing reads run_spec.
-    request.run_spec = RunSpec.from_scan_request(request)
     if len(request.repo_paths) == 1:
         return _run_single_repo(request, analyzers)
     return _run_fleet(request, analyzers)

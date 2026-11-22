@@ -7,6 +7,7 @@ import pytest
 import typer
 
 from attackmap import cli, desktop_worker, scan_service
+from attackmap.orchestration import run_spec
 from attackmap.artifact_publisher import write_diagnostic
 from attackmap.diagnostics import DiagnosticContext, DiagnosticStage, scan_diagnostic, startup_diagnostic
 from attackmap.fleet import FleetRepoResult
@@ -38,7 +39,8 @@ def test_service_selection_failure_preserves_typed_error_and_unknown_coverage(tm
     def fail(*args, **kwargs):
         raise ValueError("PRIVATE_CONFIGURATION_SENTINEL")
     monkeypatch.setattr(scan_service, "select_requested_analyzers", fail)
-    request = scan_service.ScanRequest(repo_paths=[tmp_path], output=tmp_path / "out", run_id="service", modules=["missing"])
+    request = scan_service.ScanRequest(repo_paths=[tmp_path], output=tmp_path / "out", run_id="service",
+                                   spec=run_spec.RunSpec(analyzer=run_spec.AnalyzerSelection(modules=("missing",))))
     with pytest.raises(scan_service.ScanRequestError, match="PRIVATE_CONFIGURATION_SENTINEL"):
         scan_service.execute_scan_request(request)
     result = diagnostic(request.output, "service")
@@ -233,7 +235,8 @@ def test_cli_preflight_storage_failure_preserves_original_error(tmp_path, monkey
 
 @pytest.mark.parametrize("atomic", [False, True])
 def test_empty_service_request_preserves_typed_error_and_direct_ownership(tmp_path, atomic):
-    request = scan_service.ScanRequest(repo_paths=[], output=tmp_path / "out", run_id="empty", atomic_output=atomic)
+    request = scan_service.ScanRequest(repo_paths=[], output=tmp_path / "out", run_id="empty",
+                                       spec=run_spec.RunSpec(atomic_output=atomic))
     with pytest.raises(scan_service.ScanRequestError, match="At least one repository"):
         scan_service.execute_scan_request(request)
     if atomic:
