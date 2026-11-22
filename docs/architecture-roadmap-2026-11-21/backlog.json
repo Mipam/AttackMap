@@ -546,7 +546,7 @@
       "phase": 1,
       "priority": "High",
       "effort_days": 5.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR020",
         "AR021"
@@ -564,7 +564,9 @@
         "src/attackmap/models.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit bca7b43 (agent-delivered): model/{__init__,observations,findings,paths,snapshot,evidence} created verbatim (byte-token check 4702=4702), models.py is a 73-line deprecation shim re-exporting all 61 names; fan-in attackmap.models = 63 preserved (AC-103 measured point; the <=25 target needs card step 4, retargeting internal importers - data in C:/tmp/ar022/); cycles 43/43 (35 entries canonically lengthened, none added); architecture gate 5/5; focused suites 613 passed; ruff clean. Recorded fan-ins: model=1, model.evidence=4, model.paths=2, others=1; modules 134 -> 140"
+      ]
     },
     {
       "id": "AR023",

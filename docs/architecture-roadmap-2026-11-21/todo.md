@@ -327,6 +327,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR022 · Split `models.py` into a `model/` package
 **Phase** 1 · **Priority** High · **Effort** 5 d · **Depends** AR020, AR021 · **Blocks** AR029, AR060
 **Lease** `model` · **Acceptance** AC-103
+**Status** DONE (commit bca7b43, agent-delivered from the AR022 analysis mapping) — model/{__init__,observations,findings,paths,snapshot,evidence} created verbatim; models.py is a 73-line deprecation shim re-exporting all 61 names (fan-in 63 preserved); cycles 43/43 (35 entries canonically lengthened, none added); architecture gate 5/5; focused suites 613 passed; measured fan-ins: model 1, model.evidence 4, model.paths 2, model.findings/observations/snapshot 1; modules 140. AC-103's ≤25 target requires card step 4 (retarget internal importers to the narrowest submodule) — importer data staged in the analysis artifacts
 
 **Files** new `src/attackmap/model/{__init__,observations,findings,paths,snapshot,evidence}.py`;
 `src/attackmap/models.py` becomes a re-export shim for one release
