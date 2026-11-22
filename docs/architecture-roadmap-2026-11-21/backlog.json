@@ -846,11 +846,19 @@
       "phase": 2,
       "priority": "High",
       "effort_days": 4.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR029"
       ],
-      "blocks": [],
+      "blocks": [
+        "AR041",
+        "AR042",
+        "AR043",
+        "AR044",
+        "AR045",
+        "AR047",
+        "AR050"
+      ],
       "lease_key": "reasoning-kernel",
       "acceptance_criteria": [
         "AC-201"
@@ -861,7 +869,9 @@
         "src/attackmap/reasoning/context.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit 08e9f52 (agent-delivered, parallel with AR029 - additive reasoning/ package importing only stable attackmap.model): RuleMeta frozen pydantic with id/severity/confidence validation; Rule runtime Protocol; ReasoningContext frozen narrow view built from_scan (never exposes ScanResult, asserted) with routes_by_file/calls_by_file/files_by_suffix/source_text lookups; REGISTRY deterministic by id, duplicate rejection, evaluate_all with per-rule RuleEvaluationError isolation (nothing swallowed); seed rule demo_weak_default_credentials end-to-end (finding.rule_id == registry entry); 20 kernel tests; cycles 43/43, models fan-in 63 unchanged; ruff clean. Note: rules-list CLI wiring deferred to AR046"
+      ]
     },
     {
       "id": "AR041",

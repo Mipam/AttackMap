@@ -552,6 +552,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR040 · Rule kernel: context, protocol, registry
 **Phase** 2 · **Priority** High · **Effort** 4 d · **Depends** AR029 · **Blocks** AR041–AR050
 **Lease** `reasoning-kernel` · **Acceptance** AC-201
+**Status** DONE (commit 08e9f52, agent-delivered, parallel with AR029 — additive reasoning/ package) — RuleMeta frozen validation (id `^[a-z][a-z0-9_]*$`, severity literal, confidence 0–1), Rule runtime Protocol, ReasoningContext frozen narrow view from_scan (ScanResult never exposed, asserted) + lookup helpers, REGISTRY deterministic-by-id with duplicate rejection and per-rule RuleEvaluationError isolation in the EvaluationResult; seed rule demo_weak_default_credentials end-to-end; 20 kernel tests; cycles 43/43, fan-in 63. rules-list CLI wiring deferred to AR046
 
 **Files** new `src/attackmap/reasoning/rules/{__init__,base,registry}.py`,
 `src/attackmap/reasoning/context.py`
