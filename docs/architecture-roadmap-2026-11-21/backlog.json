@@ -807,7 +807,7 @@
       "phase": 1,
       "priority": "High",
       "effort_days": 3.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR023",
         "AR024"
@@ -826,7 +826,9 @@
         "tools/report_identity.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit 93848b2 (agent-delivered): sdk.__all__ (33) + sdk.models (14) + MERGE_SCHEMA (21 keys) pinned with version-bump/migration-note marker pattern; negative-path proof (deliberate removal fails, bump self-heals, missing migration note fails); tools/report_identity.py stable semantic hash + recorded baseline 84c7b18a40588b3afb85664ae18ba035ef7004946271538b6771bc9c749d8e1b; 7 contract tests green; cycles 43/43"
+      ]
     },
     {
       "id": "AR040",

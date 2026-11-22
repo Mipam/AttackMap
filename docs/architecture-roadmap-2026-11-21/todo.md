@@ -526,6 +526,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR032 · Contract tests for SDK, merge, artifacts
 **Phase** 1 · **Priority** High · **Effort** 3 d · **Depends** AR023, AR024 · **Blocks** AR060
 **Lease** `contracts` · **Acceptance** AC-111
+**Status** DONE (commit 93848b2, agent-delivered) — sdk surface (33+14 names) and MERGE_SCHEMA (21 keys) pinned with version-bump/migration-note marker pattern, negative-path proven; tools/report_identity.py stable semantic hash with recorded baseline `84c7b18a…` + `--record/--check`; 7 contract tests green; cycles 43/43
 
 **Files** `tests/contract/test_sdk_surface.py`, `tests/contract/test_merge_schema.py`,
 `tests/contract/test_artifact_compat.py`, `tools/report_identity.py`
