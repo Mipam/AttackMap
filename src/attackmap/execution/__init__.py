@@ -1,5 +1,6 @@
 """Presentation-neutral worker admission, timeout, streams and tree cleanup."""
 from __future__ import annotations
+
 import json
 import os
 import signal
@@ -8,6 +9,7 @@ import threading
 import time
 from collections import deque
 from typing import Any, Callable
+
 from .windows import WindowsProcessJob, validate_memory_limit
 
 ProgressHook = Callable[[dict[str, Any]], None]

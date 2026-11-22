@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import re
-
 import json
+import re
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
-from attackmap.cli import app
-from attackmap.suggest import detect_ecosystems
-
+from attackmap.surfaces.cli import app
+from attackmap.surfaces.suggest import detect_ecosystems
 
 runner = CliRunner()
 
@@ -198,7 +196,7 @@ def test_ranking_more_matched_signals_ranks_higher(tmp_path: Path) -> None:
 
 
 def test_cli_suggest_prints_pip_lines_for_python_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("attackmap.suggest._installed_analyzer_names", lambda: set())
+    monkeypatch.setattr("attackmap.surfaces.suggest._installed_analyzer_names", lambda: set())
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
     (tmp_path / "app.py").write_text("print(1)\n", encoding="utf-8")
     result = runner.invoke(app, ["suggest", str(tmp_path)])
@@ -223,7 +221,7 @@ def test_cli_suggest_nonexistent_path_exits_1(tmp_path: Path) -> None:
 
 
 def test_cli_suggest_install_requires_confirmation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("attackmap.suggest._installed_analyzer_names", lambda: set())
+    monkeypatch.setattr("attackmap.surfaces.suggest._installed_analyzer_names", lambda: set())
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
 
     called: list[str] = []
@@ -231,7 +229,7 @@ def test_cli_suggest_install_requires_confirmation(tmp_path: Path, monkeypatch: 
     def fake_install(name: str) -> None:
         called.append(name)
 
-    monkeypatch.setattr("attackmap.cli.install_analyzer_module", fake_install)
+    monkeypatch.setattr("attackmap.surfaces.cli.install_analyzer_module", fake_install)
     # No confirmation → aborts, no install call.
     result = runner.invoke(app, ["suggest", str(tmp_path), "--install"], input="n\n")
     assert result.exit_code == 1
@@ -248,7 +246,7 @@ def test_cli_suggest_install_yes_flag_skips_prompt(
     def fake_install(name: str) -> None:
         called.append(name)
 
-    monkeypatch.setattr("attackmap.cli.install_analyzer_module", fake_install)
+    monkeypatch.setattr("attackmap.surfaces.cli.install_analyzer_module", fake_install)
     result = runner.invoke(app, ["suggest", str(tmp_path), "--install", "--yes"])
     assert result.exit_code == 0, result.stdout
     # The Python analyzer may already be installed in this test env; the
@@ -264,7 +262,7 @@ def test_cli_suggest_shows_installed_flag(
 
     # Force the "installed" branch by claiming the python analyzer is installed.
     monkeypatch.setattr(
-        "attackmap.suggest._installed_analyzer_names",
+        "attackmap.surfaces.suggest._installed_analyzer_names",
         lambda: {"python"},
     )
     result = runner.invoke(app, ["suggest", str(tmp_path), "--show-installed"])
@@ -274,7 +272,7 @@ def test_cli_suggest_shows_installed_flag(
 
 
 def test_suggestion_install_url_uses_repo_name_override() -> None:
-    from attackmap.suggest import Suggestion
+    from attackmap.surfaces.suggest import Suggestion
 
     s = Suggestion(plugin="attackmap-analyzer-omeka-s", analyzer_name="omeka-s", matched_signals=())
     assert re.fullmatch(

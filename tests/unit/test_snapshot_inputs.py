@@ -1,14 +1,14 @@
 """WP033 captured enumeration/bytes and cache identity regressions."""
-from pathlib import Path
 import json
 import shutil
+from pathlib import Path
 
 import pytest
 
-from attackmap.index import RepoIndex, PassSources, clear_pinned_index
-from attackmap.sbom import analyze_sbom
-from attackmap.workflow_scanner import scan_workflows
-from attackmap.supply_chain import scan_supply_chain
+from attackmap.ai.sbom import analyze_sbom
+from attackmap.ai.supply_chain import scan_supply_chain
+from attackmap.extraction.index import PassSources, RepoIndex, clear_pinned_index
+from attackmap.extraction.workflow_scanner import scan_workflows
 from attackmap.sdk.fs import iter_repo_files, read_source
 
 
@@ -80,7 +80,7 @@ def test_sdk_binary_enumeration_and_source_filters_remain_explicit(tmp_path):
 
 
 def test_raw_snapshot_identity_distinguishes_line_endings_and_preserves_legacy(tmp_path):
-    from attackmap.index import ScanSnapshot
+    from attackmap.extraction.index import ScanSnapshot
     source = tmp_path / "source.py"
     source.write_bytes(b"print('ok')\n")
     first = RepoIndex.build(tmp_path).snapshot
@@ -139,7 +139,7 @@ def test_growth_between_stat_and_capture_cannot_exceed_aggregate_budget(tmp_path
 
 
 def test_unreadable_extractor_identity_is_uncacheable(monkeypatch):
-    from attackmap.incremental import engine_identity
+    from attackmap.extraction.incremental import engine_identity
     original = Path.read_bytes
     def unreadable(path):
         if path.name == "scanner.py":
@@ -151,7 +151,7 @@ def test_unreadable_extractor_identity_is_uncacheable(monkeypatch):
 
 
 def test_model_schema_change_invalidates_extractor_identity(monkeypatch):
-    from attackmap.incremental import engine_identity
+    from attackmap.extraction.incremental import engine_identity
     previous = engine_identity()
     original = Path.read_bytes
     monkeypatch.setattr(Path, "read_bytes", lambda path: original(path) + (b"\n# changed schema" if path.name == "models.py" else b""))
@@ -159,10 +159,10 @@ def test_model_schema_change_invalidates_extractor_identity(monkeypatch):
 
 
 def test_explicit_incremental_false_overrides_inherited_cli_environment(tmp_path, monkeypatch):
-    import attackmap.scanner as scanner
-    from attackmap.analyzers import analyze_repository, BuiltinPythonWebAnalyzer
+    import attackmap.extraction.scanner as scanner
+    from attackmap.orchestration.analyzers import BuiltinPythonWebAnalyzer, analyze_repository
     from attackmap.orchestration.run_spec import RunSpec
-    from attackmap.scan_service import ScanRequest
+    from attackmap.orchestration.scan_service import ScanRequest
     (tmp_path / "app.py").write_text("from flask import Flask\napp=Flask(__name__)\n@app.route('/items')\ndef items(): return []\n", encoding="utf-8")
     monkeypatch.setenv("ATTACKMAP_INCREMENTAL", "1")
     monkeypatch.setattr(scanner, "_open_incremental_cache", lambda *a, **k: (_ for _ in ()).throw(AssertionError("explicit disabled request opened cache")))
@@ -173,11 +173,11 @@ def test_explicit_incremental_false_overrides_inherited_cli_environment(tmp_path
 
 
 def test_full_incremental_findings_provenance_and_coverage_across_100_edits(tmp_path, monkeypatch):
-    from attackmap.index import active_index_for
-    from attackmap.scanner import scan_files, run_repo_passes
-    from attackmap.recon_to_analysis import translate_recon
-    from attackmap.signal_provenance import merge_normalized_signals
-    import attackmap.incremental as cache_module
+    import attackmap.extraction.incremental as cache_module
+    from attackmap.extraction.index import active_index_for
+    from attackmap.extraction.scanner import run_repo_passes, scan_files
+    from attackmap.orchestration.recon_to_analysis import translate_recon
+    from attackmap.reasoning.signal_provenance import merge_normalized_signals
     repo = tmp_path / "repo"
     shutil.copytree(Path(__file__).parents[1] / "fixtures" / "snapshot-shop", repo)
     cache = tmp_path / "cache"

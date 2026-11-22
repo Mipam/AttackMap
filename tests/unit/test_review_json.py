@@ -1,5 +1,5 @@
 from attackmap.models import AttackPath, AttackSurface, Finding, Route, ScanResult
-from attackmap.review_json import SCHEMA_VERSION, build_defensive_review_json
+from attackmap.output.review_json import SCHEMA_VERSION, build_defensive_review_json
 
 
 def test_defensive_review_json_contains_stable_top_level_sections() -> None:

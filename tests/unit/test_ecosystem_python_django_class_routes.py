@@ -1,8 +1,11 @@
 """Bounded class-view auth and mounted regex route coverage."""
 import pytest
 
-from attackmap.ecosystem_python import scan_python_services
-from attackmap.python_django_routes import django_view_auth, extract_django_url_entries
+from attackmap.extraction.ecosystems.ecosystem_python import scan_python_services
+from attackmap.extraction.ecosystems.python_django_routes import (
+    django_view_auth,
+    extract_django_url_entries,
+)
 
 
 @pytest.mark.parametrize("segment", [r"\d+", "[0-9]+", r"\w+", "[-a-zA-Z0-9_]+", "[^/]+"])

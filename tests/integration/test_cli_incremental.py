@@ -20,12 +20,12 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-import attackmap.scanner as scanner_mod
-from attackmap import incremental
-from attackmap.cli import app
-from attackmap.incremental import default_cache_dir
+import attackmap.extraction.scanner as scanner_mod
+from attackmap.extraction import incremental
+from attackmap.extraction.incremental import default_cache_dir
 from attackmap.orchestration.run_spec import FeatureFlags, RunSpec
-from attackmap.scan_service import ScanRequest, _run_fleet_repo_argv
+from attackmap.orchestration.scan_service import ScanRequest, _run_fleet_repo_argv
+from attackmap.surfaces.cli import app
 
 APP_PY = (
     "from flask import Blueprint\n"

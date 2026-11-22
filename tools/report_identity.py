@@ -32,7 +32,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from attackmap.safe_fs import MANIFEST_FILENAME
+from attackmap.foundation.safe_fs import MANIFEST_FILENAME
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BASELINE_PATH = REPO_ROOT / "tests" / "contract" / "data" / "report_identity_baseline.json"
@@ -154,7 +154,7 @@ def compute_fixture_identity(work: Path) -> dict:
 
 def compute_scan_identity(repo: Path, work: Path) -> dict:
     """Identity of a real pipeline scan over ``repo`` (machine-local gate)."""
-    from attackmap.pipeline import AnalyzeOptions, run_scan
+    from attackmap.orchestration.pipeline import AnalyzeOptions, run_scan
 
     repo = Path(repo).resolve()
     output = work / "output"

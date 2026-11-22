@@ -14,12 +14,12 @@ from pathlib import Path
 
 import pytest
 
-from attackmap import popular_packages, supply_chain
+from attackmap.ai import popular_packages, supply_chain
+from attackmap.ai.supply_chain import _within_one_edit, scan_supply_chain
+from attackmap.extraction.scanner import scan_repo
 from attackmap.models import ScanResult, SupplyChainIssue
-from attackmap.recon_to_analysis import translate_recon
-from attackmap.scanner import scan_repo
-from attackmap.supply_chain import _within_one_edit, scan_supply_chain
-from attackmap.threat_model import rule_catalog
+from attackmap.orchestration.recon_to_analysis import translate_recon
+from attackmap.reasoning.threat_model import rule_catalog
 
 ROOT = Path(__file__).resolve().parents[2]
 SHA = "8f4b7f84864484a7bf31766abe9204da3cbe65b3"
@@ -177,7 +177,7 @@ def test_cargo_and_poetry_git_without_rev(tmp_path: Path) -> None:
 
 
 def test_requirements_git_line_is_not_a_dependency_named_git(tmp_path: Path) -> None:
-    from attackmap.sbom import analyze_sbom
+    from attackmap.ai.sbom import analyze_sbom
 
     _write(tmp_path, {"requirements.txt": "git+https://github.com/org/lib.git@main#egg=lib\n"})
     assert [d.name for d in analyze_sbom(tmp_path)] == []
@@ -224,7 +224,7 @@ def test_findings_are_catalogued_and_synthesized(tmp_path: Path) -> None:
 
 
 def test_risky_dependency_on_taint_path_amplifies_exploitability(tmp_path: Path) -> None:
-    from attackmap.exploitability import _supply_chain_index
+    from attackmap.reasoning.exploitability import _supply_chain_index
 
     scan = ScanResult(root=str(tmp_path), supply_chain_issues=[
         SupplyChainIssue(kind="typosquat_candidate", file="requirements.txt", package="Reqeusts",

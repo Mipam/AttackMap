@@ -10,8 +10,8 @@ except ImportError:
     import httpx  # Older supported SDK releases.
 import pytest
 
-from attackmap import ai_http_audit as audit
-from attackmap.llm_review import _loopback_transport
+from attackmap.output import ai_http_audit as audit
+from attackmap.output.llm_review import _loopback_transport
 
 
 def enabled(monkeypatch, tmp_path):

@@ -1,13 +1,13 @@
 """Explicit local allowances reach the SDK without resetting shared deadlines."""
-from types import SimpleNamespace
 import sys
+from types import SimpleNamespace
 
 import pytest
 
-from attackmap.ai_budget import AiBudget, budget_scope, current_reservation
-from attackmap.hunt_harness import run_majority_verify
-from attackmap.llm_review import LlmReviewError, generate_llm_review
+from attackmap.ai.ai_budget import AiBudget, budget_scope, current_reservation
 from attackmap.models import ScanResult
+from attackmap.output.hunt_harness import run_majority_verify
+from attackmap.output.llm_review import LlmReviewError, generate_llm_review
 
 
 class FakeOpenAI:

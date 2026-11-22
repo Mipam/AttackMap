@@ -1,8 +1,10 @@
 from attackmap import __version__
-from attackmap.run_contract import (
-    CURRENT_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS, parse_run_message,
+from attackmap.orchestration.run_contract import (
+    CURRENT_SCHEMA_VERSION,
+    SUPPORTED_SCHEMA_VERSIONS,
+    parse_run_message,
 )
-from attackmap.ui.contract_adapter import LegacyRunContractAdapter
+from attackmap.surfaces.ui.contract_adapter import LegacyRunContractAdapter
 
 BASE = dict(runId="run1",repositoryKey="repo1",status="running",progress={})
 

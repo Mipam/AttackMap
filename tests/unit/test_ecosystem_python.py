@@ -12,13 +12,16 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.analyzer_contracts import (
+from attackmap.extraction.ecosystems.ecosystem_python import (
+    detect_python_service_repo,
+    scan_python_services,
+)
+from attackmap.models import ScanResult
+from attackmap.orchestration.analyzers import BuiltinPythonWebAnalyzer, merge_analyzer_results
+from attackmap.reasoning.analyzer_contracts import (
     EXTRACTION_PROTOCOL_VERSION,
     check_extraction_compatibility,
 )
-from attackmap.analyzers import BuiltinPythonWebAnalyzer, merge_analyzer_results
-from attackmap.ecosystem_python import detect_python_service_repo, scan_python_services
-from attackmap.models import ScanResult
 from attackmap.sdk import AnalyzerMetadata
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "python-service-app"
@@ -324,7 +327,7 @@ def test_no_finding_like_output(result: ScanResult) -> None:
 
 
 def _registered_python_service_analyzer():
-    from attackmap.analyzers import BuiltinPythonServiceAnalyzer
+    from attackmap.orchestration.analyzers import BuiltinPythonServiceAnalyzer
 
     return BuiltinPythonServiceAnalyzer()
 

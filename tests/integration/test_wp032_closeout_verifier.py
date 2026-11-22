@@ -1,8 +1,8 @@
 """Negative gates for the reference verifier, not analyzer/runtime evidence."""
-from copy import deepcopy
 import importlib.util
-from pathlib import Path
 import sys
+from copy import deepcopy
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest

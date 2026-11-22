@@ -10,11 +10,11 @@ import argparse
 import ast
 import hashlib
 import json
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 
 def sha(path: Path) -> str:
@@ -43,7 +43,7 @@ def mutate_extractor(path: Path) -> dict:
     before = lines[statement.lineno - 1].strip()
     lines[statement.lineno - 1] = "    return signals.copy(), csrf_protected\n"
     path.write_text("".join(lines), encoding="utf-8")
-    return dict(file="scanner.py", function=function.name, line=statement.lineno,
+    return dict(file="extraction/scanner.py", function=function.name, line=statement.lineno,
                 before=before, after=lines[statement.lineno - 1].strip(),
                 scope="Only the isolated build-B source; equivalent dictionary copy")
 
@@ -64,7 +64,7 @@ def core_origins(toc_path: Path, package: Path) -> dict[str, str]:
                 visit(child)
 
     visit(ast.literal_eval(toc_path.read_text(encoding="utf-8")))
-    if "attackmap.scanner" not in origins or "attackmap.incremental" not in origins:
+    if "attackmap.extraction.scanner" not in origins or "attackmap.extraction.incremental" not in origins:
         raise RuntimeError("Missing core origins in actual PyInstaller analysis")
     return origins
 
@@ -88,7 +88,7 @@ def main() -> None:
     package = output / "source/src/attackmap"
     shutil.copytree(root / "src/attackmap", package,
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"))
-    module_tree = ast.parse((package / "incremental.py").read_text(encoding="utf-8"))
+    module_tree = ast.parse((package / "extraction" / "incremental.py").read_text(encoding="utf-8"))
     modules = next(ast.literal_eval(node.value) for node in module_tree.body
                    if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "_ENGINE_MODULES"
                                                           for t in node.targets))
@@ -117,18 +117,18 @@ def main() -> None:
     cache = output / "shared-cache"
     for label in ("a", "b"):
         if label == "b":
-            mutation = mutate_extractor(package / "scanner.py")
+            mutation = mutate_extractor(package / "extraction" / "scanner.py")
             save(output / "build-b-mutation.json", mutation)
         manifest = source_manifest(package)
         save(output / f"build-{label}-source.json", manifest)
-        shutil.copy2(package / "scanner.py", inputs / f"scanner-build-{label}.py")
+        shutil.copy2(package / "extraction" / "scanner.py", inputs / f"scanner-build-{label}.py")
         build = output / f"build-{label}"
         build.mkdir()
         name = f"wp033-probe-{label}"
         command = [str(args.python), "-m", "PyInstaller", "--noconfirm", "--clean", "--noupx",
                    "--onedir", "--console", "--name", name, "--paths", str(package.parent),
                    "--distpath", str(build / "dist"), "--workpath", str(build / "work"),
-                   "--specpath", str(build), "--add-data", f"{package / 'taint_sinks.yaml'};attackmap"]
+                   "--specpath", str(build), "--add-data", f"{package / 'reasoning' / 'taint_sinks.yaml'};attackmap.reasoning"]
         for module in modules:
             command.extend(["--hidden-import", "attackmap." + module.replace("/", ".")])
         run(f"build-{label}", [*command, str(probe)])

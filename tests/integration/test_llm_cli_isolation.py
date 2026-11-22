@@ -10,14 +10,14 @@ from typing import Any
 
 import pytest
 
-from attackmap import llm_review
-from attackmap.llm_review import (
+from attackmap.models import ScanResult
+from attackmap.output import llm_review
+from attackmap.output.llm_review import (
     CLAUDE_CLI_HARDENING_ARGS,
     LlmReviewError,
     generate_llm_review,
     scrub_cli_env,
 )
-from attackmap.models import ScanResult
 
 HOSTILE_REPO = Path(__file__).parents[1] / "fixtures" / "hostile_agent_repo"
 CLAUDE_HELP = "--tools --setting-sources --strict-mcp-config --no-session-persistence"

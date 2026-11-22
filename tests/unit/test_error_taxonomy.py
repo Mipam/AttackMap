@@ -9,15 +9,15 @@ from __future__ import annotations
 
 import pytest
 
-from attackmap.analyzers import MissingAnalyzersError, UntrustedAnalyzerError
-from attackmap.errors import (
+from attackmap.foundation.errors import (
     ArtifactIntegrityError,
     AttackMapError,
     BudgetExpired,
     FleetAdmissionError,
     UnsupportedInFleet,
 )
-from attackmap.scan_service import ScanRequestError
+from attackmap.orchestration.analyzers import MissingAnalyzersError, UntrustedAnalyzerError
+from attackmap.orchestration.scan_service import ScanRequestError
 
 ALL_TYPED = [
     AttackMapError,

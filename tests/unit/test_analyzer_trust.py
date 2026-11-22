@@ -11,14 +11,14 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from attackmap import analyzers as registry
-from attackmap.analyzers import (
+from attackmap.orchestration import analyzers as registry
+from attackmap.orchestration.analyzers import (
     ALLOW_UNTRUSTED_ENV,
     ANALYZER_ENTRYPOINT_GROUP,
     AnalyzerMetadata,
     AnalyzerResult,
 )
-from attackmap.cli import app
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 

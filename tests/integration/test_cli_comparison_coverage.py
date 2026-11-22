@@ -5,11 +5,11 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from attackmap.cli import app
-from attackmap.comparison import compare_report_files
-from attackmap.finding_identity import finding_id
 from attackmap.models import Finding, FindingLocation, ScanResult
-from attackmap.recon_to_analysis import AnalysisOutputs
+from attackmap.orchestration.recon_to_analysis import AnalysisOutputs
+from attackmap.output.comparison import compare_report_files
+from attackmap.output.finding_identity import finding_id
+from attackmap.surfaces.cli import app
 
 FIXTURES = Path(__file__).parents[2] / "fixtures" / "desktop-workflows"
 
@@ -18,8 +18,8 @@ FIXTURES = Path(__file__).parents[2] / "fixtures" / "desktop-workflows"
     ("current.json", 0, 1), ("partial-coverage.json", 1, 1),
 ])
 def test_cli_matches_desktop_semantics_and_exports_coverage_notes(tmp_path, monkeypatch, filename, uncertain_count, resolved_count):
-    import attackmap.pipeline as pipeline
-    from attackmap.artifact_publisher import current_generation
+    import attackmap.orchestration.pipeline as pipeline
+    from attackmap.foundation.artifact_publisher import current_generation
 
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -60,7 +60,7 @@ def test_cli_matches_desktop_semantics_and_exports_coverage_notes(tmp_path, monk
 
 
 def test_real_cli_oversize_skip_does_not_claim_resolution(tmp_path, monkeypatch):
-    from attackmap.artifact_publisher import current_generation
+    from attackmap.foundation.artifact_publisher import current_generation
 
     repo = tmp_path / "repo"
     repo.mkdir()

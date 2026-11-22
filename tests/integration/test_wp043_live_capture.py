@@ -2,41 +2,40 @@ import argparse
 import base64
 import hashlib
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from tools.capture_wp043_live import (
-    LiveBackend,
-    WindowsLiveBackend,
-    FrameSafetyError,
     ClientModalInspectionError,
+    FrameSafetyError,
+    LiveBackend,
     NativeWindowSafetyError,
     NavigationFocusError,
     WindowEnumerationError,
     WindowInfo,
+    WindowsLiveBackend,
+    _detail_root_png,
+    _error_details,
+    _native_window_snapshot,
+    _owned_transient_only,
+    _png_quality,
+    _require_safe,
+    _window_details,
     choose_owned_window,
+    diagnostics_snapshot_ready,
     diagram_activation_acknowledged,
     diagram_content_ready,
-    diagnostics_snapshot_ready,
     finding_selection_acknowledged,
-    intervention_acknowledged,
     intersecting_occluders,
+    intervention_acknowledged,
     navigation_acknowledged,
     run,
     validate_capture_name,
     validate_new_output,
-    _png_quality,
-    _detail_root_png,
-    _require_safe,
-    _error_details,
-    _native_window_snapshot,
-    _owned_transient_only,
-    _window_details,
 )
-
 
 RUN_ID = "ui-run-1"
 REPORT_HASH = "a" * 64
@@ -257,8 +256,9 @@ class FakeBackend(LiveBackend):
             if self.detail_root_render_probe_failed is not None:
                 self._append("detail-root-render-capture-failed", **context, errorType="IOException")
                 return
-            from PIL import Image
             import io
+
+            from PIL import Image
             raster = Image.new("RGBA", (2, 1), (255, 255, 255, 255))
             raster.putpixel((1, 0), (255, 255, 255, 128))
             stream = io.BytesIO()
@@ -1016,6 +1016,7 @@ class WP043LiveCaptureTests(unittest.TestCase):
     @unittest.skipUnless(__import__("os").name == "nt", "Windows HWND signatures")
     def test_windows_foreground_api_preserves_native_hwnd_width(self):
         from ctypes import wintypes
+
         from tools.capture_wp043_live import WindowsLiveBackend
 
         user32 = WindowsLiveBackend._user32()
@@ -1178,6 +1179,7 @@ class WP043LiveCaptureTests(unittest.TestCase):
 
     def test_windows_process_id_reads_unenumerated_window_directly(self):
         from types import SimpleNamespace
+
         from tools.capture_wp043_live import WindowsLiveBackend
 
         def get_process_id(hwnd, pid):
@@ -2083,8 +2085,9 @@ class WP043LiveCaptureTests(unittest.TestCase):
         self.assertFalse(evidence["captures"])
 
     def test_valid_idat_payload_with_bad_crc_is_rejected(self):
-        from PIL import Image
         import struct
+
+        from PIL import Image
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "crc.png"
             Image.new("RGBA", (2, 1), "white").save(path)

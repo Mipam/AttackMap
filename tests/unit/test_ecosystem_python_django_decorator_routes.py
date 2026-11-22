@@ -1,8 +1,8 @@
 """Bounded import-only Django auth-decorator resolution; never execute views."""
 import pytest
 
-from attackmap.ecosystem_python import scan_python_services
-from attackmap.python_django_routes import django_view_auth
+from attackmap.extraction.ecosystems.ecosystem_python import scan_python_services
+from attackmap.extraction.ecosystems.python_django_routes import django_view_auth
 
 
 def sources(auth="from django.contrib.auth.decorators import login_required as gate\n", decorator="@gate"):

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from attackmap.contracts import ContractLink
-from attackmap.crossrepo import (
+from attackmap.extraction.contracts import ContractLink
+from attackmap.models import BolaCandidate, Route, ScanResult, TaintChain
+from attackmap.reasoning.crossrepo import (
     CrossBoundaryFlow,
     find_cross_boundary_flows,
     find_cross_repo_anomalies,
     find_trust_gaps,
 )
-from attackmap.models import BolaCandidate, Route, ScanResult, TaintChain
 
 
 def _link(route: str = "/api/orders/<id>", method: str = "GET") -> ContractLink:

@@ -77,19 +77,19 @@ def test_spec_collects_all_analyzer_plugins() -> None:
 @pytest.mark.skipif(not SPEC.exists(), reason="PyInstaller spec not present")
 def test_spec_includes_required_hiddenimports() -> None:
     required = {
-        "attackmap.cli",
-        "attackmap.analyzers",
-        "attackmap.ui",
-        "attackmap.ui.launch",
-        "attackmap.ui.server",
-        "attackmap.ui.runner",
-        "attackmap.ui.config",
-        "attackmap.ui.report",
-        "attackmap.ui.output",
-        "attackmap.ui.secrets",
-        "attackmap.ui.watch",
-        "attackmap.ui.suppress_write",
-        "attackmap.ui.spawn",
+        "attackmap.surfaces.cli",
+        "attackmap.orchestration.analyzers",
+        "attackmap.surfaces.ui",
+        "attackmap.surfaces.ui.launch",
+        "attackmap.surfaces.ui.server",
+        "attackmap.surfaces.ui.runner",
+        "attackmap.surfaces.ui.config",
+        "attackmap.surfaces.ui.report",
+        "attackmap.surfaces.ui.output",
+        "attackmap.surfaces.ui.secrets",
+        "attackmap.surfaces.ui.watch",
+        "attackmap.surfaces.ui.suppress_write",
+        "attackmap.surfaces.ui.spawn",
     }
     source = SPEC.read_text(encoding="utf-8")
     missing = {name for name in required if name not in source}
@@ -100,8 +100,8 @@ def test_spec_includes_required_hiddenimports() -> None:
 def test_spec_includes_required_data_files() -> None:
     source = SPEC.read_text(encoding="utf-8")
     for needle in [
-        "attackmap/ui/web",
-        "attackmap/ui/fixtures",
+        "attackmap/surfaces/ui/web",
+        "attackmap/surfaces/ui/fixtures",
         "taint_sinks.yaml",
     ]:
         assert needle in source, f"spec missing data file: {needle}"

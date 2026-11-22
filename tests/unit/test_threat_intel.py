@@ -2,13 +2,6 @@
 three insight detectors added in this layer (control_bypass, trust_boundary_violation,
 stale_or_contradictory_signal)."""
 
-from attackmap.attack_taxonomy import (
-    annotate_findings,
-    annotate_insights,
-    techniques_for_finding,
-    techniques_for_insight,
-)
-from attackmap.detection_opportunities import generate_detection_opportunities
 from attackmap.models import (
     AttackSurface,
     AuthHint,
@@ -20,7 +13,14 @@ from attackmap.models import (
     ScanResult,
     SecretHint,
 )
-from attackmap.security_overlay import build_security_overlay
+from attackmap.output.attack_taxonomy import (
+    annotate_findings,
+    annotate_insights,
+    techniques_for_finding,
+    techniques_for_insight,
+)
+from attackmap.output.detection_opportunities import generate_detection_opportunities
+from attackmap.output.security_overlay import build_security_overlay
 
 
 def _scan_with(**overrides) -> ScanResult:

@@ -5,14 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from attackmap.models import Route, ScanResult, TaintChain
-from attackmap.taint import (
+from attackmap.reasoning.taint import (
     _MAX_HOPS,
     DEFAULT_RECALL,
     RecallConfig,
     analyze_taint,
     recall_config,
 )
-from attackmap.threat_model import generate_findings
+from attackmap.reasoning.threat_model import generate_findings
 
 
 def _write(root: Path, name: str, body: str) -> None:
@@ -190,7 +190,7 @@ def test_visit_cap_only_discovery_is_speculative(tmp_path: Path) -> None:
 
 
 def test_speculative_sql_chain_not_scored_exploitable(tmp_path: Path) -> None:
-    from attackmap.exploitability import score_exploitability
+    from attackmap.reasoning.exploitability import score_exploitability
 
     scan = ScanResult(
         root=str(tmp_path),
@@ -207,7 +207,7 @@ def test_speculative_sql_chain_not_scored_exploitable(tmp_path: Path) -> None:
 
 
 def test_speculative_sql_chain_ignored_by_authz(tmp_path: Path) -> None:
-    from attackmap.authz import analyze_authz
+    from attackmap.reasoning.authz import analyze_authz
 
     # A path-param route whose ONLY datastore reachability is a speculative SQL
     # chain — with the fix it raises no BOLA candidate (would, without it).

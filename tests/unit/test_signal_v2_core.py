@@ -6,9 +6,9 @@ import logging
 
 import pytest
 
-from attackmap import recon_to_analysis
 from attackmap.models import AuthHint, DatabaseHint, EdgeHint, Route, ScanResult, ServiceHint
-from attackmap.recon_to_analysis import _auth_filtered_scan, to_findings
+from attackmap.orchestration import recon_to_analysis
+from attackmap.orchestration.recon_to_analysis import _auth_filtered_scan, to_findings
 
 
 def _rules(scan: ScanResult) -> set[str]:
@@ -55,7 +55,7 @@ def test_auth_shim_drops_and_warns_on_overloaded_hints(caplog: pytest.LogCapture
     recon_to_analysis._WARNED_OVERLOADED.discard("legacy-plugin")
     overloaded = AuthHint(hint="controller:IndexController", file="module.config.php")
     overloaded.source_analyzer = "legacy-plugin"
-    with caplog.at_level(logging.WARNING, logger="attackmap.recon_to_analysis"):
+    with caplog.at_level(logging.WARNING, logger="attackmap.orchestration.recon_to_analysis"):
         filtered = _auth_filtered_scan(ScanResult(root="/r", auth_hints=[overloaded]))
         _auth_filtered_scan(ScanResult(root="/r", auth_hints=[overloaded]))
     assert filtered.auth_hints == []

@@ -22,11 +22,11 @@ from pathlib import Path
 
 import pytest
 
-from attackmap import analyzers as analyzers_mod
-from attackmap.analyzer_host import HostLimits
-from attackmap.analyzers import BuiltinPythonWebAnalyzer, analyze_repository
+from attackmap.extraction.analyzer_host import HostLimits
+from attackmap.orchestration import analyzers as analyzers_mod
+from attackmap.orchestration.analyzers import BuiltinPythonWebAnalyzer, analyze_repository
+from attackmap.orchestration.pipeline import run_scan
 from attackmap.orchestration.run_spec import AnalyzerSelection, RunSpec, SchedulerSpec
-from attackmap.pipeline import run_scan
 
 APP = (
     "from flask import Flask\n"

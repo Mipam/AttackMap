@@ -5,11 +5,14 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from attackmap import analyzers, scan_service
-from attackmap.orchestration import run_spec
-from attackmap.cli import app
-from attackmap.desktop_capabilities import build_capabilities, preflight_capabilities, validate_desktop_request
-from attackmap.run_contract import RunRequest, ScanOptionsV15
+from attackmap.orchestration import analyzers, run_spec, scan_service
+from attackmap.orchestration.desktop_capabilities import (
+    build_capabilities,
+    preflight_capabilities,
+    validate_desktop_request,
+)
+from attackmap.orchestration.run_contract import RunRequest, ScanOptionsV15
+from attackmap.surfaces.cli import app
 
 
 def payload(tmp_path, profile="php-laminas-omeka@1.0", schema="1.5"):

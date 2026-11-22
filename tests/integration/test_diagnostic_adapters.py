@@ -6,13 +6,18 @@ import threading
 import pytest
 import typer
 
-from attackmap import cli, desktop_worker, scan_service
-from attackmap.orchestration import run_spec
-from attackmap.artifact_publisher import write_diagnostic
-from attackmap.diagnostics import DiagnosticContext, DiagnosticStage, scan_diagnostic, startup_diagnostic
-from attackmap.fleet import FleetRepoResult
+from attackmap.foundation.artifact_publisher import write_diagnostic
+from attackmap.foundation.diagnostics import (
+    DiagnosticContext,
+    DiagnosticStage,
+    scan_diagnostic,
+    startup_diagnostic,
+)
 from attackmap.models import ScanResult
-from attackmap.run_contract import RunRequest
+from attackmap.orchestration import desktop_worker, run_spec, scan_service
+from attackmap.orchestration.fleet import FleetRepoResult
+from attackmap.orchestration.run_contract import RunRequest
+from attackmap.surfaces import cli
 
 
 def diagnostic(base, run_id):
@@ -175,7 +180,8 @@ def test_partial_fleet_reports_known_child_context_without_paths(tmp_path, monke
 @pytest.mark.parametrize("case", ["invalid_repo", "diff", "fleet"])
 def test_cli_early_semantic_failure_is_diagnostic_without_scanning(tmp_path, monkeypatch, case):
     from typer.testing import CliRunner
-    from attackmap.analyzers import TRUSTED_ONLY_ENV
+
+    from attackmap.orchestration.analyzers import TRUSTED_ONLY_ENV
     repo = tmp_path / "repo"
     repo.mkdir()
     second = tmp_path / "second"
@@ -220,7 +226,7 @@ def test_cli_preflight_storage_failure_preserves_original_error(tmp_path, monkey
     def unavailable(*args, **kwargs):
         calls.append(1)
         raise PermissionError("PRIVATE_STORAGE_SENTINEL")
-    monkeypatch.setattr("attackmap.artifact_publisher.write_diagnostic", unavailable)
+    monkeypatch.setattr("attackmap.foundation.artifact_publisher.write_diagnostic", unavailable)
     monkeypatch.setattr(cli, "ensure_output_dir", lambda *_a, **_k: pytest.fail("preliminary output write"))
     args = ["analyze", str(tmp_path), "-o", str(output), "--diff-output", "diff.json"]
     if direct:
@@ -249,7 +255,7 @@ def test_rejected_diagnostic_path_has_no_preliminary_directory_write(tmp_path, m
     from typer.testing import CliRunner
     def reject(*args, **kwargs):
         raise ValueError("unsafe diagnostic destination")
-    monkeypatch.setattr("attackmap.artifact_publisher.write_diagnostic", reject)
+    monkeypatch.setattr("attackmap.foundation.artifact_publisher.write_diagnostic", reject)
     monkeypatch.setattr(cli, "ensure_output_dir", lambda *_a, **_k: pytest.fail("preliminary output write"))
     monkeypatch.setattr(scan_service, "ensure_output_dir", lambda *_a, **_k: pytest.fail("preliminary output write"))
     output = tmp_path / "not-created"
@@ -271,6 +277,7 @@ def test_rejected_diagnostic_path_has_no_preliminary_directory_write(tmp_path, m
 def test_windows_junction_preflight_does_not_write_redirected_output(tmp_path):
     import os
     import subprocess
+
     from typer.testing import CliRunner
     if os.name != "nt":
         pytest.skip("Windows junction semantics")
@@ -293,8 +300,8 @@ def test_service_adapter_publishes_degraded_coverage_diagnostic(tmp_path):
     """Degraded coverage through the shared application service: the scan
     completes, the published diagnostic marks coverage partial with the
     analyzer-error count as the explicit reason, and no analyzer text leaks."""
-    from attackmap.analyzers import BuiltinPythonWebAnalyzer
-    from attackmap.artifact_publisher import current_generation
+    from attackmap.foundation.artifact_publisher import current_generation
+    from attackmap.orchestration.analyzers import BuiltinPythonWebAnalyzer
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "app.py").write_text("from flask import Flask\napp = Flask(__name__)\n", encoding="utf-8")

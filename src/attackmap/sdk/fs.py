@@ -21,8 +21,8 @@ from __future__ import annotations
 from collections.abc import Callable, Collection, Iterator
 from pathlib import Path
 
-from ..safe_fs import is_contained, max_file_bytes, walk_repo
-from ..srcpaths import SKIP_DIRS, is_test_file, line_number
+from attackmap.foundation.safe_fs import is_contained, max_file_bytes, walk_repo
+from attackmap.foundation.srcpaths import SKIP_DIRS, is_test_file, line_number
 
 # Directories no analyzer should descend into. Plugins extend it for their
 # ecosystem, e.g. ``DEFAULT_SKIP_DIRS | {"bin", "obj"}`` for .NET.
@@ -62,7 +62,7 @@ def iter_repo_files(
     skip = frozenset(skip_dirs)
     cap = max_bytes if max_bytes is not None else max_file_bytes()
 
-    from ..index import active_index_for
+    from attackmap.extraction.index import active_index_for
     index = active_index_for(root_path)
     if index is not None:
         for source in index.sources:
@@ -115,7 +115,7 @@ def read_source(path: str | Path, *, root: str | Path | None = None) -> str | No
     in the first 8 KiB) and, when ``root`` is given, paths outside it.
     """
     file_path = Path(path)
-    from ..index import active_index_for, decode_source_bytes, pinned_repo_index
+    from attackmap.extraction.index import active_index_for, decode_source_bytes, pinned_repo_index
     index = active_index_for(root) if root is not None else pinned_repo_index()
     if index is not None and root is None and file_path.is_absolute():
         try:

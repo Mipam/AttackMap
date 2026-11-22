@@ -7,19 +7,18 @@ ctypes, and Pillow are loaded only by WindowsLiveBackend during a live run.
 from __future__ import annotations
 
 import argparse
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
 import hashlib
 import importlib.util
 import json
 import os
-from pathlib import Path
 import stat
 import struct
 import subprocess
 import time
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Iterable, TypeVar
-
 
 SCHEMA_VERSION = "wp043-live-evidence-v1"
 DESTINATIONS = (

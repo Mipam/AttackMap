@@ -1,9 +1,9 @@
 """Report producer identity must match the executing CLI, including frozen code."""
 
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -26,8 +26,8 @@ def distribution_version(name):
 importlib.metadata.version = distribution_version
 
 from attackmap import __version__
-from attackmap.cli import app
-from attackmap.sarif import build_sarif
+from attackmap.surfaces.cli import app
+from attackmap.output.sarif import build_sarif
 from typer.testing import CliRunner
 
 cli = CliRunner().invoke(app, ["--version"])

@@ -9,12 +9,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from attackmap.cli import app
-from attackmap.config_scanner import scan_config_repo
+from attackmap.extraction.config_scanner import scan_config_repo
+from attackmap.extraction.scanner import HARDCODED_SECRET_PATTERNS
+from attackmap.foundation.redact import MASK, SECRET_TOKEN_PATTERNS, mask_secret, redact_text
 from attackmap.models import DatabaseHint, ExternalCall, Finding, ScanResult
-from attackmap.redact import MASK, SECRET_TOKEN_PATTERNS, mask_secret, redact_text
-from attackmap.review_prompts import _code_excerpts
-from attackmap.scanner import HARDCODED_SECRET_PATTERNS
+from attackmap.output.review_prompts import _code_excerpts
+from attackmap.surfaces.cli import app
 
 # Provider-shaped values are assembled at runtime so the repository never
 # contains anything a secret scanner (or GitHub push protection) would flag.

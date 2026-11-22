@@ -7,11 +7,10 @@ from itertools import product
 from pathlib import Path
 
 import pytest
-
 from typer.testing import CliRunner
 
-from attackmap.cli import app
-from attackmap.hunt_harness import (
+from attackmap.output.citations import capture_source_spans, context_from_payload
+from attackmap.output.hunt_harness import (
     Hypothesis,
     combine_verdicts,
     dedupe_hypotheses,
@@ -20,8 +19,8 @@ from attackmap.hunt_harness import (
     render_consensus_report,
     run_majority_verify,
 )
-from attackmap.llm_review import LlmReviewResult
-from attackmap.citations import capture_source_spans, context_from_payload
+from attackmap.output.llm_review import LlmReviewResult
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 
@@ -428,7 +427,7 @@ def test_budget_reservation_is_retained_when_backend_reports_no_usage() -> None:
 
 def test_critic_prompt_includes_evidence() -> None:
     from attackmap.models import ScanResult
-    from attackmap.review_prompts import render_critic_prompts
+    from attackmap.output.review_prompts import render_critic_prompts
 
     rendered = render_critic_prompts(
         ScanResult(root="/x"), [], [], [],
@@ -492,7 +491,7 @@ def test_cli_hunt_verify_votes_writes_consensus(tmp_path: Path, monkeypatch) -> 
         seq["n"] += 1
         return _result(out)
 
-    monkeypatch.setattr("attackmap.pipeline.generate_llm_review", fake)
+    monkeypatch.setattr("attackmap.orchestration.pipeline.generate_llm_review", fake)
     out = tmp_path / "out"
     result = runner.invoke(
         app,
@@ -517,7 +516,7 @@ def test_cli_hunt_lenses_routes_through_harness(tmp_path: Path, monkeypatch) -> 
             return _result(gen)
         return _result("VERDICT H1: REFUTED — arg is constant")
 
-    monkeypatch.setattr("attackmap.pipeline.generate_llm_review", fake)
+    monkeypatch.setattr("attackmap.orchestration.pipeline.generate_llm_review", fake)
     out = tmp_path / "out"
     result = runner.invoke(
         app,
@@ -547,7 +546,7 @@ def test_cli_hunt_rounds_routes_through_harness(tmp_path: Path, monkeypatch) -> 
             return _result("- try races")
         return _result("VERDICT H1: REFUTED — constant")
 
-    monkeypatch.setattr("attackmap.pipeline.generate_llm_review", fake)
+    monkeypatch.setattr("attackmap.orchestration.pipeline.generate_llm_review", fake)
     out = tmp_path / "out"
     result = runner.invoke(
         app,
@@ -566,7 +565,7 @@ def test_cli_verify_votes_1_uses_single_pass(tmp_path: Path, monkeypatch) -> Non
         seen["modes"].append(kwargs.get("mode"))
         return _result("single-pass hunt+verify output")
 
-    monkeypatch.setattr("attackmap.pipeline.generate_llm_review", fake)
+    monkeypatch.setattr("attackmap.orchestration.pipeline.generate_llm_review", fake)
     out = tmp_path / "out"
     result = runner.invoke(
         app,

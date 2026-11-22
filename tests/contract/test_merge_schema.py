@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from attackmap.merge import MERGE_SCHEMA, initial_seen, merge_into
+from attackmap.extraction.merge import MERGE_SCHEMA, initial_seen, merge_into
 from attackmap.model import ScanResult
 
 pytestmark = [pytest.mark.contract]

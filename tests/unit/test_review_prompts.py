@@ -1,9 +1,9 @@
-import re
 import json
+import re
 from pathlib import Path
 
 from attackmap.models import AttackPath, AttackSurface, Finding, Route, ScanResult
-from attackmap.review_prompts import (
+from attackmap.output.review_prompts import (
     render_critic_prompts,
     render_hunt_generate_prompts,
     render_hunt_prompts,
@@ -135,8 +135,8 @@ def test_every_prompt_path_redacts_secrets_and_fences_repo_text(tmp_path):
     a hardcoded credential in the analyzed repository never reaches any
     rendered prompt, and injection-shaped lines are withheld outright in the
     paths that carry captured source excerpts."""
-    from attackmap.recon_to_analysis import translate_recon
-    from attackmap.scanner import scan_repo
+    from attackmap.extraction.scanner import scan_repo
+    from attackmap.orchestration.recon_to_analysis import translate_recon
 
     repo = tmp_path / "secrets"
     repo.mkdir()

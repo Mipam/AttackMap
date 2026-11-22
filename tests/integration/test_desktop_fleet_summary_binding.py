@@ -4,17 +4,16 @@ import importlib.util
 import io
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
-
-from attackmap import artifact_publisher as publisher
-from attackmap.fleet import fleet_repo_ids
-
 from artifact_fixture import write_generation
-from attackmap import desktop_fleet as fleet
+
+from attackmap.foundation import artifact_publisher as publisher
+from attackmap.orchestration import desktop_fleet as fleet
+from attackmap.orchestration.fleet import fleet_repo_ids
 
 
 def request(tmp_path):

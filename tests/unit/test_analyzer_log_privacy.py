@@ -1,11 +1,11 @@
 """Default analyzer logs describe categories, never exception source excerpts."""
-from types import SimpleNamespace
 import logging
+from types import SimpleNamespace
 
 import pytest
 
-from attackmap import analyzers
-from attackmap.analyzer_contracts import AnalyzerMetadata
+from attackmap.orchestration import analyzers
+from attackmap.reasoning.analyzer_contracts import AnalyzerMetadata
 
 PRIVATE = "SOURCE_EXCERPT_SENTINEL token=UNRECOGNIZED_CREDENTIAL_SENTINEL C:/private/project.py"
 

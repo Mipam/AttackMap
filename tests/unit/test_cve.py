@@ -8,16 +8,15 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from attackmap.cli import app
-from attackmap.cve import (
+from attackmap.ai.cve import (
     LookupSummary,
     map_severity,
     query_vulnerabilities,
     resolve_concrete_version,
 )
 from attackmap.models import DependencyHint, ScanResult, Vulnerability
-from attackmap.threat_model import generate_findings
-
+from attackmap.reasoning.threat_model import generate_findings
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 
@@ -374,7 +373,7 @@ def test_cocoapods_is_inventory_only(tmp_path: Path) -> None:
     ],
 )
 def test_normalize_swift_url(url: str, expected) -> None:
-    from attackmap.cve import normalize_swift_url
+    from attackmap.ai.cve import normalize_swift_url
 
     assert normalize_swift_url(url) == expected
 
@@ -400,7 +399,7 @@ def test_query_batches_many_packages_into_few_requests(tmp_path: Path) -> None:
     """The whole point of querybatch (#cve-batch): a big lockfile tree must
     not produce one HTTP request per package. 700 unique clean packages →
     2 batch POSTs (500 + 200) and zero detail fetches."""
-    from attackmap.cve import _BATCH_SIZE, _OSV_BATCH_URL
+    from attackmap.ai.cve import _BATCH_SIZE, _OSV_BATCH_URL
 
     transport, calls = _stub_transport({})
     deps = [_dep(name=f"pkg-{i}") for i in range(_BATCH_SIZE + 200)]
@@ -415,7 +414,7 @@ def test_query_batches_many_packages_into_few_requests(tmp_path: Path) -> None:
 def test_query_fetches_shared_vuln_details_once(tmp_path: Path) -> None:
     """Two packages hit by the same advisory ID → one /v1/vulns/{id} fetch
     (memoized per run), both packages still emit their Vulnerability."""
-    from attackmap.cve import _OSV_VULNS_URL
+    from attackmap.ai.cve import _OSV_VULNS_URL
 
     shared = _osv_vuln("GHSA-shared-1")
     transport, calls = _stub_transport({"pkg-a": {"vulns": [shared]}, "pkg-b": {"vulns": [shared]}})
@@ -432,7 +431,7 @@ def test_query_failed_detail_fetch_is_not_cached(tmp_path: Path) -> None:
     fails, the package must NOT be cached — a cached partial/empty payload
     would suppress a known vulnerability for the whole TTL. The next run
     (connectivity restored) must query again and surface the vuln."""
-    from attackmap.cve import _OSV_VULNS_URL
+    from attackmap.ai.cve import _OSV_VULNS_URL
 
     good_transport, _ = _stub_transport({"sample-pkg": {"vulns": [_osv_vuln()]}})
 
@@ -457,7 +456,7 @@ def test_query_fallback_follows_single_query_pagination(tmp_path: Path) -> None:
     """Codex P2: the single-query fallback must follow /v1/query's OWN
     next_page_token — the high-advisory packages that enter this branch
     paginate there too. All pages' vulns are merged; nothing is dropped."""
-    from attackmap.cve import _OSV_BATCH_URL, _OSV_QUERY_URL
+    from attackmap.ai.cve import _OSV_BATCH_URL, _OSV_QUERY_URL
 
     page1 = {"vulns": [_osv_vuln("GHSA-page1-1")], "next_page_token": "page2"}
     page2 = {"vulns": [_osv_vuln("GHSA-page2-1")]}
@@ -487,7 +486,7 @@ def test_query_fallback_follows_single_query_pagination(tmp_path: Path) -> None:
 def test_query_paginated_batch_result_falls_back_to_single_query(tmp_path: Path) -> None:
     """A batch result carrying next_page_token (rare: >1 page of advisories
     for one package) falls back to the classic full /v1/query for it."""
-    from attackmap.cve import _OSV_BATCH_URL, _OSV_QUERY_URL
+    from attackmap.ai.cve import _OSV_BATCH_URL, _OSV_QUERY_URL
 
     calls: list[tuple[str, bytes]] = []
     full_payload = {"vulns": [_osv_vuln("GHSA-paged-1")]}
@@ -630,7 +629,7 @@ def test_cli_cve_off_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         called.append((args, kwargs))
         return [], LookupSummary()
 
-    monkeypatch.setattr("attackmap.pipeline.query_vulnerabilities", stub_query)
+    monkeypatch.setattr("attackmap.orchestration.pipeline.query_vulnerabilities", stub_query)
     result = runner.invoke(app, ["analyze", str(repo), "--output", str(tmp_path / "out")])
     assert result.exit_code == 0
     assert called == []  # --cve not passed → lookup never runs
@@ -647,7 +646,7 @@ def test_cli_cve_flag_triggers_lookup(tmp_path: Path, monkeypatch: pytest.Monkey
         summary = LookupSummary(queried=len(list(deps)))
         return [_make_vuln()], summary
 
-    monkeypatch.setattr("attackmap.pipeline.query_vulnerabilities", stub_query)
+    monkeypatch.setattr("attackmap.orchestration.pipeline.query_vulnerabilities", stub_query)
     result = runner.invoke(
         app, ["analyze", str(repo), "--output", str(tmp_path / "out"), "--cve"]
     )
@@ -674,7 +673,7 @@ def test_cli_cve_with_no_deps_does_not_call_lookup(
         called.append((args, kwargs))
         return [], LookupSummary()
 
-    monkeypatch.setattr("attackmap.pipeline.query_vulnerabilities", stub_query)
+    monkeypatch.setattr("attackmap.orchestration.pipeline.query_vulnerabilities", stub_query)
     result = runner.invoke(app, ["analyze", str(repo), "--output", str(tmp_path / "out"), "--cve"])
     assert result.exit_code == 0
     assert called == []

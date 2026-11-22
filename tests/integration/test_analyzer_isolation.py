@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from attackmap import analyzers as analyzers_mod
-from attackmap.analyzers import BuiltinPythonWebAnalyzer, analyze_repository
-from attackmap.cli import app
+from attackmap.orchestration import analyzers as analyzers_mod
+from attackmap.orchestration.analyzers import BuiltinPythonWebAnalyzer, analyze_repository
+from attackmap.surfaces.cli import app
 
 APP = "from flask import Flask\napp = Flask(__name__)\n\n@app.route('/ok')\ndef ok():\n    return 'ok'\n"
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")

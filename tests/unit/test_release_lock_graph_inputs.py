@@ -1,6 +1,7 @@
 """Native graph project references must participate in the source-bound package lock."""
 import importlib.util
 from pathlib import Path
+
 import pytest
 
 

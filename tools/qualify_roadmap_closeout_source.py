@@ -1,5 +1,7 @@
 """Physical corpus integration evidence; never representative production acceptance."""
 from __future__ import annotations
+
+import argparse
 import hashlib
 import json
 import os
@@ -7,7 +9,6 @@ import sys
 import time
 from pathlib import Path
 
-import argparse
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--source-root', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
@@ -18,7 +19,7 @@ parser.add_argument('--pipeline-worker', action='store_true')
 args = parser.parse_args()
 ROOT = args.source_root.resolve()
 sys.path.insert(0, str(ROOT / "src"))
-from attackmap.scan_service import ScanRequest, execute_scan_request
+from attackmap.orchestration.scan_service import ScanRequest, execute_scan_request
 
 OUT = args.output.resolve()
 

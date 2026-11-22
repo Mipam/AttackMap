@@ -2,16 +2,21 @@
 import ctypes
 import json
 import os
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 import pytest
-
 from artifact_fixture import write_generation
-from attackmap import safe_fs
-from attackmap.artifact_publisher import CURRENT_POINTER, current_generation, publish_generation, validate_generation
+
+from attackmap.foundation import safe_fs
+from attackmap.foundation.artifact_publisher import (
+    CURRENT_POINTER,
+    current_generation,
+    publish_generation,
+    validate_generation,
+)
 from attackmap.models import ScanResult
-from attackmap.report import write_reports
+from attackmap.output.report import write_reports
 
 
 @pytest.fixture

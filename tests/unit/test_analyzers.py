@@ -2,8 +2,18 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.analyzer_contracts import normalize_analyzer_metadata
-from attackmap.analyzers import (
+from attackmap.models import (
+    AuthHint,
+    EdgeHint,
+    ExternalCall,
+    FrameworkHint,
+    ProtocolHint,
+    Route,
+    ScanResult,
+    SecretHint,
+    ServiceHint,
+)
+from attackmap.orchestration.analyzers import (
     ALLOW_UNTRUSTED_ENV,
     ANALYZER_ENTRYPOINT_GROUP,
     AnalyzerMetadata,
@@ -22,17 +32,7 @@ from attackmap.analyzers import (
     merge_analyzer_results,
     select_requested_analyzers,
 )
-from attackmap.models import (
-    AuthHint,
-    EdgeHint,
-    ExternalCall,
-    FrameworkHint,
-    ProtocolHint,
-    Route,
-    ScanResult,
-    SecretHint,
-    ServiceHint,
-)
+from attackmap.reasoning.analyzer_contracts import normalize_analyzer_metadata
 
 
 def test_analyzer_result_reuses_scan_result_shape() -> None:
@@ -42,7 +42,7 @@ def test_analyzer_result_reuses_scan_result_shape() -> None:
 
 
 def test_get_registered_analyzers_exposes_builtin_web_analyzers(monkeypatch) -> None:
-    monkeypatch.setattr("attackmap.analyzers.discover_installed_analyzers", lambda **kwargs: [])
+    monkeypatch.setattr("attackmap.orchestration.analyzers.discover_installed_analyzers", lambda **kwargs: [])
     analyzers = get_registered_analyzers()
 
     assert len(analyzers) == 9
@@ -125,7 +125,7 @@ def test_discover_installed_analyzers_loads_valid_entrypoints_in_name_order(monk
             FakeEntryPoint("broken", object()),
         ]
     )
-    monkeypatch.setattr("attackmap.analyzers.entry_points", lambda: fake_points)
+    monkeypatch.setattr("attackmap.orchestration.analyzers.entry_points", lambda: fake_points)
 
     analyzers = discover_installed_analyzers(allow_untrusted=True)
 
@@ -167,7 +167,7 @@ def test_discover_installed_analyzers_refuses_third_party_by_default(monkeypatch
             return self._candidates
 
     monkeypatch.setattr(
-        "attackmap.analyzers.entry_points",
+        "attackmap.orchestration.analyzers.entry_points",
         lambda: FakeEntryPoints([FakeEntryPoint("external-x", ExternalAnalyzer)]),
     )
 
@@ -205,7 +205,7 @@ def test_select_requested_analyzers_matches_builtin_and_external_names(monkeypat
         def analyze(self, root: str | Path) -> AnalyzerResult:
             return AnalyzerResult(root=str(root))
 
-    monkeypatch.setattr("attackmap.analyzers.get_registered_analyzers", lambda: [ExternalPhpAnalyzer()])
+    monkeypatch.setattr("attackmap.orchestration.analyzers.get_registered_analyzers", lambda: [ExternalPhpAnalyzer()])
 
     selected = select_requested_analyzers(
         [
@@ -246,7 +246,7 @@ def test_select_requested_analyzers_installs_missing_modules_when_enabled(monkey
         calls.append(repo_name)
         registry_state["ready"] = True
 
-    monkeypatch.setattr("attackmap.analyzers.get_registered_analyzers", fake_registry)
+    monkeypatch.setattr("attackmap.orchestration.analyzers.get_registered_analyzers", fake_registry)
 
     selected = select_requested_analyzers(["php-web"], auto_install=True, installer=fake_installer)
 
@@ -255,7 +255,7 @@ def test_select_requested_analyzers_installs_missing_modules_when_enabled(monkey
 
 
 def test_select_requested_analyzers_errors_when_missing_without_install(monkeypatch) -> None:
-    monkeypatch.setattr("attackmap.analyzers.get_registered_analyzers", lambda: [])
+    monkeypatch.setattr("attackmap.orchestration.analyzers.get_registered_analyzers", lambda: [])
 
     with pytest.raises(ValueError, match="not available"):
         select_requested_analyzers(["php-web"], auto_install=False)
@@ -272,7 +272,7 @@ def test_get_registered_analyzers_skips_duplicate_names(monkeypatch) -> None:
         def analyze(self, root: str | Path) -> AnalyzerResult:
             return AnalyzerResult(root=str(root))
 
-    monkeypatch.setattr("attackmap.analyzers.discover_installed_analyzers",
+    monkeypatch.setattr("attackmap.orchestration.analyzers.discover_installed_analyzers",
                         lambda **kwargs: [DuplicatePythonAnalyzer()])
 
     analyzers = get_registered_analyzers()
@@ -368,7 +368,7 @@ def test_get_available_modules_returns_registered_metadata(monkeypatch) -> None:
         def analyze(self, root: str | Path) -> AnalyzerResult:
             return AnalyzerResult(root=str(root))
 
-    monkeypatch.setattr("attackmap.analyzers.get_registered_analyzers", lambda: [ExternalAnalyzer()])
+    monkeypatch.setattr("attackmap.orchestration.analyzers.get_registered_analyzers", lambda: [ExternalAnalyzer()])
 
     modules = get_available_modules()
 

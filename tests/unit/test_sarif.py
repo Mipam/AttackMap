@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 
 from attackmap.models import AttackPath, Finding
-from attackmap.sarif import SARIF_VERSION, build_sarif
-
+from attackmap.output.sarif import SARIF_VERSION, build_sarif
 
 # ---------------------------------------------------------------------------
 # Top-level shape

@@ -6,11 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.authz import analyze_authz, _resource_id_param
+from attackmap.extraction.scanner import scan_repo
 from attackmap.models import BolaCandidate, DatabaseHint, Route, ScanResult, TaintChain
-from attackmap.scanner import scan_repo
-from attackmap.threat_model import generate_attack_paths, generate_findings
-
+from attackmap.reasoning.authz import _resource_id_param, analyze_authz
+from attackmap.reasoning.threat_model import generate_attack_paths, generate_findings
 
 # ---------------------------------------------------------------------------
 # ID-param detection

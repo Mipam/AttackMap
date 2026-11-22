@@ -1,10 +1,14 @@
-from pathlib import Path
-
 import json
+from pathlib import Path
 
 import pytest
 
-from attackmap.review_eval import evaluate_review_text, load_eval_fixture, run_evaluation, run_evaluation_suite
+from attackmap.orchestration.review_eval import (
+    evaluate_review_text,
+    load_eval_fixture,
+    run_evaluation,
+    run_evaluation_suite,
+)
 
 
 def _fixture_path() -> Path:

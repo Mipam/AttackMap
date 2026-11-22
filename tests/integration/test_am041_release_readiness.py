@@ -61,7 +61,7 @@ def write_package(root: Path, *, bundled=False, package_id="dev-20260101200000-1
         target.write_bytes(data)
     engine_meta = {
         "bundled": False,
-        "required_modules": ["attackmap.desktop_worker", "attackmap.desktop_actions"],
+        "required_modules": ["attackmap.orchestration.desktop_worker", "attackmap.orchestration.desktop_actions"],
         "run_schema_range": "1.0-1.1",
     }
     if bundled:

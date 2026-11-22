@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from attackmap import taxonomy
-from attackmap.rules import RULES, registry, spec_tables
-from attackmap.taxonomy import taxonomy_for
-from attackmap.threat_model import rule_catalog
+from attackmap.model.taxonomy import taxonomy_for
+from attackmap.model import taxonomy
+from attackmap.reasoning.rule_specs import RULES, registry, spec_tables
+from attackmap.reasoning.threat_model import rule_catalog
 
 
 def test_registry_matches_rule_catalog() -> None:

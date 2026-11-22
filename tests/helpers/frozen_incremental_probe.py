@@ -12,13 +12,13 @@ import hashlib
 import importlib.util
 import json
 import marshal
-from pathlib import Path
 import sys
+from pathlib import Path
 from types import CodeType
 
 import attackmap
-from attackmap.incremental import _ENGINE_MODULES, engine_identity
-import attackmap.scanner as scanner
+import attackmap.extraction.scanner as scanner
+from attackmap.extraction.incremental import _ENGINE_MODULES, engine_identity
 
 
 def digest(value: object) -> str:

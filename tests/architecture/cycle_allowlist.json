@@ -6,435 +6,412 @@
     "The list may only SHRINK: removing a cycle requires deleting its entry",
     "in the same change. tests/architecture/test_import_boundaries.py fails on",
     "any cycle not listed here and on stale entries.",
-    "The principal-architect review measured 44 cycles with different tooling;",
-    "this tool deterministically measures this many. The gate is never grows.",
-    "AR020+AR021 (2026-11-22): safe_fs/artifact_manifest/artifact_publisher",
-    "de-cycled and the recon_models shim deleted; entries re-measured with",
-    "the same tooling. 49 -> 43 entries; the gate cap stays 49.",
-    "AR022 (2026-11-22): models.py split into the attackmap.model package with",
-    "models.py kept as a re-export shim; the pre-existing",
-    "models -> analyzer_run_ledger cycle is not fixed here, it lengthens by the",
-    "model node in all 35 entries that traversed it. Same tooling, still 43",
-    "entries; the gate cap stays 49.",
-    "AR023 (2026-11-22): the analyzer run ledger moved to",
-    "attackmap.extraction.ledger; attackmap.analyzer_run_ledger remains only",
-    "as a re-export shim and appears in no cycle. The model ->",
-    "analyzer_run_ledger traversal became model -> extraction.ledger in all",
-    "36 entries that used it. Same tooling, still 43 entries; the gate cap",
-    "stays 49."
+    "AR020+AR021 (2026-11-22): 49 -> 43. AR022/AR023: still 43 (renamed nodes).",
+    "AR029 (2026-11-22): flat modules moved into foundation/ extraction/",
+    "reasoning/ orchestration/ output/ ai/ surfaces/ with the same import",
+    "edges; node renames change the DFS canonicalisation, so the same tooling",
+    "re-measures the set. The gate cap in test_import_boundaries.py tightens",
+    "from 49 to the measured count."
   ],
   "schema": 1,
   "cycles": [
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzer_contracts",
+      "attackmap.ai.sbom",
+      "attackmap.extraction.lockfiles",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.ai.sbom"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.analyzer_catalog"
-    ],
-    [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.analyzer_host",
-      "attackmap.analyzer_contracts",
+      "attackmap.ai.sbom",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.ai.sbom"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.analyzer_host",
-      "attackmap.index",
+      "attackmap.ai.supply_chain",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.ai.supply_chain"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.analyzer_host",
+      "attackmap.extraction.analyzer_host",
+      "attackmap.extraction.index",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.analyzer_host"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.analyzer_host",
-      "attackmap.signal_provenance",
-      "attackmap.evidence",
+      "attackmap.extraction.analyzer_host",
+      "attackmap.extraction.snapshot_transport",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.analyzer_host"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.analyzer_host",
-      "attackmap.signal_provenance",
+      "attackmap.extraction.analyzer_host",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.analyzer_host"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.analyzer_host",
-      "attackmap.snapshot_transport",
+      "attackmap.extraction.analyzer_host",
+      "attackmap.reasoning.analyzer_contracts",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.analyzer_host"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.config_datastores",
+      "attackmap.extraction.analyzer_host",
+      "attackmap.reasoning.signal_provenance",
+      "attackmap.extraction.evidence",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.analyzer_host"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.contracts",
+      "attackmap.extraction.analyzer_host",
+      "attackmap.reasoning.signal_provenance",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.analyzer_host"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.fleet",
-      "attackmap.crossrepo",
-      "attackmap.anomalies",
+      "attackmap.extraction.config_datastores",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.config_datastores"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.fleet",
-      "attackmap.crossrepo",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.contracts",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.fleet",
-      "attackmap.fleet_architecture",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.extraction.incremental",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.fleet",
-      "attackmap.fleet_architecture",
-      "attackmap.topology",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.extraction.workflow_scanner",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.fleet",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.reasoning.anomalies",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.reasoning.authz",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
-      "attackmap.authz",
-      "attackmap.authz_js_handlers",
-      "attackmap.ecosystem_node_atproto",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.reasoning.authz",
+      "attackmap.reasoning.authz_js_handlers",
+      "attackmap.extraction.ecosystems.ecosystem_node_atproto",
+      "attackmap.extraction.config_scanner"
+    ],
+    [
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.reasoning.authz",
+      "attackmap.reasoning.authz_js_handlers",
+      "attackmap.extraction.ecosystems.ecosystem_node_atproto",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
-      "attackmap.authz",
-      "attackmap.authz_js_handlers",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.reasoning.authz",
+      "attackmap.reasoning.authz_js_handlers",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
-      "attackmap.authz",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.reasoning.authz",
+      "attackmap.reasoning.route_auth_fusion",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
-      "attackmap.authz",
-      "attackmap.route_auth_fusion",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.reasoning.crypto",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
-      "attackmap.crypto",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.reasoning.taint",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
-      "attackmap.incremental",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.reasoning.weaknesses",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
-      "attackmap.sbom",
-      "attackmap.lockfiles",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
+      "attackmap.reasoning.webhardening",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
-      "attackmap.sbom",
-      "attackmap.models",
-      "attackmap.model",
-      "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
-    ],
-    [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
+      "attackmap.extraction.config_scanner",
+      "attackmap.extraction.scanner",
       "attackmap.sdk.models",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
-      "attackmap.supply_chain",
+      "attackmap.extraction.config_scanner",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
-      "attackmap.taint",
+      "attackmap.extraction.config_scanner",
+      "attackmap.orchestration.fleet",
+      "attackmap.extraction.contracts",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
-      "attackmap.weaknesses",
+      "attackmap.extraction.config_scanner",
+      "attackmap.orchestration.fleet",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
-      "attackmap.webhardening",
+      "attackmap.extraction.config_scanner",
+      "attackmap.orchestration.fleet",
+      "attackmap.orchestration.fleet_architecture",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
-      "attackmap.workflow_scanner",
+      "attackmap.extraction.config_scanner",
+      "attackmap.orchestration.fleet",
+      "attackmap.orchestration.fleet_architecture",
+      "attackmap.reasoning.topology",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.ecosystem_php",
-      "attackmap.analyzer_contracts",
+      "attackmap.extraction.config_scanner",
+      "attackmap.orchestration.fleet",
+      "attackmap.reasoning.crossrepo",
+      "attackmap.extraction.contracts",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.ecosystem_php",
+      "attackmap.extraction.config_scanner",
+      "attackmap.orchestration.fleet",
+      "attackmap.reasoning.crossrepo",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.config_scanner"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.ecosystem_python",
+      "attackmap.extraction.ecosystems.ecosystem_node_atproto",
+      "attackmap.extraction.scanner",
+      "attackmap.reasoning.authz",
+      "attackmap.reasoning.authz_js_handlers",
+      "attackmap.extraction.ecosystems.ecosystem_node_atproto"
+    ],
+    [
+      "attackmap.extraction.ecosystems.ecosystem_php",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.ecosystems.ecosystem_php"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.extraction.ecosystems.ecosystem_php",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.ecosystems.ecosystem_php"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
+      "attackmap.extraction.ecosystems.ecosystem_python",
       "attackmap.models",
       "attackmap.model",
       "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.ecosystems.ecosystem_python"
     ],
     [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.sdk.contracts",
-      "attackmap.analyzer_contracts",
+      "attackmap.extraction.ledger",
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.extraction.ledger"
+    ],
+    [
+      "attackmap.extraction.ledger",
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.extraction.ledger",
-      "attackmap.analyzer_catalog"
+      "attackmap.extraction.ledger"
     ],
     [
-      "attackmap.analyzer_contracts",
-      "attackmap.models",
-      "attackmap.model",
-      "attackmap.extraction.ledger",
-      "attackmap.analyzer_contracts"
+      "attackmap.orchestration.analyzer_catalog",
+      "attackmap.orchestration.analyzers",
+      "attackmap.orchestration.analyzer_catalog"
     ],
     [
-      "attackmap.analyzers",
-      "attackmap.ecosystem_php",
-      "attackmap.analyzers"
+      "attackmap.orchestration.desktop_actions",
+      "attackmap.surfaces.cli",
+      "attackmap.orchestration.desktop_actions"
     ],
     [
-      "attackmap.authz",
-      "attackmap.authz_js_handlers",
-      "attackmap.ecosystem_node_atproto",
-      "attackmap.config_scanner",
-      "attackmap.scanner",
-      "attackmap.authz"
+      "attackmap.orchestration.desktop_fleet",
+      "attackmap.orchestration.run_contract",
+      "attackmap.orchestration.desktop_fleet"
     ],
     [
-      "attackmap.authz",
-      "attackmap.authz_js_handlers",
-      "attackmap.ecosystem_node_atproto",
-      "attackmap.scanner",
-      "attackmap.authz"
-    ],
-    [
-      "attackmap.cli",
-      "attackmap.desktop_actions",
-      "attackmap.cli"
-    ],
-    [
-      "attackmap.desktop_fleet",
-      "attackmap.run_contract",
-      "attackmap.desktop_fleet"
-    ],
-    [
-      "attackmap.fleet",
-      "attackmap.fleet_architecture",
-      "attackmap.fleet"
+      "attackmap.orchestration.fleet",
+      "attackmap.orchestration.fleet_architecture",
+      "attackmap.orchestration.fleet"
     ]
   ]
 }

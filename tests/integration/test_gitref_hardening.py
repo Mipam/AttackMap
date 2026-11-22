@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.gitref import added_lines, show_file
+from attackmap.foundation.gitref import added_lines, show_file
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
 

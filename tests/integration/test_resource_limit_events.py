@@ -5,12 +5,12 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from attackmap.extraction.config_scanner import scan_config_repo
+from attackmap.extraction.index import RepoIndex
+from attackmap.extraction.scanner import scan_files
 from attackmap.models import ResourceLimitEvent, ScanResult
-from attackmap.analyzer_contracts import AnalyzerMetadata
-from attackmap.index import RepoIndex
-from attackmap.scanner import scan_files
-from attackmap.config_scanner import scan_config_repo
-from attackmap.analyzers import analyze_repository, merge_analyzer_results
+from attackmap.orchestration.analyzers import analyze_repository, merge_analyzer_results
+from attackmap.reasoning.analyzer_contracts import AnalyzerMetadata
 
 
 def event(relative="a.py", **kwargs):
@@ -50,7 +50,7 @@ def test_index_file_cap_emits_actual_stat_and_scanner_preserves(tmp_path, monkey
 
 
 def test_aggregate_overflow_does_not_claim_all_later_files_skipped(tmp_path, monkeypatch):
-    from attackmap import index as module
+    from attackmap.extraction import index as module
     paths = [tmp_path / name for name in ("first.py", "overflow.py", "later.py")]
     for path, size in zip(paths, (4, 8, 2)):
         path.write_bytes(b"x" * size)
@@ -66,7 +66,7 @@ def test_aggregate_overflow_does_not_claim_all_later_files_skipped(tmp_path, mon
 @pytest.mark.parametrize("indexed", [False, True])
 def test_config_limit_emits_from_actual_branch(tmp_path, monkeypatch, indexed):
     monkeypatch.setenv("ATTACKMAP_MAX_FILE_BYTES", "100")
-    monkeypatch.setattr("attackmap.config_scanner._MAX_CONFIG_BYTES", 10)
+    monkeypatch.setattr("attackmap.extraction.config_scanner._MAX_CONFIG_BYTES", 10)
     (tmp_path / "config.yaml").write_bytes(b"x" * 11)
     result = scan_config_repo(tmp_path, index=RepoIndex.build(tmp_path) if indexed else None)
     item, = result.resource_limit_events
@@ -106,7 +106,7 @@ def test_shared_index_events_survive_legacy_plugin(tmp_path, monkeypatch):
         metadata = AnalyzerMetadata(name=name)
         def detect(self, root): return True
         def analyze(self, root): return ScanResult(root=str(root))
-    monkeypatch.setattr("attackmap.analyzers.run_repo_passes", lambda *args, **kwargs: None)
+    monkeypatch.setattr("attackmap.orchestration.analyzers.run_repo_passes", lambda *args, **kwargs: None)
     result = analyze_repository(tmp_path, analyzers=[Legacy()])
     assert len(result.resource_limit_events) == 1
     assert result.resource_limit_reporting == "partial"
@@ -117,10 +117,11 @@ def test_resource_limit_events_reach_published_diagnostic_context(tmp_path, monk
     """A real resource-limited run surfaces its events in the published
     diagnostic manifest without the skipped file's path."""
     import json
-    from attackmap.analyzers import BuiltinPythonWebAnalyzer
-    from attackmap.artifact_publisher import current_generation
+
+    from attackmap.foundation.artifact_publisher import current_generation
+    from attackmap.orchestration.analyzers import BuiltinPythonWebAnalyzer
+    from attackmap.orchestration.pipeline import run_scan
     from attackmap.orchestration.run_spec import RunSpec
-    from attackmap.pipeline import run_scan
     monkeypatch.setenv("ATTACKMAP_MAX_FILE_BYTES", "100")
     repo = tmp_path / "repo"
     repo.mkdir()

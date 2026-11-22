@@ -5,14 +5,14 @@ import threading
 
 import pytest
 
-from attackmap.desktop_worker import run_request_file, serve
-from attackmap.run_contract import RunRequest, parse_run_message
+from attackmap.orchestration.desktop_worker import run_request_file, serve
+from attackmap.orchestration.run_contract import RunRequest, parse_run_message
 
 
 @pytest.fixture
 def broker(tmp_path, monkeypatch):
-    import attackmap.artifact_publisher as publisher
     import attackmap.execution as execution
+    import attackmap.foundation.artifact_publisher as publisher
 
     request = RunRequest(run_id="run-test", repository_id="repo-test", generation=2,
                          revision=7, repository_path=str(tmp_path),
@@ -76,7 +76,7 @@ def messages(events, request):
 
 
 def assert_unknown_worker_diagnostic(calls, state):
-    from attackmap.diagnostics import DiagnosticContext
+    from attackmap.foundation.diagnostics import DiagnosticContext
 
     assert len(calls["diagnostics"]) == 1
     diagnostic = calls["diagnostics"][0]
@@ -176,7 +176,7 @@ def test_cancel_acknowledgement_waits_for_verified_worker_completion(broker, mon
 
 
 def test_publication_error_does_not_expose_exception_or_diagnostics(broker, monkeypatch):
-    import attackmap.artifact_publisher as publisher
+    import attackmap.foundation.artifact_publisher as publisher
     request, _, _, _ = broker
 
     def fail(*args, **kwargs):
@@ -217,7 +217,7 @@ def test_manifest_exit_mismatch_cannot_publish_ready_artifacts(broker):
 
 
 def test_policy_failure_publication_error_still_emits_valid_terminal(broker, monkeypatch):
-    import attackmap.artifact_publisher as publisher
+    import attackmap.foundation.artifact_publisher as publisher
     request, supervisor, _, _ = broker
     supervisor.mode = "policy-failure"
 

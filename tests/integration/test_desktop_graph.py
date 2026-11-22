@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.desktop_actions import ActionRequest, execute_action, run_action_file
-from attackmap.desktop_graph import project_report_graph
+from attackmap.orchestration.desktop_actions import ActionRequest, execute_action, run_action_file
+from attackmap.orchestration.desktop_graph import project_report_graph
 
 
 def _report(tmp_path, scan=None):
@@ -64,7 +64,7 @@ def test_rejects_unbound_or_nonlocal_requests(tmp_path, change):
 
 def test_bounded_read_and_nonregular_rejected(tmp_path, monkeypatch):
     path, payload = _report(tmp_path)
-    monkeypatch.setattr("attackmap.desktop_graph.MAX_REPORT_BYTES", 5)
+    monkeypatch.setattr("attackmap.orchestration.desktop_graph.MAX_REPORT_BYTES", 5)
     with pytest.raises(ValueError): project_report_graph(payload)
     payload["report_path"] = str(tmp_path)
     with pytest.raises(ValueError): project_report_graph(payload)
@@ -82,7 +82,7 @@ def test_redirection_is_rejected_even_when_hash_matches(tmp_path):
 
 
 def test_mutation_during_projection_cannot_publish(tmp_path, monkeypatch):
-    import attackmap.desktop_graph as adapter
+    import attackmap.orchestration.desktop_graph as adapter
     path, payload = _report(tmp_path)
     original = adapter.build_fleet_architecture
     def change(*args, **kwargs):

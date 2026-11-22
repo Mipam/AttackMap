@@ -4,9 +4,9 @@ from itertools import permutations
 
 import pytest
 
-from attackmap.contracts import ContractLink, DeploymentAliases, link_contracts
-from attackmap.crossrepo import find_cross_boundary_flows, find_trust_gaps
+from attackmap.extraction.contracts import ContractLink, DeploymentAliases, link_contracts
 from attackmap.models import BolaCandidate, ExternalCall, Route, ScanResult, TaintChain
+from attackmap.reasoning.crossrepo import find_cross_boundary_flows, find_trust_gaps
 
 
 def linked(calls, *, method="GET", aliases=None):

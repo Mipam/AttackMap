@@ -8,14 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.config_scanner import extract_deployment_aliases
-from attackmap.contracts import DeploymentAliases, link_contracts
-from attackmap.crossrepo import find_cross_boundary_flows, find_trust_gaps
-from attackmap.fleet import FleetRepoResult, FleetScan
-from attackmap.fleet_architecture import build_fleet_architecture
+from attackmap.extraction.config_scanner import extract_deployment_aliases
+from attackmap.extraction.contracts import DeploymentAliases, link_contracts
 from attackmap.models import ExternalCall, Route, ScanResult, TaintChain
-from attackmap.scan_service import ScanRequest, _effective_deployment_aliases
-
+from attackmap.orchestration.fleet import FleetRepoResult, FleetScan
+from attackmap.orchestration.fleet_architecture import build_fleet_architecture
+from attackmap.orchestration.scan_service import ScanRequest, _effective_deployment_aliases
+from attackmap.reasoning.crossrepo import find_cross_boundary_flows, find_trust_gaps
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "wp032_multibackend_proxy"
 BAD_CASES = ("mixed-upstream.conf", "mixed-ports.conf", "mixed-unknown.conf",
@@ -220,7 +219,7 @@ def test_trailing_dot_declarations_cannot_bypass_unresolved_proxy(tmp_path, pref
 
 @pytest.mark.parametrize("prefix", ["http://", "https://", ""], ids=["http", "https", "scheme-less"])
 def test_cli_dotted_host_merge_cannot_override_unresolved_config_proxy(tmp_path, prefix):
-    from attackmap.cli import _parse_deployment_aliases
+    from attackmap.surfaces.cli import _parse_deployment_aliases
 
     root = tmp_path / "fleet"
     scans = materialize(root, ("mixed-upstream.conf",))

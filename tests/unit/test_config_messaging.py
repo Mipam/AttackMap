@@ -1,19 +1,29 @@
 """Bounded owner declarations, not discovery or a runtime message-delivery test."""
-from copy import deepcopy
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
 
-from attackmap.config_datastores import extract_config_datastores, extract_config_messaging
-from attackmap.config_scanner import scan_config_repo
-from attackmap.fleet import FleetRepoResult, FleetScan, fleet_summary_json
-from attackmap.fleet_architecture import aggregate_fleet_architecture, build_fleet_architecture
-from attackmap.fleet_resource_identity import (MAX_MESSAGING_DECLARATIONS,
-    MAX_MESSAGING_REPOSITORIES, extract_messaging_declarations, project_producer_consumer)
-from attackmap.index import RepoIndex
+from attackmap.extraction.config_datastores import (
+    extract_config_datastores,
+    extract_config_messaging,
+)
+from attackmap.extraction.config_scanner import scan_config_repo
+from attackmap.extraction.index import RepoIndex
+from attackmap.foundation.fleet_resource_identity import (
+    MAX_MESSAGING_DECLARATIONS,
+    MAX_MESSAGING_REPOSITORIES,
+    extract_messaging_declarations,
+    project_producer_consumer,
+)
 from attackmap.models import ScanResult, SignalConflict, SignalOrigin
-from attackmap.signal_provenance import stamp_scan_provenance
+from attackmap.orchestration.fleet import FleetRepoResult, FleetScan, fleet_summary_json
+from attackmap.orchestration.fleet_architecture import (
+    aggregate_fleet_architecture,
+    build_fleet_architecture,
+)
+from attackmap.reasoning.signal_provenance import stamp_scan_provenance
 
 IDENTITY = dict(scope="production-eu", protocol="kafka", transport="tls",
                 host="broker.example.internal", port=9093, namespace="orders-cluster", channel="orders.created")

@@ -1,8 +1,8 @@
 """Operator declarations must not inherit a config declaration's ownership."""
 import pytest
 
-from attackmap.contracts import DeploymentAliases
-from attackmap.scan_service import ScanRequest, _effective_deployment_aliases
+from attackmap.extraction.contracts import DeploymentAliases
+from attackmap.orchestration.scan_service import ScanRequest, _effective_deployment_aliases
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def config_aliases(monkeypatch):
             "proxies:edge.internal": "edge/nginx.conf",
         },
     )
-    monkeypatch.setattr("attackmap.config_scanner.extract_deployment_aliases",
+    monkeypatch.setattr("attackmap.extraction.config_scanner.extract_deployment_aliases",
                         lambda roots: (extracted, ["retained extraction note"]))
     return extracted
 

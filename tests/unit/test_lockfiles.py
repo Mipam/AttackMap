@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.lockfiles import parse_lockfiles
-from attackmap.sbom import analyze_sbom
+from attackmap.ai.sbom import analyze_sbom
+from attackmap.extraction.lockfiles import parse_lockfiles
 
 
 @pytest.mark.parametrize("payload", [
@@ -25,7 +25,7 @@ from attackmap.sbom import analyze_sbom
     {"dependencies": {"express": {"version": "4.18.2", "dependencies": "bad"}}},
 ])
 def test_malformed_npm_shapes_do_not_emit_partial_graph_or_supersede_ranges(tmp_path: Path, payload) -> None:
-    from attackmap.lockfiles import _parse_package_lock
+    from attackmap.extraction.lockfiles import _parse_package_lock
 
     lock = tmp_path / "package-lock.json"
     lock.write_text(json.dumps(payload), encoding="utf-8")

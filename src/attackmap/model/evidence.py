@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
-from ..redact import redact_list, redact_text
+from attackmap.foundation.redact import redact_list, redact_text
 
 # Provenance field. Present on every analyzer-emitted signal so downstream
 # consumers can trace a signal back to the analyzer that produced it.

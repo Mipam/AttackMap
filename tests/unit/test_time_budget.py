@@ -14,12 +14,12 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.errors import BudgetExpired
-from attackmap.index import RepoIndex
+from attackmap.extraction.index import RepoIndex
+from attackmap.extraction.run_budget import active_budget, time_budget_scope
+from attackmap.extraction.scanner import scan_files
+from attackmap.foundation.errors import BudgetExpired
+from attackmap.orchestration.pipeline import TimeBudget, run_scan
 from attackmap.orchestration.run_spec import BudgetSpec, RunSpec
-from attackmap.pipeline import TimeBudget, run_scan
-from attackmap.run_budget import active_budget, time_budget_scope
-from attackmap.scanner import scan_files
 
 
 def test_tick_raises_after_deadline_and_silent_before():

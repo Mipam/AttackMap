@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.crypto import find_crypto_weaknesses
+from attackmap.extraction.scanner import scan_repo
 from attackmap.models import ScanResult
-from attackmap.scanner import scan_repo
-from attackmap.threat_model import generate_findings
+from attackmap.reasoning.crypto import find_crypto_weaknesses
+from attackmap.reasoning.threat_model import generate_findings
 
 
 def _kinds(content: str) -> set[str]:
@@ -257,7 +257,7 @@ def test_scan_repo_clean_file_no_crypto_findings(tmp_path: Path) -> None:
 
 
 def _kinds(content: str, f: str = "x.go"):
-    from attackmap.crypto import find_crypto_weaknesses
+    from attackmap.reasoning.crypto import find_crypto_weaknesses
     return {w.kind for w in find_crypto_weaknesses(content, f)}
 
 

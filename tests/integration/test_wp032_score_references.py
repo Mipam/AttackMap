@@ -6,12 +6,18 @@ from itertools import permutations
 import pytest
 from pydantic import ValidationError
 
-from attackmap.exploitability import best_by_sink_kind, score_exploitability
-from attackmap.finding_presentation import FindingPresentationIndex
-from attackmap.index import ScanSnapshot
-from attackmap.models import (AttackSurface, ExploitabilityScore, ExploitabilityScoreReference,
-    Finding, ScanResult, TaintChain)
-from attackmap.threat_model import generate_findings
+from attackmap.extraction.index import ScanSnapshot
+from attackmap.models import (
+    AttackSurface,
+    ExploitabilityScore,
+    ExploitabilityScoreReference,
+    Finding,
+    ScanResult,
+    TaintChain,
+)
+from attackmap.output.finding_presentation import FindingPresentationIndex
+from attackmap.reasoning.exploitability import best_by_sink_kind, score_exploitability
+from attackmap.reasoning.threat_model import generate_findings
 
 
 def chain(*, file="public.py", path="/items", kind="sql_execute", sink="shared_db.py", line=10, hops=0):
@@ -180,7 +186,8 @@ def test_score_reference_fields_are_additive_in_json_schema():
 
 def test_score_producer_consumes_existing_captured_context_without_resolving_live_paths(tmp_path, monkeypatch):
     from pathlib import Path
-    from attackmap.index import RepoIndex, clear_pinned_index
+
+    from attackmap.extraction.index import RepoIndex, clear_pinned_index
 
     (tmp_path / "public.py").write_text("# Synthetic captured fixture only\n", encoding="utf-8")
     (tmp_path / "shared_db.py").write_text("# Synthetic sink fixture only\n", encoding="utf-8")

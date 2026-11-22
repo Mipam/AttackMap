@@ -11,7 +11,7 @@ import io
 import json
 import threading
 
-from attackmap.progress import EventLog, JsonScanProgress, ScanProgress
+from attackmap.extraction.progress import EventLog, JsonScanProgress, ScanProgress
 
 THREADS = 8
 RECORDS_PER_THREAD = 1000

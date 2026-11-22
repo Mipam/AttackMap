@@ -6,10 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from attackmap.ai.sbom import analyze_sbom
+from attackmap.extraction.scanner import scan_repo
 from attackmap.models import DependencyHint, ScanResult
-from attackmap.sbom import analyze_sbom
-from attackmap.scanner import scan_repo
-
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 REPO = FIXTURES / "sbom_repo"

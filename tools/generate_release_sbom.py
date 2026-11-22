@@ -235,7 +235,7 @@ def plugin_lock_sbom() -> dict:
     ``content_verified`` is true exactly when pinned: the install URL embeds
     the commit, so what installs is byte-identical to what the lock recorded.
     """
-    from attackmap.plugins_lock import OFFICIAL_PLUGINS
+    from attackmap.foundation.plugins_lock import OFFICIAL_PLUGINS
 
     analyzers = []
     for entry in OFFICIAL_PLUGINS:

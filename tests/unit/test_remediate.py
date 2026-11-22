@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from attackmap.cli import REMEDIATION_BANNER
-from attackmap.llm_review import generate_llm_review
 from attackmap.models import AttackSurface, Finding, Route, ScanResult
-from attackmap.review_prompts import render_remediation_prompts
+from attackmap.output.llm_review import generate_llm_review
+from attackmap.output.review_prompts import render_remediation_prompts
+from attackmap.surfaces.cli import REMEDIATION_BANNER
 
 
 def _scan() -> ScanResult:
@@ -30,7 +30,7 @@ def test_remediation_prompt_is_review_first_and_grounded() -> None:
 
 
 def test_remediation_and_review_prompts_differ() -> None:
-    from attackmap.review_prompts import render_review_prompts
+    from attackmap.output.review_prompts import render_review_prompts
     rem = render_remediation_prompts(_scan(), [], _findings(), []).system
     rev = render_review_prompts(_scan(), [], _findings(), []).system
     assert rem != rev

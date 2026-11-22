@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from attackmap import analyzers as registry
-from attackmap.analyzer_catalog import get_analyzer_catalog
-from attackmap.analyzer_contracts import AnalyzerMetadata, AnalyzerResult
-from attackmap.plugins_lock import OFFICIAL_PLUGINS
+from attackmap.foundation.plugins_lock import OFFICIAL_PLUGINS
+from attackmap.orchestration import analyzers as registry
+from attackmap.orchestration.analyzer_catalog import get_analyzer_catalog
+from attackmap.reasoning.analyzer_contracts import AnalyzerMetadata, AnalyzerResult
 
 
 class _Distribution:
@@ -94,7 +94,7 @@ def test_catalog_retains_all_three_php_collisions_and_builtin_precedence(monkeyp
         assert row["shadowed_by"] == winner["candidate_id"]
         assert row["metadata"]["priority"] == 0
         assert winner["origin"] == "builtin"
-        assert winner["implementation"]["module"] == "attackmap.ecosystem_php"
+        assert winner["implementation"]["module"] == "attackmap.extraction.ecosystems.ecosystem_php"
         assert winner["provenance"]["declared_pin"] is None
         assert row["provenance"]["declared_pin"]["package"] == row["package"]["name"]
 
@@ -283,7 +283,7 @@ def test_direct_url_credentials_and_query_are_not_exposed(monkeypatch) -> None:
 def test_observed_source_hash_is_bounded_to_class_source_file(monkeypatch, tmp_path) -> None:
     source = tmp_path / "observed.py"
     source.write_text("# observed class source\n", encoding="utf-8")
-    monkeypatch.setattr("attackmap.analyzer_catalog.inspect.getsourcefile", lambda cls: str(source))
+    monkeypatch.setattr("attackmap.orchestration.analyzer_catalog.inspect.getsourcefile", lambda cls: str(source))
     _install(monkeypatch)
 
     first = get_analyzer_catalog().to_dict()["candidates"][0]["implementation"]
@@ -296,7 +296,7 @@ def test_observed_source_hash_is_bounded_to_class_source_file(monkeypatch, tmp_p
 
 
 def test_unavailable_source_does_not_invent_frozen_provenance(monkeypatch) -> None:
-    monkeypatch.setattr("attackmap.analyzer_catalog.inspect.getsourcefile", lambda cls: None)
+    monkeypatch.setattr("attackmap.orchestration.analyzer_catalog.inspect.getsourcefile", lambda cls: None)
     _install(monkeypatch)
 
     row = get_analyzer_catalog().to_dict()["candidates"][0]

@@ -8,8 +8,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from attackmap.cli import app
-from attackmap.finding_identity import finding_id, legacy_finding_id
+from attackmap.output.finding_identity import finding_id, legacy_finding_id
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 

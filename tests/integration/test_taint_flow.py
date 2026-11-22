@@ -14,11 +14,11 @@ from pathlib import Path
 
 import pytest
 
+from attackmap.extraction.scanner import scan_repo
 from attackmap.models import Route, ScanResult, TaintChain
-from attackmap.sarif import build_sarif
-from attackmap.scanner import scan_repo
-from attackmap.taint import analyze_taint
-from attackmap.threat_model import generate_findings
+from attackmap.output.sarif import build_sarif
+from attackmap.reasoning.taint import analyze_taint
+from attackmap.reasoning.threat_model import generate_findings
 
 FIX = Path(__file__).parents[1] / "fixtures" / "taint_flow"
 REPO_ROOT = Path(__file__).resolve().parents[2]

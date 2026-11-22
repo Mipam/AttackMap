@@ -12,11 +12,10 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pytest
-
 from artifact_fixture import write_generation
 
-from attackmap.ui.config import ScanConfig, analyze_argv, filter_unknown_flags
-from attackmap.ui.output import (
+from attackmap.surfaces.ui.config import ScanConfig, analyze_argv, filter_unknown_flags
+from attackmap.surfaces.ui.output import (
     current_generation,
     fleet_dir,
     generation_dir,
@@ -25,11 +24,16 @@ from attackmap.ui.output import (
     reports_dir,
     rotate_previous,
 )
-from attackmap.ui.report import decode_report, fixture_report_path, load_report_file, web_root
-from attackmap.ui.runner import ScanRunner, child_python_env
-from attackmap.ui.server import LoopbackApp, _start_scan, make_server
-from attackmap.ui.suppress_write import append_suppression
-from attackmap.ui.watch import Watcher
+from attackmap.surfaces.ui.report import (
+    decode_report,
+    fixture_report_path,
+    load_report_file,
+    web_root,
+)
+from attackmap.surfaces.ui.runner import ScanRunner, child_python_env
+from attackmap.surfaces.ui.server import LoopbackApp, _start_scan, make_server
+from attackmap.surfaces.ui.suppress_write import append_suppression
+from attackmap.surfaces.ui.watch import Watcher
 
 FIX = Path(__file__).parents[1] / "fixtures" / "ui" / "juice-shop-report.json"
 
@@ -360,7 +364,7 @@ def test_lmstudio_scan_needs_no_api_key(tmp_path: Path, monkeypatch: pytest.Monk
     # Ensure no key is present for either provider.
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    from attackmap.ui.secrets import child_llm_env
+    from attackmap.surfaces.ui.secrets import child_llm_env
 
     env = child_llm_env("openai", "http://localhost:1234/v1")
     assert env["OPENAI_API_KEY"]
@@ -369,7 +373,7 @@ def test_lmstudio_scan_needs_no_api_key(tmp_path: Path, monkeypatch: pytest.Monk
     app.provider = "openai"
     app.base_url = "http://localhost:1234/v1"
     app.llm_mode = "review"
-    from attackmap.ui.server import _start_scan
+    from attackmap.surfaces.ui.server import _start_scan
 
     # Stub the runner so no real subprocess starts; we only check the gate.
     class _Stub:
@@ -439,7 +443,7 @@ def test_real_mini_scan_renders_overview(tmp_path: Path, monkeypatch: pytest.Mon
 
 
 def test_launch_opens_dark_splash_then_loads_url() -> None:
-    src = (Path(__file__).resolve().parents[2] / "src" / "attackmap" / "ui" / "launch.py").read_text(
+    src = (Path(__file__).resolve().parents[2] / "src" / "attackmap" / "surfaces" / "ui" / "launch.py").read_text(
         encoding="utf-8"
     )
     assert "html=_SPLASH_HTML" in src
@@ -723,7 +727,10 @@ def test_fleet_start_scan_promotes_generation_and_loads_summary(
                 '{"repo_count": 2, "total_findings": 5, "repos": [], "cross_repo_links": []}',
                 encoding="utf-8",
             )
-            from attackmap.artifact_publisher import publish_generation, write_fleet_manifest
+            from attackmap.foundation.artifact_publisher import (
+                publish_generation,
+                write_fleet_manifest,
+            )
             for name in ("repo-a", "repo-b"):
                 child = generation_dir(output / name, "child-run")
                 write_generation(child)

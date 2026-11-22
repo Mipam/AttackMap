@@ -10,9 +10,9 @@ from __future__ import annotations
 import json
 import threading
 
+from attackmap.extraction.progress import EventLog
+from attackmap.orchestration.pipeline import run_scan
 from attackmap.orchestration.run_spec import RunSpec
-from attackmap.pipeline import run_scan
-from attackmap.progress import EventLog
 
 REQUIRED_FIELDS = {"ts", "run_id", "stage", "event", "status"}
 
@@ -121,7 +121,7 @@ def test_published_generation_contains_events_jsonl(tmp_path):
 
 def test_failed_publication_still_writes_events(tmp_path, monkeypatch):
     """A failing publication leaves the event log next to the diagnostic."""
-    from attackmap import artifact_publisher
+    from attackmap.foundation import artifact_publisher
 
     base = tmp_path / "reports"
 

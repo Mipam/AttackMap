@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from attackmap import scan_service as service
-from attackmap.analyzers import BuiltinPythonWebAnalyzer
-from attackmap.contracts import DeploymentAliases
-from attackmap.fleet import FleetRepoResult, FleetScan
-from attackmap.fleet_admission import FleetMemoryEstimate, FleetMemoryPolicy
+from attackmap.extraction.contracts import DeploymentAliases
 from attackmap.models import ScanResult
+from attackmap.orchestration import scan_service as service
+from attackmap.orchestration.analyzers import BuiltinPythonWebAnalyzer
+from attackmap.orchestration.fleet import FleetRepoResult, FleetScan
+from attackmap.orchestration.fleet_admission import FleetMemoryEstimate, FleetMemoryPolicy
 
 
 def request(tmp_path, budget, count=2, **kwargs):
@@ -213,7 +213,7 @@ def test_actual_subprocess_capture_preserves_skip_events_and_partial_scope(tmp_p
     # Real child processes run the production capture gates and JSON interchange.
     # No providers, scanner scale benchmark, native packaging or OS memory claim.
     script = (
-        "import json,pathlib,sys; from attackmap.index import RepoIndex; "
+        "import json,pathlib,sys; from attackmap.extraction.index import RepoIndex; "
         "index=RepoIndex.build(sys.argv[1]); "
         "data={'scan':{'root':sys.argv[1],'files_scanned':len(index.files),"
         "'limitations':list(index.limitations),'resource_limit_scopes':list(index.resource_limit_scopes),"

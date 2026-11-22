@@ -10,7 +10,7 @@ import textwrap
 
 import pytest
 
-from attackmap.taint_flow import FileFlow
+from attackmap.reasoning.taint_flow import FileFlow
 
 
 def _flow(source: str, suffix: str):

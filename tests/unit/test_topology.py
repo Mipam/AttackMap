@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from attackmap.models import AuthHint, EdgeHint, ExternalCall, Route, ScanResult, ServiceHint
-from attackmap.topology import ServiceEdge, ServiceGraph, ServiceNode, build_service_graph
-
+from attackmap.reasoning.topology import ServiceEdge, ServiceGraph, ServiceNode, build_service_graph
 
 # ---------------------------------------------------------------------------
 # Node discovery

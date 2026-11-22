@@ -1,7 +1,7 @@
 from itertools import permutations
 
-from attackmap.analyzers import merge_analyzer_results
 from attackmap.models import Route, ScanResult
+from attackmap.orchestration.analyzers import merge_analyzer_results
 
 
 def _scan(auth, analyzer, files=None):
@@ -59,7 +59,7 @@ def test_remerge_preserves_conflicts_without_adding_synthetic_origin():
 
 
 def test_distinct_secret_locations_and_outbound_methods_are_not_collapsed():
-    from attackmap.models import SecretHint, ExternalCall
+    from attackmap.models import ExternalCall, SecretHint
     source = ScanResult(root='.',secret_hints=[SecretHint(name='AKIA...',file='app.py',line=1),SecretHint(name='AKIA...',file='app.py',line=2)],external_calls=[ExternalCall(target='https://api',file='app.py',method='GET'),ExternalCall(target='https://api',file='app.py',method='POST')])
     signals = merge_analyzer_results([source]).all_signals()
     assert len(signals) == 4

@@ -4,9 +4,16 @@ from dataclasses import asdict
 
 import pytest
 
-from attackmap import threat_model, topology
-from attackmap.models import AuthHint, DatabaseHint, EdgeHint, ExternalCall, Route, ScanResult, ServiceHint
-
+from attackmap.models import (
+    AuthHint,
+    DatabaseHint,
+    EdgeHint,
+    ExternalCall,
+    Route,
+    ScanResult,
+    ServiceHint,
+)
+from attackmap.reasoning import threat_model, topology
 
 FILE = "services/layout/app.py"
 FAMILIES = [("auth_hints", AuthHint), ("service_hints", ServiceHint), ("edge_hints", EdgeHint)]

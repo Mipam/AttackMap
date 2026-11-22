@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attackmap.analyzer import identify_attack_surfaces
+from attackmap.extraction.scanner import scan_repo
 from attackmap.models import AttackSurface, Route, ScanResult
-from attackmap.route_auth_fusion import synthesize_unauthenticated_routes
-from attackmap.scanner import scan_repo
-from attackmap.threat_model import generate_findings
+from attackmap.reasoning.analyzer import identify_attack_surfaces
+from attackmap.reasoning.route_auth_fusion import synthesize_unauthenticated_routes
+from attackmap.reasoning.threat_model import generate_findings
 
 _TAG = "state-changing"
 

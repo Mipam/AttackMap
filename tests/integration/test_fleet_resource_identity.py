@@ -1,12 +1,16 @@
 """Fixture-only qualification of a prepared contract, without scanner claims."""
-from copy import deepcopy
 import json
+from copy import deepcopy
 
 import pytest
 from pydantic import ValidationError
 
-from attackmap.fleet_resource_identity import (MAX_DATASTORE_DECLARATIONS,
-    MAX_DATASTORE_REPOSITORIES, DatastoreDeclaration, project_shared_datastores)
+from attackmap.foundation.fleet_resource_identity import (
+    MAX_DATASTORE_DECLARATIONS,
+    MAX_DATASTORE_REPOSITORIES,
+    DatastoreDeclaration,
+    project_shared_datastores,
+)
 
 
 def declaration(root="C:/repos/reader", *, operation="read", observation="db-read"):
@@ -99,8 +103,8 @@ def test_dns_case_and_final_dot_are_canonical_but_no_alias_or_default_port_is_in
 
 @pytest.mark.parametrize("prefix", ["sk-proj-", "SK-PROJ-"])
 def test_secret_shaped_dns_labels_are_rejected_before_and_after_canonicalization(prefix):
-    from attackmap.fleet_resource_identity import QualifiedDatastoreIdentity
-    from attackmap.redact import redact_text
+    from attackmap.foundation.fleet_resource_identity import QualifiedDatastoreIdentity
+    from attackmap.foundation.redact import redact_text
 
     host = prefix + "a" * 30 + ".example.internal"
     assert redact_text(host.lower()) != host.lower()

@@ -1,8 +1,8 @@
-from pathlib import Path
 import json
+from pathlib import Path
 
 from attackmap.models import AttackPath, Finding, ScanResult
-from attackmap.report import render_console_summary, write_reports
+from attackmap.output.report import render_console_summary, write_reports
 
 
 def test_render_console_summary_orders_findings_by_severity() -> None:

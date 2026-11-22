@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import json
-
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from attackmap import scan_service
+from attackmap.orchestration import scan_service
+from attackmap.orchestration.pipeline import RunState
 from attackmap.orchestration.run_spec import AnalyzerSelection, RunSpec
-from attackmap.pipeline import RunState
-from attackmap.scan_service import ScanRequest, ScanRequestError, execute_scan_request
+from attackmap.orchestration.scan_service import ScanRequest, ScanRequestError, execute_scan_request
 
 
 def _make_state(spec: RunSpec, repo_path: Path, output: Path) -> RunState:
@@ -21,7 +20,8 @@ def _make_state(spec: RunSpec, repo_path: Path, output: Path) -> RunState:
 
     state.scan = ScanResult(root=str(repo_path), files_scanned=1)
     from artifact_fixture import write_generation
-    from attackmap.artifact_publisher import generation_dir, publish_generation
+
+    from attackmap.foundation.artifact_publisher import generation_dir, publish_generation
     folder = generation_dir(output, "fixture-run")
     write_generation(folder, {"scan": state.scan.model_dump(mode="json")})
     publish_generation(output, folder.name)
@@ -120,7 +120,7 @@ def test_fleet_runs_all_repos(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
 
 def test_fleet_refused_flags_raise_typed_admission_error(tmp_path: Path) -> None:
     """AR069: baseline is admitted per child; report-compared flags refuse typed."""
-    from attackmap.errors import UnsupportedInFleet
+    from attackmap.foundation.errors import UnsupportedInFleet
 
     a, b = tmp_path / "a", tmp_path / "b"
     a.mkdir()
@@ -144,8 +144,14 @@ def test_bad_module_raises_scan_request_error(tmp_path: Path) -> None:
 @pytest.mark.parametrize("run_id", ["startup-failed", None])
 def test_analyzer_startup_failure_writes_redacted_diagnostic_preserving_current(tmp_path, monkeypatch, run_id):
     import json
+
     from artifact_fixture import write_generation
-    from attackmap.artifact_publisher import generation_dir, publish_generation, current_generation
+
+    from attackmap.foundation.artifact_publisher import (
+        current_generation,
+        generation_dir,
+        publish_generation,
+    )
     repo = tmp_path / "repo"
     repo.mkdir()
     out = tmp_path / "out"
@@ -188,7 +194,7 @@ def test_fleet_deployment_aliases_resolve_observed_links(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """ScanRequest.deployment_aliases flows into link resolution (C28/AM040)."""
-    from attackmap.contracts import DeploymentAliases
+    from attackmap.extraction.contracts import DeploymentAliases
     from attackmap.models import ExternalCall, Route, ScanResult
 
     a, b = tmp_path / "web", tmp_path / "auth-api"
@@ -208,7 +214,8 @@ def test_fleet_deployment_aliases_resolve_observed_links(
                 routes=[Route(path="/users/{id}", method="GET", file="s.py", line=1)],
             )
         from artifact_fixture import write_generation
-        from attackmap.artifact_publisher import generation_dir, publish_generation
+
+        from attackmap.foundation.artifact_publisher import generation_dir, publish_generation
         folder = generation_dir(kwargs["output"], "fixture-run")
         write_generation(folder, {"scan": state.scan.model_dump(mode="json")})
         publish_generation(kwargs["output"], folder.name)

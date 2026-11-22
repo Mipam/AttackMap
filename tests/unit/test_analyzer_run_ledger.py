@@ -7,15 +7,15 @@ from typing import ClassVar
 
 import pytest
 
-from attackmap import analyzers as registry
-from attackmap.analyzer_contracts import AnalyzerMetadata
-from attackmap.analyzer_host import HOST_INPUT_INVALID, HOST_TIMEOUT, IsolatedOutcome
+from attackmap.extraction.analyzer_host import HOST_INPUT_INVALID, HOST_TIMEOUT, IsolatedOutcome
 from attackmap.extraction.ledger import (
     AnalyzerLifecycleEvent,
     AnalyzerRunLedger,
     analyzer_run_identity,
 )
 from attackmap.models import Route, ScanResult
+from attackmap.orchestration import analyzers as registry
+from attackmap.reasoning.analyzer_contracts import AnalyzerMetadata
 
 PRIVATE = "LEDGER_PRIVATE_SOURCE token=unknown C:/private/source.py"
 
@@ -177,7 +177,7 @@ def test_isolated_outcome_distinguishes_host_request_from_analyzer_execution(tmp
             return self
         def __exit__(self, *args):
             pass
-    monkeypatch.setattr("attackmap.snapshot_transport.SnapshotBundle", Bundle)
+    monkeypatch.setattr("attackmap.extraction.snapshot_transport.SnapshotBundle", Bundle)
     calls = []
     def isolated(analyzer, root, **kwargs):
         calls.append(analyzer)
@@ -200,10 +200,10 @@ def test_isolated_outcome_distinguishes_host_request_from_analyzer_execution(tmp
 
 
 def test_captured_input_failure_does_not_claim_host_or_analyzer_started(tmp_path, monkeypatch):
-    from attackmap.snapshot_transport import SnapshotInputError
+    from attackmap.extraction.snapshot_transport import SnapshotInputError
     def unavailable(index):
         raise SnapshotInputError(PRIVATE)
-    monkeypatch.setattr("attackmap.snapshot_transport.SnapshotBundle", unavailable)
+    monkeypatch.setattr("attackmap.extraction.snapshot_transport.SnapshotBundle", unavailable)
     monkeypatch.setattr(registry, "run_isolated_analyzer", lambda *args, **kwargs: pytest.fail("host must not run"))
 
     result = registry.analyze_repository(tmp_path, analyzers=[Plugin()], isolated_analyzers=True)
@@ -336,7 +336,7 @@ def test_provenance_failure_is_timed_and_recorded_before_strict_raise(tmp_path, 
 def test_detection_and_selection_stage_feed_is_ordered_and_private(tmp_path, monkeypatch):
     from io import StringIO
 
-    from attackmap.progress import JsonScanProgress
+    from attackmap.extraction.progress import JsonScanProgress
     candidates = [Plugin("detect-error", detection=ValueError(PRIVATE)), Plugin("good"),
                   Plugin("opt-in", enabled=False), Plugin("unmatched", detection=False)]
     monkeypatch.setattr(registry, "get_registered_analyzers", lambda **kwargs: candidates)

@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
+from attackmap.extraction.scanner import scan_repo
 from attackmap.models import CodeWeakness, Route, ScanResult
-from attackmap.scanner import scan_repo
-from attackmap.threat_model import generate_findings
-from attackmap.weaknesses import find_code_weaknesses
+from attackmap.reasoning.threat_model import generate_findings
+from attackmap.reasoning.weaknesses import find_code_weaknesses
 
 
 def _kinds(content: str) -> set[str]:

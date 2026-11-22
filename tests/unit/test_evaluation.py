@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.bench import SCORED_CATEGORIES
-from attackmap.evaluation import (
+from attackmap.orchestration.bench import SCORED_CATEGORIES
+from attackmap.orchestration.evaluation import (
     C27_TARGETS,
     EXPERIMENTAL_MIN_PER_SIDE,
     FAMILIES,

@@ -1,5 +1,5 @@
 """Bounded per-file prefix resolution; multiple mounts need richer identity."""
-from attackmap.scanner import _python_route_prefixes
+from attackmap.extraction.scanner import _python_route_prefixes
 
 
 def test_repeated_include_retains_local_prefix():

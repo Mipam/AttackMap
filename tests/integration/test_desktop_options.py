@@ -7,8 +7,8 @@ from unittest.mock import Mock
 import pytest
 from pydantic import ValidationError
 
-from attackmap.desktop_worker import run_request_file
-from attackmap.run_contract import RunRequest, ScanOptions, ScanOptionsV12
+from attackmap.orchestration.desktop_worker import run_request_file
+from attackmap.orchestration.run_contract import RunRequest, ScanOptions, ScanOptionsV12
 
 
 def test_defaults_are_local_and_finite():
@@ -31,7 +31,7 @@ def test_invalid_options_rejected(fields):
 
 def test_options_reach_shared_engine(tmp_path, monkeypatch):
     captured = []
-    monkeypatch.setattr("attackmap.scan_service.run_scan",
+    monkeypatch.setattr("attackmap.orchestration.scan_service.run_scan",
                         lambda spec, **kwargs: captured.append(spec) or SimpleNamespace(exit_code=0))
     request = RunRequest(run_id="options", repository_id="repo", generation=1,
                          revision=0, repository_path=str(tmp_path),
@@ -84,7 +84,7 @@ NEW_SENTINELS = {
 
 
 def test_every_new_field_has_nondefault_service_and_pipeline_sentinel(tmp_path):
-    from attackmap.scan_service import scan_request_from_run
+    from attackmap.orchestration.scan_service import scan_request_from_run
     assert set(NEW_SENTINELS) == set(ScanOptionsV12.model_fields) - set(ScanOptions.model_fields)
     options = ScanOptionsV12(**NEW_SENTINELS, timeout_seconds=37)
     request = RunRequest(schema_version="1.2", run_id="sentinel", repository_id="opaque-repo",
@@ -168,10 +168,10 @@ def test_v12_worker_reaches_application_service_with_exact_sentinels(tmp_path, m
     request = RunRequest(schema_version="1.2", run_id="mapped", repository_id="repo", generation=1,
         revision=0, repository_path=str(tmp_path), output_path=str(tmp_path / "out"), options=options)
     captured = []
-    monkeypatch.setattr("attackmap.scan_service.execute_scan_request",
+    monkeypatch.setattr("attackmap.orchestration.scan_service.execute_scan_request",
                         lambda value: captured.append(value) or SimpleNamespace(exit_code=0))
     provider = Mock(side_effect=AssertionError("Provider must not be called"))
-    monkeypatch.setattr("attackmap.desktop_provider.execute_provider_action", provider)
+    monkeypatch.setattr("attackmap.orchestration.desktop_provider.execute_provider_action", provider)
     path = tmp_path / "request.json"
     path.write_text(request.model_dump_json())
     assert run_request_file(path, engine=True) == 0
@@ -192,7 +192,7 @@ def test_v12_worker_reaches_application_service_with_exact_sentinels(tmp_path, m
 
 @pytest.mark.parametrize("unsupported", ["incremental", "mode", "fleet", "jury", "max_memory_bytes"])
 def test_v12_unwired_fields_fail_before_dispatch_and_preserve_previous(tmp_path, monkeypatch, unsupported):
-    from attackmap.desktop_capabilities import validate_desktop_request
+    from attackmap.orchestration.desktop_capabilities import validate_desktop_request
     output = tmp_path / "out"
     output.mkdir()
     previous = output / "current.json"
@@ -203,9 +203,9 @@ def test_v12_unwired_fields_fail_before_dispatch_and_preserve_previous(tmp_path,
     with pytest.raises(ValueError, match="unsupported or malformed"):
         validate_desktop_request(payload)
     dispatches = [Mock() for _ in range(3)]
-    monkeypatch.setattr("attackmap.desktop_worker.serve", dispatches[0])
-    monkeypatch.setattr("attackmap.scan_service.execute_scan_request", dispatches[1])
-    monkeypatch.setattr("attackmap.desktop_provider.execute_provider_action", dispatches[2])
+    monkeypatch.setattr("attackmap.orchestration.desktop_worker.serve", dispatches[0])
+    monkeypatch.setattr("attackmap.orchestration.scan_service.execute_scan_request", dispatches[1])
+    monkeypatch.setattr("attackmap.orchestration.desktop_provider.execute_provider_action", dispatches[2])
     path = tmp_path / "request.json"
     path.write_text(json.dumps(payload))
     assert run_request_file(path, engine=True) == 2
@@ -217,7 +217,7 @@ def test_v12_unwired_fields_fail_before_dispatch_and_preserve_previous(tmp_path,
 @pytest.mark.parametrize("field", ["baseline", "suppress_file"])
 def test_missing_v12_input_file_fails_before_service(tmp_path, monkeypatch, field):
     service = Mock()
-    monkeypatch.setattr("attackmap.scan_service.execute_scan_request", service)
+    monkeypatch.setattr("attackmap.orchestration.scan_service.execute_scan_request", service)
     request = RunRequest(schema_version="1.2", run_id="missing", repository_id="repo", generation=1,
         revision=0, repository_path=str(tmp_path), output_path=str(tmp_path / "out"),
         options=ScanOptionsV12(**{field: str(tmp_path / "missing-file")}))
@@ -230,7 +230,7 @@ def test_missing_v12_input_file_fails_before_service(tmp_path, monkeypatch, fiel
 @pytest.mark.parametrize("field", ["repository_paths", "repo_paths", "repository_ids", "max_workers",
                                     "llm", "llm_backend", "incremental"])
 def test_unwired_top_level_feature_alias_is_not_metadata(field, tmp_path):
-    from attackmap.desktop_capabilities import validate_desktop_request
+    from attackmap.orchestration.desktop_capabilities import validate_desktop_request
     request = RunRequest(schema_version="1.2", run_id="alias", repository_id="repo", generation=1,
         revision=0, repository_path=str(tmp_path), output_path=str(tmp_path / "out"))
     with pytest.raises(ValueError, match="unsupported or malformed"):
@@ -240,8 +240,9 @@ def test_unwired_top_level_feature_alias_is_not_metadata(field, tmp_path):
 @pytest.mark.parametrize("schema", ["1.0", "1.1", "1.2"])
 def test_broker_echoes_request_schema_for_old_and_new_consumers(schema, tmp_path, monkeypatch):
     import io
-    from attackmap.desktop_worker import serve
-    from attackmap.run_contract import parse_run_message
+
+    from attackmap.orchestration.desktop_worker import serve
+    from attackmap.orchestration.run_contract import parse_run_message
     class RejectedLaunch:
         def start(self, argv, *, on_done, **kwargs):
             on_done(1, "")
@@ -249,7 +250,7 @@ def test_broker_echoes_request_schema_for_old_and_new_consumers(schema, tmp_path
         def request_cancel(self):
             return True
     monkeypatch.setattr("attackmap.execution.ProcessSupervisor", RejectedLaunch)
-    monkeypatch.setattr("attackmap.artifact_publisher.write_diagnostic", lambda *args, **kwargs: None)
+    monkeypatch.setattr("attackmap.foundation.artifact_publisher.write_diagnostic", lambda *args, **kwargs: None)
     request = RunRequest(schema_version=schema, run_id="schema-echo", repository_id="repo", generation=1,
         revision=0, repository_path=str(tmp_path), output_path=str(tmp_path / "out"))
     events = io.StringIO()

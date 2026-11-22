@@ -13,13 +13,17 @@ from pathlib import Path
 
 import pytest
 
-from attackmap import scan_service
-from attackmap.errors import UnsupportedInFleet
-from attackmap.fleet import FleetScan
+from attackmap.foundation.errors import UnsupportedInFleet
 from attackmap.models import ScanResult
+from attackmap.orchestration import scan_service
+from attackmap.orchestration.fleet import FleetScan
+from attackmap.orchestration.pipeline import RunState
 from attackmap.orchestration.run_spec import AiSpec, FeatureFlags, RunSpec
-from attackmap.pipeline import RunState
-from attackmap.scan_service import ScanRequest, _fleet_feature_admission, execute_scan_request
+from attackmap.orchestration.scan_service import (
+    ScanRequest,
+    _fleet_feature_admission,
+    execute_scan_request,
+)
 
 
 def _fleet_request(tmp_path: Path, spec: RunSpec | None = None) -> ScanRequest:

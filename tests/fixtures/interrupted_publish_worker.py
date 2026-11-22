@@ -23,7 +23,7 @@ TESTS_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TESTS_DIR))
 
 from artifact_fixture import write_generation  # noqa: E402
-from attackmap import artifact_publisher  # noqa: E402
+from attackmap.foundation import artifact_publisher  # noqa: E402
 
 
 def hold(marker: Path) -> None:

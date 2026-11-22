@@ -1,5 +1,18 @@
-from attackmap.models import AttackSurface, AuthHint, DatabaseHint, EdgeHint, ExternalCall, FrameworkHint, ProtocolHint, Route, ScanResult, SecretHint, ServiceHint, TaintChain
-from attackmap.threat_model import (
+from attackmap.models import (
+    AttackSurface,
+    AuthHint,
+    DatabaseHint,
+    EdgeHint,
+    ExternalCall,
+    FrameworkHint,
+    ProtocolHint,
+    Route,
+    ScanResult,
+    SecretHint,
+    ServiceHint,
+    TaintChain,
+)
+from attackmap.reasoning.threat_model import (
     _build_probable_chains,
     confidence_bucket,
     generate_attack_paths,
@@ -187,7 +200,7 @@ def test_generate_attack_paths_reuses_provided_attack_surfaces(monkeypatch) -> N
     def fail_if_called(_scan: ScanResult) -> list[AttackSurface]:
         raise AssertionError("identify_attack_surfaces should not be called when attack_surfaces are provided")
 
-    monkeypatch.setattr("attackmap.threat_model.identify_attack_surfaces", fail_if_called)
+    monkeypatch.setattr("attackmap.reasoning.threat_model.identify_attack_surfaces", fail_if_called)
 
     attack_paths = generate_attack_paths(scan, attack_surfaces=provided_surfaces)
 
@@ -272,7 +285,7 @@ def test_same_surface_is_not_double_counted_across_archetypes() -> None:
 
 def test_max_attack_paths_cap_is_respected() -> None:
     """At most MAX_ATTACK_PATHS basic paths emit, even with more matching surfaces."""
-    from attackmap.threat_model import MAX_ATTACK_PATHS
+    from attackmap.reasoning.threat_model import MAX_ATTACK_PATHS
 
     surfaces = [
         AttackSurface(route="/webhook/a", method="POST", file="webhook.py", category="webhook", exposure="public", risk="high", auth_signals=[], data_store_interaction=True, outbound_integration=False, rationale=[]),
@@ -607,7 +620,7 @@ def test_public_data_fanout_collapses_same_file_surfaces_to_one_path() -> None:
 # ---------------------------------------------------------------------------
 
 
-from attackmap.threat_model import compute_finding_score  # noqa: E402
+from attackmap.reasoning.threat_model import compute_finding_score  # noqa: E402
 
 
 def test_compute_finding_score_range() -> None:

@@ -4,9 +4,9 @@ import itertools
 
 import pytest
 
-from attackmap.crossrepo import find_cross_repo_anomalies
 from attackmap.models import ExternalCall, Route, ScanResult, ServiceHint
-from attackmap.topology import _service_from_url, build_service_graph
+from attackmap.reasoning.crossrepo import find_cross_repo_anomalies
+from attackmap.reasoning.topology import _service_from_url, build_service_graph
 
 
 def cohort(values):

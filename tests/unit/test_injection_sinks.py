@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
+from attackmap.extraction.scanner import scan_repo
 from attackmap.models import Route, ScanResult
-from attackmap.scanner import scan_repo
-from attackmap.taint import analyze_taint
-from attackmap.threat_model import generate_findings
+from attackmap.reasoning.taint import analyze_taint
+from attackmap.reasoning.threat_model import generate_findings
 
 
 def _route_repo(tmp_path: Path, worker_body: str) -> Path:

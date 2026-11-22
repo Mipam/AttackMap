@@ -8,9 +8,9 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from attackmap.cli import app
-from attackmap.contracts import ContractLink, DeploymentAliases
-from attackmap.fleet import (
+from attackmap.extraction.contracts import ContractLink, DeploymentAliases
+from attackmap.models import Finding, ScanResult
+from attackmap.orchestration.fleet import (
     FleetRepoResult,
     FleetScan,
     fleet_repo_ids,
@@ -18,7 +18,7 @@ from attackmap.fleet import (
     render_fleet_graph_mermaid,
     render_fleet_summary,
 )
-from attackmap.models import Finding, ScanResult
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 
@@ -590,7 +590,7 @@ def test_cli_service_port_overrides_config_declaration(tmp_path: Path) -> None:
 
 
 def test_effective_deployment_aliases_merges_and_falls_back(tmp_path: Path) -> None:
-    from attackmap.scan_service import ScanRequest, _effective_deployment_aliases
+    from attackmap.orchestration.scan_service import ScanRequest, _effective_deployment_aliases
 
     fleet = Path(__file__).parents[1] / "fixtures" / "deployment-seam-fleet"
     repos = [fleet / "web-app", fleet / "auth-api", fleet / "feed-generator"]

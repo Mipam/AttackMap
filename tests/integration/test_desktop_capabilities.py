@@ -1,20 +1,28 @@
 """Capability compatibility and raw-request admission; no provider/network calls."""
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
 from typer.testing import CliRunner
 
-from attackmap.cli import app
-from attackmap.desktop_actions import ActionRequest, execute_action, run_action_file
-from attackmap.desktop_capabilities import (
-    build_capabilities, executable_identity, module_inventory,
-    preflight_capabilities, validate_desktop_request,
+from attackmap.orchestration.desktop_actions import ActionRequest, execute_action, run_action_file
+from attackmap.orchestration.desktop_capabilities import (
+    build_capabilities,
+    executable_identity,
+    module_inventory,
+    preflight_capabilities,
+    validate_desktop_request,
 )
-from attackmap.desktop_worker import run_request_file
-from attackmap.run_contract import RunRequest, ScanOptions, ScanOptionsV12, SUPPORTED_SCHEMA_VERSIONS
+from attackmap.orchestration.desktop_worker import run_request_file
+from attackmap.orchestration.run_contract import (
+    SUPPORTED_SCHEMA_VERSIONS,
+    RunRequest,
+    ScanOptions,
+    ScanOptionsV12,
+)
+from attackmap.surfaces.cli import app
 
 
 def request(tmp_path, schema="1.1"):
@@ -29,7 +37,7 @@ def caps():
 
 
 def test_cli_and_action_share_capabilities_and_module_inventory(monkeypatch):
-    from attackmap.analyzers import get_available_modules
+    from attackmap.orchestration.analyzers import get_available_modules
     expected_modules = module_inventory(get_available_modules())
     cli = CliRunner().invoke(app, ["capabilities"])
     assert cli.exit_code == 0, cli.output
@@ -49,7 +57,7 @@ def test_cli_and_action_share_capabilities_and_module_inventory(monkeypatch):
 
 
 def test_catalog_cli_and_capabilities_share_engine_bound_discovery(monkeypatch):
-    import attackmap.analyzer_catalog as catalog_module
+    import attackmap.orchestration.analyzer_catalog as catalog_module
     discover = catalog_module.get_analyzer_catalog
     calls = []
 
@@ -61,8 +69,8 @@ def test_catalog_cli_and_capabilities_share_engine_bound_discovery(monkeypatch):
         pytest.fail("Offline catalog queried remote repositories or installed a plugin")
 
     monkeypatch.setattr(catalog_module, "get_analyzer_catalog", counted)
-    monkeypatch.setattr("attackmap.cli.get_available_repository_modules", forbidden)
-    monkeypatch.setattr("attackmap.cli.install_analyzer_module", forbidden)
+    monkeypatch.setattr("attackmap.surfaces.cli.get_available_repository_modules", forbidden)
+    monkeypatch.setattr("attackmap.surfaces.cli.install_analyzer_module", forbidden)
     result = CliRunner().invoke(app, ["modules", "--catalog-json"])
     assert result.exit_code == 0, result.output
     assert len(calls) == 1
@@ -173,9 +181,9 @@ def test_unsupported_request_fails_before_any_scan_or_provider(tmp_path, monkeyp
     path.write_text(json.dumps(payload), encoding="utf-8")
     dispatches = [Mock(side_effect=AssertionError("Unsupported request reached dispatch or provider"))
                   for _ in range(3)]
-    monkeypatch.setattr("attackmap.desktop_worker.serve", dispatches[0])
-    monkeypatch.setattr("attackmap.pipeline.run_scan", dispatches[1])
-    monkeypatch.setattr("attackmap.desktop_provider.execute_provider_action", dispatches[2])
+    monkeypatch.setattr("attackmap.orchestration.desktop_worker.serve", dispatches[0])
+    monkeypatch.setattr("attackmap.orchestration.pipeline.run_scan", dispatches[1])
+    monkeypatch.setattr("attackmap.orchestration.desktop_provider.execute_provider_action", dispatches[2])
     assert run_request_file(path, engine=engine) == 2
     for dispatch in dispatches:
         dispatch.assert_not_called()
@@ -196,7 +204,7 @@ def test_valid_source_request_reaches_existing_broker(tmp_path, monkeypatch, sch
     path = tmp_path / "request.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     called = []
-    monkeypatch.setattr("attackmap.desktop_worker.serve", lambda value, **kwargs: called.append(value) or 0)
+    monkeypatch.setattr("attackmap.orchestration.desktop_worker.serve", lambda value, **kwargs: called.append(value) or 0)
     assert run_request_file(path) == 0
     assert called[0].schema_version == schema
 
@@ -208,7 +216,7 @@ def test_read_only_action_source_and_frozen_transport_no_provider(tmp_path, monk
     monkeypatch.setenv("ATTACKMAP_ACTION_CREDENTIAL", "secret-sentinel")
     def forbidden(*args, **kwargs):
         pytest.fail("Capability discovery invoked provider")
-    monkeypatch.setattr("attackmap.desktop_provider.execute_provider_action", forbidden)
+    monkeypatch.setattr("attackmap.orchestration.desktop_provider.execute_provider_action", forbidden)
     value = ActionRequest(request_id="probe", operation=operation, output_path=str(tmp_path / "out"),
                           payload={} if operation == "capabilities" else {"request": request(tmp_path)})
     path = tmp_path / "action.json"

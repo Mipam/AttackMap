@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.ui.config import ScanConfig
-from attackmap.ui.spawn import (
+from attackmap.surfaces.ui.config import ScanConfig
+from attackmap.surfaces.ui.spawn import (
     discovery_argv,
     frozen_aware_argv,
     is_frozen_build,

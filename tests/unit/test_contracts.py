@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from attackmap.contracts import ContractLink, DeploymentAliases, link_contracts
+from attackmap.extraction.contracts import ContractLink, DeploymentAliases, link_contracts
 from attackmap.models import ExternalCall, Route, ScanResult
 
 
@@ -172,7 +172,7 @@ def test_test_and_vendored_callers_excluded() -> None:
 
 def test_two_verbs_same_target_survive_merge() -> None:
     # merge identity now includes method, so GET+POST /items don't collapse (#146b).
-    from attackmap.analyzers import merge_analyzer_results
+    from attackmap.orchestration.analyzers import merge_analyzer_results
 
     r1 = ScanResult(
         root="a", external_calls=[ExternalCall(target="http://b/api/items/1", method="GET", file="c.py")]
@@ -186,7 +186,7 @@ def test_two_verbs_same_target_survive_merge() -> None:
 
 
 def test_bare_fetch_defaults_to_get_and_parses_init_method(tmp_path) -> None:
-    from attackmap.scanner import scan_repo
+    from attackmap.extraction.scanner import scan_repo
 
     (tmp_path / "client.js").write_text(
         'fetch("http://b/api/items/1");\n'

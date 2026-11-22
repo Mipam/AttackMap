@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from attackmap import index as module
+from attackmap.extraction import index as module
 
 
 def capture(root, monkeypatch, workers, **kwargs):

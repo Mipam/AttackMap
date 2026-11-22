@@ -9,12 +9,11 @@ from __future__ import annotations
 
 import pytest
 
-from attackmap.analyzer_contracts import (
+from attackmap.orchestration.analyzers import get_registered_analyzers
+from attackmap.reasoning.analyzer_contracts import (
     AnalyzerMetadata,
     normalize_analyzer_metadata,
 )
-from attackmap.analyzers import get_registered_analyzers
-
 
 # ---------------------------------------------------------------------------
 # Required fields exist with the documented defaults

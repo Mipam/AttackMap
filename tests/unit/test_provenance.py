@@ -23,13 +23,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from attackmap.analyzers import (
+from attackmap.extraction.merge import MERGE_SCHEMA
+from attackmap.orchestration.analyzers import (
     Analyzer,
     _stamp_provenance,
     analyze_repository,
     merge_analyzer_results,
 )
-from attackmap.merge import MERGE_SCHEMA
 from attackmap.sdk import (
     AnalyzerMetadata,
     AnalyzerResult,
@@ -40,7 +40,6 @@ from attackmap.sdk import (
     ScanResult,
     SecretHint,
 )
-
 
 # ---------------------------------------------------------------------------
 # 1. Field exists on every signal, defaults to None

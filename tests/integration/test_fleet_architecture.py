@@ -6,12 +6,26 @@ from dataclasses import replace
 
 import pytest
 
-from attackmap.contracts import ContractLink
-from attackmap.fleet import FleetRepoResult, FleetScan
-from attackmap.fleet_architecture import aggregate_fleet_architecture, build_fleet_architecture
-from attackmap.fleet_resource_identity import MAX_DATASTORE_DECLARATIONS, MAX_DATASTORE_REPOSITORIES
-from attackmap.models import (DatabaseHint, ExternalCall, Route, ScanResult,
-                              SecretHint, ServiceHint, Signal, SignalOrigin)
+from attackmap.extraction.contracts import ContractLink
+from attackmap.foundation.fleet_resource_identity import (
+    MAX_DATASTORE_DECLARATIONS,
+    MAX_DATASTORE_REPOSITORIES,
+)
+from attackmap.models import (
+    DatabaseHint,
+    ExternalCall,
+    Route,
+    ScanResult,
+    SecretHint,
+    ServiceHint,
+    Signal,
+    SignalOrigin,
+)
+from attackmap.orchestration.fleet import FleetRepoResult, FleetScan
+from attackmap.orchestration.fleet_architecture import (
+    aggregate_fleet_architecture,
+    build_fleet_architecture,
+)
 
 
 def _result(slug: str, root: str, *, services=("api",)) -> FleetRepoResult:

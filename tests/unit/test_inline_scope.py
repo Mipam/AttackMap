@@ -8,7 +8,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from attackmap.cli import app
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")

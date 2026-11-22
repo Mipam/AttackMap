@@ -8,15 +8,18 @@ compatibility for the registration patch delivered with AM052.
 
 from pathlib import Path
 
-from attackmap.analyzer_contracts import (
+from attackmap.extraction.ecosystems.ecosystem_node_atproto import (
+    looks_like_atproto_repo,
+    scan_node_atproto,
+)
+from attackmap.extraction.index import RepoIndex
+from attackmap.models import Route
+from attackmap.reasoning.analyzer_contracts import (
     EXTRACTION_PROTOCOL_VERSION,
     AnalyzerMetadata,
     check_extraction_compatibility,
     normalize_analyzer_metadata,
 )
-from attackmap.ecosystem_node_atproto import looks_like_atproto_repo, scan_node_atproto
-from attackmap.index import RepoIndex
-from attackmap.models import Route
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "atproto-service"
 XRPC_METHODS = "src/xrpc-methods.ts"
@@ -260,7 +263,7 @@ def test_scan_uses_index_when_provided(tmp_path: Path) -> None:
 
 
 def test_registration_class_satisfies_analyzer_contract() -> None:
-    from attackmap.analyzers import BuiltinNodeAtprotoAnalyzer
+    from attackmap.orchestration.analyzers import BuiltinNodeAtprotoAnalyzer
 
     analyzer = BuiltinNodeAtprotoAnalyzer()
     assert EXTRACTION_PROTOCOL_VERSION == "1.0"

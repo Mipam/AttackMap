@@ -2,11 +2,12 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from attackmap.analyzers import BuiltinPythonServiceAnalyzer, analyze_repository
-from attackmap.sdk import AnalyzerMetadata, AnalyzerResult, Route
+from attackmap.extraction.ecosystems.python_django_routes import (
+    normalize_pinned_python_plugin_routes,
+)
 from attackmap.models import Signal
-from attackmap.python_django_routes import normalize_pinned_python_plugin_routes
-
+from attackmap.orchestration.analyzers import BuiltinPythonServiceAnalyzer, analyze_repository
+from attackmap.sdk import AnalyzerMetadata, AnalyzerResult, Route
 
 URLS = """from django.urls import path, re_path, include
 urlpatterns = [

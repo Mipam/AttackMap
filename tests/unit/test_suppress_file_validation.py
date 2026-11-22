@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from attackmap.cli import app
-from attackmap.suppress import load_suppress_file
+from attackmap.output.suppress import load_suppress_file
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")

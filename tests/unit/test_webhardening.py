@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from attackmap.extraction.scanner import scan_repo
 from attackmap.models import ScanResult, WebHardeningIssue
-from attackmap.scanner import scan_repo
-from attackmap.threat_model import generate_findings
-from attackmap.webhardening import find_web_hardening_issues
+from attackmap.reasoning.threat_model import generate_findings
+from attackmap.reasoning.webhardening import find_web_hardening_issues
 
 
 def _kinds(content: str) -> set[str]:

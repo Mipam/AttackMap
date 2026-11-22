@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attackmap.analyzers import analyze_repository
-from attackmap.recon_to_analysis import translate_recon
-from attackmap.workflow_scanner import scan_workflows
+from attackmap.extraction.workflow_scanner import scan_workflows
+from attackmap.orchestration.analyzers import analyze_repository
+from attackmap.orchestration.recon_to_analysis import translate_recon
 
 
 def _repo(tmp_path: Path, yaml_text: str, name: str = "ci.yml") -> Path:

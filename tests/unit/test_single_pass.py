@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from attackmap import scanner
-from attackmap.analyzers import analyze_repository
-from attackmap.progress import JsonScanProgress
+from attackmap.extraction import scanner
+from attackmap.extraction.progress import JsonScanProgress
+from attackmap.orchestration.analyzers import analyze_repository
 
 
 def _repo(tmp_path: Path) -> Path:

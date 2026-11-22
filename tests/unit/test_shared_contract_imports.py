@@ -1,9 +1,9 @@
-from attackmap.analyzer_contracts import AnalyzerMetadata as SharedAnalyzerMetadata
-from attackmap.analyzers import AnalyzerMetadata, AnalyzerResult
 from attackmap.models import Route, ScanResult, ServiceHint
 from attackmap.models import Route as SharedRoute
 from attackmap.models import ScanResult as SharedScanResult
 from attackmap.models import ServiceHint as SharedServiceHint
+from attackmap.orchestration.analyzers import AnalyzerMetadata, AnalyzerResult
+from attackmap.reasoning.analyzer_contracts import AnalyzerMetadata as SharedAnalyzerMetadata
 from attackmap.sdk.contracts import AnalyzerMetadata as SdkAnalyzerMetadata
 from attackmap.sdk.models import Route as SdkRoute
 from attackmap.sdk.models import ScanResult as SdkScanResult
@@ -54,7 +54,7 @@ def test_sdk_exports_the_dependency_ecosystem_set() -> None:
     from typing import get_args
 
     from attackmap import sdk
-    from attackmap.cve import _OSV_ECOSYSTEM, INVENTORY_ONLY_ECOSYSTEMS
+    from attackmap.ai.cve import _OSV_ECOSYSTEM, INVENTORY_ONLY_ECOSYSTEMS
 
     assert set(sdk.DEPENDENCY_ECOSYSTEMS) == set(get_args(sdk.DependencyEcosystem))
     assert {"maven", "nuget", "conan", "vcpkg", "gem", "cocoapods", "hex", "pub", "swiftpm"} <= set(

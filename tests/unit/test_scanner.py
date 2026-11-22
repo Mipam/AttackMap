@@ -1,9 +1,9 @@
 import base64
 from pathlib import Path
 
-from attackmap.analyzers import AnalyzerSignals, merge_analyzer_signals
+from attackmap.extraction.scanner import scan_repo
 from attackmap.models import AuthHint, DatabaseHint, ExternalCall, Route, ScanResult, SecretHint
-from attackmap.scanner import scan_repo
+from attackmap.orchestration.analyzers import AnalyzerSignals, merge_analyzer_signals
 
 
 def test_merge_analyzer_signals_applies_core_merge_rules() -> None:
@@ -928,7 +928,7 @@ def test_route_extraction_keeps_real_routes(tmp_path: Path) -> None:
 def test_custom_auth_middleware_recognized(tmp_path: Path) -> None:
     """Custom middleware factories and guard args count as auth signals so an
     authenticated route isn't reported as 'no auth' (#100)."""
-    from attackmap.analyzer import identify_attack_surfaces
+    from attackmap.reasoning.analyzer import identify_attack_surfaces
 
     (tmp_path / "authed.js").write_text(
         "const express = require('express')\n"

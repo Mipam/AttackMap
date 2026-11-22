@@ -54,7 +54,7 @@ def test_report_identity_matches_recorded_baseline() -> None:
 
 
 def test_fixture_generation_passes_artifact_validation() -> None:
-    from attackmap.safe_fs import validate_generation
+    from attackmap.foundation.safe_fs import validate_generation
 
     with tempfile.TemporaryDirectory(prefix="attackmap-compat-") as work:
         doc = compute_fixture_identity(Path(work))

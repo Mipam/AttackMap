@@ -1,17 +1,17 @@
 """Runner negative gates and owned Python-process cleanup; no GUI/model dispatch."""
-from contextlib import redirect_stdout
 import ctypes
-from io import StringIO
 import json
 import os
-from pathlib import Path
 import stat
 import subprocess
 import sys
 import tempfile
 import textwrap
-from types import SimpleNamespace
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from tools import run_wp017_native_modes as runner

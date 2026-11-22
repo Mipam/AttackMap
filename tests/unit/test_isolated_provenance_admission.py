@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from attackmap.models import Route, ScanResult, Signal, SignalOrigin
-from attackmap.signal_provenance import admit_isolated_provenance
+from attackmap.reasoning.signal_provenance import admit_isolated_provenance
 
 
 def test_legacy_alias_keeps_semantics_but_parent_owns_emitter():
@@ -58,7 +58,7 @@ def test_missing_location_and_long_claim_remain_explicit():
 
 
 def test_actual_child_legacy_alias_uses_parent_metadata(tmp_path, monkeypatch):
-    from attackmap.analyzer_host import HostLimits, run_isolated_analyzer
+    from attackmap.extraction.analyzer_host import HostLimits, run_isolated_analyzer
     root = tmp_path / 'repo'
     root.mkdir()
     (root / 'app.py').write_text('pass\n')

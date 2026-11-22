@@ -6,8 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.comparison import compare_report_files, compare_reports
-from attackmap.diff import ComparisonCoverage, FindingSnapshot, diff_findings, render_diff_markdown
+from attackmap.output.comparison import compare_report_files, compare_reports
+from attackmap.output.diff import (
+    ComparisonCoverage,
+    FindingSnapshot,
+    diff_findings,
+    render_diff_markdown,
+)
 
 FIXTURES = Path(__file__).parents[2] / "fixtures" / "desktop-workflows"
 

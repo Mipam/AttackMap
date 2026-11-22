@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.ecosystem_python import scan_python_services
+from attackmap.extraction.ecosystems.ecosystem_python import scan_python_services
 
 
 def write_repo(root: Path, sources: dict[str, str]):

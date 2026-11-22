@@ -8,20 +8,19 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Any
-
-import pytest
-
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from attackmap.safe_fs import UnsafePathError
-from attackmap.ui.export_md import (
+import pytest
+
+from attackmap.foundation.safe_fs import UnsafePathError
+from attackmap.surfaces.ui.export_md import (
     SUPPORTED_SUFFIXES,
     _table,
     render_view_markdown,
     suggested_export_name,
 )
-from attackmap.ui.report import decode_report
+from attackmap.surfaces.ui.report import decode_report
 
 FIX = Path(__file__).parents[1] / "fixtures" / "ui" / "juice-shop-report.json"
 
@@ -189,7 +188,7 @@ def test_empty_state_message() -> None:
 
 @pytest.mark.skipif(sys.platform != "win32", reason="O_NOFOLLOW test is Windows-specific")
 def test_export_endpoint_writes_markdown(tmp_path: Path) -> None:
-    from attackmap.ui.server import LoopbackApp, make_server
+    from attackmap.surfaces.ui.server import LoopbackApp, make_server
 
     data = json.loads(FIX.read_text(encoding="utf-8"))
     app = LoopbackApp(report=decode_report(data, repo_name="juice-shop"))
@@ -216,7 +215,7 @@ def test_export_endpoint_writes_markdown(tmp_path: Path) -> None:
 
 
 def test_export_endpoint_rejects_bad_suffix(tmp_path: Path) -> None:
-    from attackmap.ui.server import LoopbackApp, make_server
+    from attackmap.surfaces.ui.server import LoopbackApp, make_server
 
     data = json.loads(FIX.read_text(encoding="utf-8"))
     app = LoopbackApp(report=decode_report(data, repo_name="juice-shop"))
@@ -241,7 +240,7 @@ def test_export_endpoint_rejects_bad_suffix(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows tests run without symlink creation privileges")
 def test_export_endpoint_rejects_symlinked_path(tmp_path: Path) -> None:
-    from attackmap.ui.server import LoopbackApp, make_server
+    from attackmap.surfaces.ui.server import LoopbackApp, make_server
 
     data = json.loads(FIX.read_text(encoding="utf-8"))
     app = LoopbackApp(report=decode_report(data, repo_name="juice-shop"))
@@ -250,7 +249,7 @@ def test_export_endpoint_rejects_symlinked_path(tmp_path: Path) -> None:
     try:
         out = tmp_path / "exports"
         out.mkdir()
-        dest = out / "attackmap.md"
+        dest = out / "attackmap.output.md"
         dest.symlink_to(out / "nowhere")
         req_body = json.dumps({"view": "findings", "path": str(dest)}).encode("utf-8")
         req = Request(
@@ -268,8 +267,8 @@ def test_export_endpoint_rejects_symlinked_path(tmp_path: Path) -> None:
 
 
 def test_pick_save_bridge_handles_string_and_list(monkeypatch: pytest.MonkeyPatch) -> None:
-    from attackmap.ui.launch import _Bridge
-    from attackmap.ui.server import LoopbackApp
+    from attackmap.surfaces.ui.launch import _Bridge
+    from attackmap.surfaces.ui.server import LoopbackApp
 
     app = LoopbackApp()
     bridge = _Bridge(app)
@@ -296,8 +295,8 @@ def test_pick_save_bridge_handles_string_and_list(monkeypatch: pytest.MonkeyPatc
 
 
 def test_pick_save_bridge_appends_extension(monkeypatch: pytest.MonkeyPatch) -> None:
-    from attackmap.ui.launch import _Bridge
-    from attackmap.ui.server import LoopbackApp
+    from attackmap.surfaces.ui.launch import _Bridge
+    from attackmap.surfaces.ui.server import LoopbackApp
 
     app = LoopbackApp()
     bridge = _Bridge(app)

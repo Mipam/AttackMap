@@ -4,10 +4,17 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from attackmap.run_contract import (
-    CURRENT_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS,
-    RunArtifact, RunArtifactManifest, RunProgress, RunRequest, RunTerminal,
-    accepts_update, import_legacy_report, parse_run_message,
+from attackmap.orchestration.run_contract import (
+    CURRENT_SCHEMA_VERSION,
+    SUPPORTED_SCHEMA_VERSIONS,
+    RunArtifact,
+    RunArtifactManifest,
+    RunProgress,
+    RunRequest,
+    RunTerminal,
+    accepts_update,
+    import_legacy_report,
+    parse_run_message,
 )
 
 BASE = dict(run_id="r1", repository_id="repo1", generation=1, revision=1)

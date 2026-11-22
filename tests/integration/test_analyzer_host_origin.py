@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from attackmap import analyzer_host as host
+from attackmap.extraction import analyzer_host as host
 
 
 def point(package="selected-plugin", value="selected:Analyzer", version="1.0"):

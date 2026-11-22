@@ -8,11 +8,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from attackmap import sarif
-from attackmap.cli import app
-from attackmap.diff import FindingSnapshot, diff_findings, finding_id
 from attackmap.models import Finding
-from attackmap.suppress import (
+from attackmap.output import sarif
+from attackmap.output.diff import FindingSnapshot, diff_findings, finding_id
+from attackmap.output.suppress import (
     INLINE_DIRECTIVE,
     Suppression,
     SuppressionSet,
@@ -21,6 +20,7 @@ from attackmap.suppress import (
     rule_slug,
     scan_inline_suppressions,
 )
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 _SECRET_RULE = "hard-coded-secret-literals-were-found-in-source-or-config"

@@ -1,5 +1,5 @@
-from attackmap.context_pack import SCHEMA_VERSION, build_review_context_pack
 from attackmap.models import AuthHint, Route, ScanResult
+from attackmap.output.context_pack import SCHEMA_VERSION, build_review_context_pack
 
 
 def test_context_pack_contains_required_sections() -> None:

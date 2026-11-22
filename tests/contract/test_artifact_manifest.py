@@ -10,16 +10,15 @@ import pytest
 from jsonschema import FormatChecker, validate
 
 from attackmap import __version__
-from attackmap.artifact_manifest import (
-    ArtifactManifest,
-    ArtifactSection,
+from attackmap.foundation.artifact_manifest import (
     SCHEMA_VERSION,
     SECTION_ORDER,
+    ArtifactManifest,
+    ArtifactSection,
     load_artifact_manifest,
     make_run_id,
     write_artifact_manifest,
 )
-
 
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schemas" / "artifact-manifest.schema.json"
 
@@ -56,7 +55,8 @@ def test_make_run_id_is_unique_and_well_formed() -> None:
 def test_make_run_id_is_unique_with_frozen_coarse_clock(monkeypatch) -> None:
     from datetime import datetime, timezone
     from uuid import UUID
-    import attackmap.artifact_manifest as manifest
+
+    import attackmap.foundation.artifact_manifest as manifest
 
     class FrozenClock:
         @staticmethod
@@ -248,7 +248,7 @@ def test_manifest_records_verified_snapshot_identity(tmp_path: Path) -> None:
     assert snapshot["verification"]["state"] == "verified"
     # Config identity is derived from the captured index config, not trusted
     # from the report channel: it is recomputed on rehydration.
-    from attackmap.index import ScanSnapshot
+    from attackmap.extraction.index import ScanSnapshot
     expected = ScanSnapshot.from_identity(report_data["scan"]["scan_snapshot"])
     assert snapshot["config_identity"] == expected.config_identity
     assert "snapshot_state" not in manifest["exit_state"]

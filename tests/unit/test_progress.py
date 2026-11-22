@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import io
+import json
 from pathlib import Path
 
-import json
-
-from attackmap.progress import (
+from attackmap.extraction.progress import (
     PROGRESS_PROTOCOL_VERSION,
     JsonScanProgress,
     ScanProgress,
@@ -15,7 +14,7 @@ from attackmap.progress import (
     _truncate,
     create_progress,
 )
-from attackmap.scanner import scan_repo
+from attackmap.extraction.scanner import scan_repo
 
 
 def _events(stream: io.StringIO) -> list[dict]:

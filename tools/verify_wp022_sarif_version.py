@@ -7,7 +7,8 @@ import json
 from pathlib import Path
 
 from verify_wp018_closeout import ROOT, launch, production_inputs, read, require, save, sha
-from attackmap.artifact_publisher import current_generation, validate_generation
+
+from attackmap.foundation.artifact_publisher import current_generation, validate_generation
 
 ARTIFACTS = ROOT / "artifacts/wp022-sarif-version-20261107"
 FIXTURE = ARTIFACTS / "fixture"

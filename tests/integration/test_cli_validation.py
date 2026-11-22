@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from attackmap import cli
-from attackmap.cli import app
+from attackmap.surfaces import cli
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
@@ -86,8 +86,14 @@ def test_defaults_and_valid_combinations_still_run(repo: Path) -> None:
 
 def test_module_preflight_diagnostic_is_generic_and_preserves_previous(repo, tmp_path, monkeypatch):
     import json
+
     from artifact_fixture import write_generation
-    from attackmap.artifact_publisher import generation_dir, publish_generation, current_generation
+
+    from attackmap.foundation.artifact_publisher import (
+        current_generation,
+        generation_dir,
+        publish_generation,
+    )
     out = tmp_path / "out"
     previous = generation_dir(out, "previous")
     write_generation(previous)
@@ -118,7 +124,7 @@ def test_module_preflight_storage_failure_keeps_original_usage_error(repo, tmp_p
     def unavailable(*args, **kwargs):
         calls.append(args)
         raise PermissionError("storage error must not replace module error")
-    monkeypatch.setattr("attackmap.artifact_publisher.write_diagnostic", unavailable)
+    monkeypatch.setattr("attackmap.foundation.artifact_publisher.write_diagnostic", unavailable)
     monkeypatch.setattr(cli, "execute_scan_request", lambda *_a, **_k: pytest.fail("scan must not start"))
     argv = ["analyze", str(repo), "--output", str(tmp_path / "out"), "--module", "synthetic-missing"]
     if direct:
@@ -134,8 +140,14 @@ def test_module_preflight_storage_failure_keeps_original_usage_error(repo, tmp_p
 @pytest.mark.parametrize("direct", [False, True])
 def test_fleet_module_preflight_generic_diagnostic_and_direct_suppression(tmp_path, monkeypatch, direct):
     import json
+
     from artifact_fixture import write_generation
-    from attackmap.artifact_publisher import generation_dir, publish_generation, current_generation
+
+    from attackmap.foundation.artifact_publisher import (
+        current_generation,
+        generation_dir,
+        publish_generation,
+    )
     repos = [tmp_path / "repo one", tmp_path / "služba dvě"]
     for repo in repos:
         repo.mkdir()

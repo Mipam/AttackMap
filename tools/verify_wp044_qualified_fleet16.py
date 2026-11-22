@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import argparse
-from collections import Counter
 import json
 import os
+from collections import Counter
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from verify_wp018_closeout import ROOT, launch, collect, production_inputs, read, require, save, sha
+from verify_wp018_closeout import ROOT, collect, launch, production_inputs, read, require, save, sha
 
 FIXTURE = ROOT / "tests/fixtures/wp044_qualified_fleet16"
 MODULES = ["config", "javascript-web", "python-web"]

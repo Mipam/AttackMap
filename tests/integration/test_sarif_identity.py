@@ -8,11 +8,11 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from attackmap.fingerprint import assign_fingerprints
+from attackmap.extraction.scanner import scan_repo
 from attackmap.models import AttackPath, Finding, FindingLocation
-from attackmap.recon_to_analysis import translate_recon
-from attackmap.sarif import build_sarif
-from attackmap.scanner import scan_repo
+from attackmap.orchestration.recon_to_analysis import translate_recon
+from attackmap.output.fingerprint import assign_fingerprints
+from attackmap.output.sarif import build_sarif
 
 SCHEMA = json.loads((Path(__file__).parents[1] / "fixtures" / "sarif" / "sarif-schema-2.1.0.json").read_text(encoding="utf-8"))
 SECRET = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"

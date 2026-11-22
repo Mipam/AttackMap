@@ -1,17 +1,17 @@
 """Pre-resume Windows policy ordering and controlled actual OS allocation tests."""
 import json
 import os
-from pathlib import Path
 import sys
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
-from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+
 import attackmap.execution as execution
-from attackmap.execution import ProcessSupervisor
-from attackmap.execution import windows
-from attackmap import analyzer_host as host
+from attackmap.execution import ProcessSupervisor, windows
+from attackmap.extraction import analyzer_host as host
 
 
 def no_threads(monkeypatch):

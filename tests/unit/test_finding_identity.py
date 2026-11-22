@@ -3,11 +3,21 @@ import json
 
 import pytest
 
-from attackmap.diff import FindingSnapshot, diff_findings, load_baseline, render_diff_markdown
-from attackmap.finding_identity import dependency_entity_id, finding_id, legacy_finding_id, legacy_id_aliases
 from attackmap.models import Finding, FindingLocation, ScanResult, Vulnerability
-from attackmap.report import write_reports
-from attackmap.suppress import Suppression, SuppressionSet, apply_suppressions
+from attackmap.output.diff import (
+    FindingSnapshot,
+    diff_findings,
+    load_baseline,
+    render_diff_markdown,
+)
+from attackmap.output.finding_identity import (
+    dependency_entity_id,
+    finding_id,
+    legacy_finding_id,
+    legacy_id_aliases,
+)
+from attackmap.output.report import write_reports
+from attackmap.output.suppress import Suppression, SuppressionSet, apply_suppressions
 
 
 def finding(title="Old title", **changes):
@@ -59,7 +69,7 @@ def test_explicit_rule_rename_remains_new_and_resolved_without_guessed_mapping()
 
 
 def test_file_rename_is_visible_as_new_instance_without_guessed_mapping(tmp_path):
-    from attackmap.fingerprint import assign_fingerprints
+    from attackmap.output.fingerprint import assign_fingerprints
     for name in ("before.py", "after.py"):
         (tmp_path / name).write_text("run(value)\n")
     old = finding(locations=[FindingLocation(file="before.py", line=1)])
@@ -71,7 +81,7 @@ def test_file_rename_is_visible_as_new_instance_without_guessed_mapping(tmp_path
 
 
 def test_core_dependency_emitter_has_distinct_stable_entities_and_legacy_adapter():
-    from attackmap.threat_model import generate_findings
+    from attackmap.reasoning.threat_model import generate_findings
     scan = ScanResult(root="fixture", vulnerabilities=[
         Vulnerability(id="CVE-fixture-a", ecosystem="npm", package_name=name,
                       package_version="1.0.0", severity="high", summary="Fixture")

@@ -1,6 +1,3 @@
-from attackmap.asset_model import detect_assets
-from attackmap.control_model import detect_controls
-from attackmap.insights import generate_insights
 from attackmap.models import (
     AttackPath,
     AttackSurface,
@@ -12,7 +9,10 @@ from attackmap.models import (
     ScanResult,
     SecretHint,
 )
-from attackmap.security_overlay import build_security_overlay
+from attackmap.output.asset_model import detect_assets
+from attackmap.output.control_model import detect_controls
+from attackmap.output.insights import generate_insights
+from attackmap.output.security_overlay import build_security_overlay
 
 
 def _scan_with(**overrides) -> ScanResult:

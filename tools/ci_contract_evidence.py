@@ -6,10 +6,10 @@ import hashlib
 import importlib.metadata
 import json
 import os
-from pathlib import Path
 import platform
 import subprocess
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GROUPS = {
@@ -100,8 +100,8 @@ def require_exercised(name: str, applicable: bool, counts: dict[str, int], error
 
 
 def exercise(group: str) -> dict:
-    from attackmap.analyzers import get_builtin_repository_analyzers
-    from attackmap.index import RepoIndex, clear_pinned_index
+    from attackmap.extraction.index import RepoIndex, clear_pinned_index
+    from attackmap.orchestration.analyzers import get_builtin_repository_analyzers
     assert_core_origin()
     relative, names = GROUPS[group]
     root = (ROOT / relative).resolve()
@@ -127,7 +127,7 @@ def exercise(group: str) -> dict:
 
 
 def evaluate() -> dict:
-    from attackmap.evaluation import load_corpus, run_evaluation, report_json
+    from attackmap.orchestration.evaluation import load_corpus, report_json, run_evaluation
     assert_core_origin()
     corpus = load_corpus(ROOT / "fixtures/evaluation/corpus.json")
     report = run_evaluation(corpus, ROOT)

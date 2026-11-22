@@ -15,8 +15,7 @@ import json
 import random
 from pathlib import Path
 
-from attackmap.index import RepoIndex
-from attackmap.incremental import (
+from attackmap.extraction.incremental import (
     CACHE_SCHEMA,
     FileCacheKey,
     PerFileCache,
@@ -24,8 +23,9 @@ from attackmap.incremental import (
     engine_identity,
     source_policy_identity,
 )
-from attackmap.scanner import scan_files
-from attackmap.signal_provenance import merge_normalized_signals
+from attackmap.extraction.index import RepoIndex
+from attackmap.extraction.scanner import scan_files
+from attackmap.reasoning.signal_provenance import merge_normalized_signals
 
 N_SEQUENCES = 100
 
@@ -359,9 +359,10 @@ def test_frozen_code_identity_reuses_cache_and_invalidates_upgrade(monkeypatch, 
     """Source-less frozen layout must actually replay, then miss on code change."""
     import sys
     from types import SimpleNamespace
+
     import attackmap
-    import attackmap.incremental as incremental_mod
-    import attackmap.scanner as scanner_mod
+    import attackmap.extraction.incremental as incremental_mod
+    import attackmap.extraction.scanner as scanner_mod
 
     package = tmp_path / "bundle" / "attackmap"
     monkeypatch.setattr(attackmap, "__file__", str(package / "__init__.py"))
@@ -392,7 +393,7 @@ def test_frozen_code_identity_reuses_cache_and_invalidates_upgrade(monkeypatch, 
     warm = scan_files(repo, incremental=True, cache_dir=cache_dir)
     assert calls == [], "equality alone does not prove warm reuse"
     assert _normalized(cold) == _normalized(warm)
-    codes["attackmap.scanner"] = compile("def extractor():\n    return 2\n", "scanner", "exec")
+    codes["attackmap.extraction.scanner"] = compile("def extractor():\n    return 2\n", "scanner", "exec")
     assert engine_identity() != identity
     upgraded = scan_files(repo, incremental=True, cache_dir=cache_dir)
     assert calls == cold_calls
@@ -402,8 +403,10 @@ def test_frozen_code_identity_reuses_cache_and_invalidates_upgrade(monkeypatch, 
 def test_frozen_identity_missing_code_disables_cache_safely(monkeypatch, tmp_path):
     import sys
     from types import SimpleNamespace
+
     import pytest
-    import attackmap.incremental as incremental_mod
+
+    import attackmap.extraction.incremental as incremental_mod
 
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(incremental_mod.importlib.util, "find_spec",
@@ -471,7 +474,7 @@ def test_cache_survives_engine_generation_change(tmp_path: Path) -> None:
 
 
 def test_index_file_limit_default_is_c35_target() -> None:
-    from attackmap.index import DEFAULT_INDEX_FILE_LIMIT
+    from attackmap.extraction.index import DEFAULT_INDEX_FILE_LIMIT
     assert DEFAULT_INDEX_FILE_LIMIT == 100_000
     assert CACHE_SCHEMA == "attackmap-incremental/1.0"
 
@@ -489,7 +492,7 @@ def _key(cache: PerFileCache, rel: str, content: str) -> FileCacheKey:
 
 
 def _empty_payload() -> dict:
-    from attackmap.incremental import dump_payload
+    from attackmap.extraction.incremental import dump_payload
 
     return dump_payload({}, False)
 
@@ -524,7 +527,7 @@ def test_reopen_trims_a_file_written_under_a_larger_bound(tmp_path: Path) -> Non
 
 
 def test_default_bound_is_the_documented_constant(tmp_path: Path) -> None:
-    from attackmap.incremental import MAX_CACHE_ENTRIES
+    from attackmap.extraction.incremental import MAX_CACHE_ENTRIES
 
     assert PerFileCache.open(tmp_path / "cache.json").max_entries == MAX_CACHE_ENTRIES
     assert MAX_CACHE_ENTRIES == 50_000
@@ -533,7 +536,7 @@ def test_default_bound_is_the_documented_constant(tmp_path: Path) -> None:
 def test_env_activation_flag_activates_cache(monkeypatch, tmp_path: Path) -> None:
     """ATTACKMAP_INCREMENTAL=1 (set by the CLI --incremental flag) activates
     the cache exactly like incremental=True, and stays off by default."""
-    from attackmap.incremental import enabled_by_env
+    from attackmap.extraction.incremental import enabled_by_env
 
     repo = tmp_path / "repo"
     repo.mkdir()

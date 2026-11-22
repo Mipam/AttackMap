@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from attackmap.bench import (
+from attackmap.orchestration.bench import (
     Benchmark,
     Case,
     Expected,
@@ -160,7 +160,7 @@ def test_line_fallback_only_when_finding_has_no_route():
 
 def test_f1_is_zero_not_none_when_precision_or_recall_zero():
     # Codex P2: 1 FP + 1 miss → precision 0, recall 0, F1 defined as 0.0.
-    from attackmap.bench import CategoryScore
+    from attackmap.orchestration.bench import CategoryScore
     cs = CategoryScore(category="injection", tp=0, fp=1,
                        matched_expected=[], missed_expected=["x"])
     assert cs.precision == 0.0 and cs.recall == 0.0

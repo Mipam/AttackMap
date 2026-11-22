@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
+import json
 import math
 import subprocess
-import json
 import time
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 import pytest
-
-from attackmap import scan_service
-from attackmap.orchestration.run_spec import RunSpec
-from attackmap.pipeline import RunState
-from attackmap.scan_service import ScanRequest, execute_scan_request
 from artifact_fixture import write_generation
-from attackmap.artifact_publisher import current_generation, publish_generation
+
+from attackmap.foundation.artifact_publisher import current_generation, publish_generation
+from attackmap.orchestration import scan_service
+from attackmap.orchestration.pipeline import RunState
+from attackmap.orchestration.run_spec import RunSpec
+from attackmap.orchestration.scan_service import ScanRequest, execute_scan_request
 
 
 def test_supervised_worker_cancel_waits_for_verified_cleanup(monkeypatch):
@@ -566,7 +566,7 @@ def test_cli_fleet_workers_spawns_parallel_subprocesses(
     """Ordinary parallel CLI workers preserve the requested isolation policy."""
     from typer.testing import CliRunner
 
-    from attackmap.cli import app
+    from attackmap.surfaces.cli import app
 
     a, b = tmp_path / "a", tmp_path / "b"
     a.mkdir()
@@ -609,7 +609,7 @@ def test_cli_fleet_workers_spawns_parallel_subprocesses(
 def test_cli_serial_fleet_preserves_isolation_policy(monkeypatch, tmp_path, isolated):
     from typer.testing import CliRunner
 
-    from attackmap.cli import app
+    from attackmap.surfaces.cli import app
 
     repos = [tmp_path / name for name in ("a", "b")]
     for repo in repos:

@@ -10,8 +10,8 @@ import hashlib
 import json
 import shutil
 import stat
-from pathlib import Path
 import zipfile
+from pathlib import Path
 
 
 def digest(path: Path) -> str:

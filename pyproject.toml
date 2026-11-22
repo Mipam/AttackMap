@@ -100,7 +100,7 @@ Issues = "https://github.com/mlaify/AttackMap/issues"
 Changelog = "https://github.com/mlaify/AttackMap/blob/main/CHANGELOG.md"
 
 [project.scripts]
-attackmap = "attackmap.cli:app"
+attackmap = "attackmap.surfaces.cli:app"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -109,8 +109,10 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-# Declarative taint sink registry (#240).
-attackmap = ["taint_sinks.yaml", "ui/web/**/*", "ui/fixtures/*.json"]
+# Declarative taint sink registry (#240) lives next to reasoning/taint_sinks.py;
+# the desktop UI assets live under surfaces/ui (AR029 subpackage restructure).
+attackmap.reasoning = ["taint_sinks.yaml"]
+attackmap.surfaces.ui = ["web/**/*", "fixtures/*.json"]
 
 [tool.setuptools.dynamic]
 version = {attr = "attackmap.__version__"}
@@ -161,7 +163,7 @@ known-first-party = ["attackmap"]
 [tool.ruff.lint.per-file-ignores]
 # The typer CLI uses `Option(...)`/`Argument(...)` call defaults by design —
 # that is the framework's own idiom for declaring options (B008).
-"src/attackmap/cli.py" = ["B008"]
+"src/attackmap/surfaces/cli.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.11"

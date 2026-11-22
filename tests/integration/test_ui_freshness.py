@@ -11,11 +11,10 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 import pytest
-
 from artifact_fixture import write_generation
 
-from attackmap.ui.report import decode_report
-from attackmap.ui.server import LoopbackApp, _apply_config, _start_scan, make_server
+from attackmap.surfaces.ui.report import decode_report
+from attackmap.surfaces.ui.server import LoopbackApp, _apply_config, _start_scan, make_server
 
 
 class FakeRunner:
@@ -38,7 +37,7 @@ class FakeRunner:
 @pytest.fixture
 def app(tmp_path, monkeypatch):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
-    monkeypatch.setattr("attackmap.ui.server._refresh_missing", lambda app: None)
+    monkeypatch.setattr("attackmap.surfaces.ui.server._refresh_missing", lambda app: None)
     instance = LoopbackApp()
     instance.runner = FakeRunner()
     repo = tmp_path / "repo"

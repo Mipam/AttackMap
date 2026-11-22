@@ -1,8 +1,8 @@
 """The frozen entry admits only the owned isolated analyzer worker."""
 import importlib.util
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
@@ -15,17 +15,17 @@ def entry(monkeypatch):
     spec.loader.exec_module(module)
     calls = []
     monkeypatch.setattr(module, "configure_redirected_stdio", lambda: calls.append("stdio"))
-    monkeypatch.setitem(sys.modules, "attackmap.cli", types.SimpleNamespace(app=lambda: calls.append("cli")))
+    monkeypatch.setitem(sys.modules, "attackmap.surfaces.cli", types.SimpleNamespace(app=lambda: calls.append("cli")))
     def worker(argv):
         calls.append(("worker", argv))
         return 7
-    monkeypatch.setitem(sys.modules, "attackmap.analyzer_host", types.SimpleNamespace(_main=worker))
+    monkeypatch.setitem(sys.modules, "attackmap.extraction.analyzer_host", types.SimpleNamespace(_main=worker))
     return module, calls
 
 
 def test_frozen_owned_worker_dispatch_preserves_worker_arguments(entry, monkeypatch):
     module, calls = entry
-    argv = ["engine.exe", "-m", "attackmap.analyzer_host", "--worker", "--repo", "repo"]
+    argv = ["engine.exe", "-m", "attackmap.extraction.analyzer_host", "--worker", "--repo", "repo"]
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "argv", argv)
     with pytest.raises(SystemExit) as error:
@@ -35,10 +35,10 @@ def test_frozen_owned_worker_dispatch_preserves_worker_arguments(entry, monkeypa
 
 
 @pytest.mark.parametrize("arguments", [
-    [], ["-m"], ["-m", "attackmap.analyzer_host"],
+    [], ["-m"], ["-m", "attackmap.extraction.analyzer_host"],
     ["-m", "foreign.module", "--worker"],
-    ["-m", "attackmap.analyzer_host", "--help"],
-    ["-m", "attackmap.analyzer_host.extra", "--worker"],
+    ["-m", "attackmap.extraction.analyzer_host", "--help"],
+    ["-m", "attackmap.extraction.analyzer_host.extra", "--worker"],
     ["desktop-worker", "--request", "request.json"],
     ["desktop-action", "--request", "request.json"],
 ])
@@ -53,6 +53,6 @@ def test_frozen_other_invocations_retain_cli_dispatch(entry, monkeypatch, argume
 def test_source_entry_does_not_emulate_interpreter_dispatch(entry, monkeypatch):
     module, calls = entry
     monkeypatch.delattr(sys, "frozen", raising=False)
-    monkeypatch.setattr(sys, "argv", ["python", "-m", "attackmap.analyzer_host", "--worker"])
+    monkeypatch.setattr(sys, "argv", ["python", "-m", "attackmap.extraction.analyzer_host", "--worker"])
     module.main()
     assert calls == ["stdio", "cli"]

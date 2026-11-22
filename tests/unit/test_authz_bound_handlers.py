@@ -3,13 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.index import RepoIndex
-from attackmap.authz import analyze_authz
-from attackmap.authz_js_handlers import _handler_binding
-from attackmap.bench import Expected, _matches
+from attackmap.extraction.index import RepoIndex
+from attackmap.extraction.scanner import scan_files, scan_repo
 from attackmap.models import Route
-from attackmap.scanner import scan_files, scan_repo
-from attackmap.threat_model import generate_findings
+from attackmap.orchestration.bench import Expected, _matches
+from attackmap.reasoning.authz import analyze_authz
+from attackmap.reasoning.authz_js_handlers import _handler_binding
+from attackmap.reasoning.threat_model import generate_findings
 
 
 def _repo(tmp_path: Path, body: str, *, registration: str = "loadOrder()", imports: str = "import { loadOrder } from './orders'", role: str = "") -> Path:

@@ -7,7 +7,8 @@ from typing import Annotated, Literal, get_args
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 
-from ..redact import redact_text
+from attackmap.foundation.redact import redact_text
+
 from .evidence import _PROVENANCE_FIELD, _RedactedEvidence
 
 RouteAuth = Literal["required", "anonymous", "unknown"]
@@ -525,7 +526,7 @@ class AttackSurface(BaseModel):
     @computed_field
     @property
     def evidence_class(self) -> str:
-        from ..evidence import surface_evidence_class
+        from attackmap.extraction.evidence import surface_evidence_class
 
         return surface_evidence_class(self)
 

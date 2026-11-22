@@ -20,12 +20,12 @@ from __future__ import annotations
 
 from itertools import permutations
 
-from attackmap.analyzer import identify_attack_surfaces
-from attackmap.exploitability import score_exploitability
-from attackmap.finding_presentation import FindingPresentationIndex
 from attackmap.models import AttackSurface, Finding, Route, ScanResult, TaintChain
-from attackmap.threat_model import compute_finding_score, generate_findings
-from attackmap.triage import rank_findings
+from attackmap.output.finding_presentation import FindingPresentationIndex
+from attackmap.output.triage import rank_findings
+from attackmap.reasoning.analyzer import identify_attack_surfaces
+from attackmap.reasoning.exploitability import score_exploitability
+from attackmap.reasoning.threat_model import compute_finding_score, generate_findings
 
 
 def _finding(title: str, severity: str, confidence: str) -> Finding:

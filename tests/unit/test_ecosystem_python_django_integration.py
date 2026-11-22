@@ -3,8 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.ecosystem_python import scan_python_services
-
+from attackmap.extraction.ecosystems.ecosystem_python import scan_python_services
 
 AUTH = "django.contrib.auth.middleware.AuthenticationMiddleware"
 LOGIN = "django.contrib.auth.middleware.LoginRequiredMiddleware"

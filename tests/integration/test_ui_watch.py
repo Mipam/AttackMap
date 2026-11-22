@@ -14,13 +14,13 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.artifact_manifest import write_artifact_manifest
-from attackmap.safe_fs import OUTPUT_MARKER
-from attackmap.ui import server as ui_server
-from attackmap.ui import watch as ui_watch
-from attackmap.ui.run_state import GuiRunState
-from attackmap.ui.server import LoopbackApp, _drain_watch_pending, _sync_watch
-from attackmap.ui.watch import Watcher
+from attackmap.foundation.artifact_manifest import write_artifact_manifest
+from attackmap.foundation.safe_fs import OUTPUT_MARKER
+from attackmap.surfaces.ui import server as ui_server
+from attackmap.surfaces.ui import watch as ui_watch
+from attackmap.surfaces.ui.run_state import GuiRunState
+from attackmap.surfaces.ui.server import LoopbackApp, _drain_watch_pending, _sync_watch
+from attackmap.surfaces.ui.watch import Watcher
 
 
 def _records(*names: str) -> bytes:

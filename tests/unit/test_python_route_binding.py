@@ -1,8 +1,7 @@
 """Imported identities and fail-closed mount observations, without execution."""
 import pytest
 
-from attackmap.python_route_binding import BindingIndex
-
+from attackmap.extraction.ecosystems.python_route_binding import BindingIndex
 
 ROUTER = '''from fastapi import APIRouter
 router = APIRouter(prefix="/items")

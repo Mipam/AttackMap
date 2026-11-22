@@ -14,20 +14,20 @@ from pathlib import Path
 
 import pytest
 
-from attackmap import pipeline
-from attackmap.analyzers import BuiltinPythonWebAnalyzer
-from attackmap.application_errors import AnalysisConfigurationError
-from attackmap.artifact_publisher import current_generation
-from attackmap.graph import build_graph, resolve_max_graph_edges
+from attackmap.foundation.application_errors import AnalysisConfigurationError
+from attackmap.foundation.artifact_publisher import current_generation
 from attackmap.models import ExternalCall, ScanResult
-from attackmap.orchestration.run_spec import RunSpec
-from attackmap.pipeline import (
+from attackmap.orchestration import pipeline
+from attackmap.orchestration.analyzers import BuiltinPythonWebAnalyzer
+from attackmap.orchestration.pipeline import (
     DEFAULT_TIME_BUDGET_SECONDS,
     TIME_BUDGET_ENV,
     TimeBudget,
     resolve_time_budget_seconds,
     run_scan,
 )
+from attackmap.orchestration.run_spec import RunSpec
+from attackmap.output.graph import build_graph, resolve_max_graph_edges
 
 _spec = importlib.util.spec_from_file_location(
     "gen_stress_repo", Path(__file__).parents[2] / "tools" / "gen_stress_repo.py"

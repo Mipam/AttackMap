@@ -14,13 +14,12 @@ import faulthandler
 import hashlib
 import json
 import os
-from pathlib import Path
 import platform
 import shutil
 import subprocess
 import sys
 import time
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TWO_GIB = 2 * 1024**3
@@ -28,8 +27,8 @@ EXPECTED_PYTHON = ROOT / ".tools" / "wp024-freeze-venv" / "Scripts" / "python.ex
 
 
 def scope() -> dict:
-    from attackmap.analyzers import get_available_modules, get_registered_analyzers
     import attackmap
+    from attackmap.orchestration.analyzers import get_available_modules, get_registered_analyzers
     modules = sorted((item.model_dump(mode="json") for item in get_available_modules()),key=lambda item:item["name"])
     code = hashlib.sha256()
     packages = set()
@@ -144,9 +143,9 @@ def worker(folder: Path) -> int:
         raise ValueError("Worker requires a campaign-owned fixture directory")
     write(folder / "runtime-identity.json", {"pid": os.getpid(), "parent_pid": os.getppid(),
           "sys_executable": sys.executable, "engine_source": str(ROOT)})
-    from attackmap import pipeline
-    from attackmap.analyzers import get_analyzer_metadata
-    from attackmap.index import RepoIndex
+    from attackmap.extraction.index import RepoIndex
+    from attackmap.orchestration import pipeline
+    from attackmap.orchestration.analyzers import get_analyzer_metadata
     admitted_scope = scope()
     if admitted_scope["discovered_module_count"] != 21:
         raise ValueError("WP034 campaign requires the agreed 21-module discovery scope")
@@ -270,7 +269,7 @@ def main() -> int:
     process_peaks = {}
     tree_samples_incomplete = 0
     from attackmap.execution.windows import WindowsProcessJob
-    from attackmap.analyzer_host import _query_job_peak_memory
+    from attackmap.extraction.analyzer_host import _query_job_peak_memory
     job = WindowsProcessJob()
     with (folder / "stdout.log").open("w",encoding="utf-8") as stdout, (folder / "stderr.log").open("w",encoding="utf-8") as stderr, (folder / "owned-tree-samples.ndjson").open("x",encoding="utf-8") as samples_log:
         process = subprocess.Popen(command,stdout=stdout,stderr=stderr,cwd=snapshot,env=child_env,creationflags=0x00000004)

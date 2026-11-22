@@ -17,16 +17,16 @@ from pathlib import Path
 import pytest
 
 import attackmap
-import attackmap.incremental as cache_mod
-import attackmap.scanner as scanner_mod
-from attackmap.analyzers import (
+import attackmap.extraction.incremental as cache_mod
+import attackmap.extraction.scanner as scanner_mod
+from attackmap.extraction.index import RepoIndex, clear_pinned_index
+from attackmap.orchestration.analyzers import (
     BuiltinConfigAnalyzer,
     BuiltinJavaScriptWebAnalyzer,
     BuiltinPythonWebAnalyzer,
     analyze_repository,
 )
-from attackmap.index import RepoIndex, clear_pinned_index
-from attackmap.recon_to_analysis import translate_recon
+from attackmap.orchestration.recon_to_analysis import translate_recon
 
 SEED_BASE = 2026103100
 MUTATIONS = ("edit", "add", "rename", "delete", "dependency", "config",
@@ -170,7 +170,7 @@ def _mutate(kind: str, repo: Path, cache: Path, state: dict, step: int, monkeypa
     elif kind == "analyzer_upgrade":
         before = cache_mod.engine_identity()
         package = _identity_copy(cache.parent, monkeypatch)
-        target = package / "analyzers.py"
+        target = package / "orchestration" / "analyzers.py"
         with target.open("a", encoding="utf-8") as stream:
             stream.write(f"\n# WP033 disposable source identity upgrade {suffix}\n")
         monkeypatch.setattr(BuiltinPythonWebAnalyzer, "metadata",

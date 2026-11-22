@@ -8,17 +8,16 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.config_scanner import extract_deployment_aliases
-from attackmap.contracts import DeploymentAliases, link_contracts
-from attackmap.crossrepo import find_cross_boundary_flows, find_trust_gaps
-from attackmap.exploitability import score_exploitability
-from attackmap.finding_presentation import FindingPresentationIndex
-from attackmap.fleet import FleetRepoResult, FleetScan
-from attackmap.fleet_architecture import build_fleet_architecture
-from attackmap.index import RepoIndex, clear_pinned_index
+from attackmap.extraction.config_scanner import extract_deployment_aliases
+from attackmap.extraction.contracts import DeploymentAliases, link_contracts
+from attackmap.extraction.index import RepoIndex, clear_pinned_index
 from attackmap.models import AttackSurface, ExternalCall, Route, ScanResult, TaintChain
-from attackmap.threat_model import generate_findings
-
+from attackmap.orchestration.fleet import FleetRepoResult, FleetScan
+from attackmap.orchestration.fleet_architecture import build_fleet_architecture
+from attackmap.output.finding_presentation import FindingPresentationIndex
+from attackmap.reasoning.crossrepo import find_cross_boundary_flows, find_trust_gaps
+from attackmap.reasoning.exploitability import score_exploitability
+from attackmap.reasoning.threat_model import generate_findings
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "wp032_protocol_fleet"
 UPPER, LOWER = "/Api/Items/{id}", "/api/items/{id}"

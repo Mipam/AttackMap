@@ -15,7 +15,8 @@ from typing import ClassVar
 
 import pytest
 
-from attackmap.fleet import FleetScan
+from attackmap.orchestration.fleet import FleetScan
+from attackmap.orchestration.pipeline import RunState
 from attackmap.orchestration.run_spec import (
     AiSpec,
     AnalyzerSelection,
@@ -24,9 +25,12 @@ from attackmap.orchestration.run_spec import (
     FleetSpec,
     RunSpec,
 )
-from attackmap.pipeline import RunState
-from attackmap.scan_service import ScanRequest, _run_fleet_serial, execute_scan_request
-from attackmap.ui.config import ScanConfig
+from attackmap.orchestration.scan_service import (
+    ScanRequest,
+    _run_fleet_serial,
+    execute_scan_request,
+)
+from attackmap.surfaces.ui.config import ScanConfig
 
 # AC-105's contract verify (`pytest -m contract -k runspec`) and the unit leg
 # both select this module; every test name carries the "runspec" stem.
@@ -289,7 +293,7 @@ def test_runspec_no_feature_flag_env_writes():
 
 
 def test_runspec_threads_through_execute_scan_request(monkeypatch):
-    from attackmap import scan_service
+    from attackmap.orchestration import scan_service
 
     captured: dict = {}
     monkeypatch.setattr(scan_service, "ensure_output_dir", lambda path, mark=False: path)
@@ -313,7 +317,7 @@ def test_runspec_threads_through_execute_scan_request(monkeypatch):
 
 
 def test_runspec_threads_through_fleet_serial(monkeypatch):
-    from attackmap import scan_service
+    from attackmap.orchestration import scan_service
 
     captured: dict = {}
     request = ScanRequest(repo_paths=[Path("r1"), Path("r2")], output=Path("out"),
@@ -332,7 +336,7 @@ def test_runspec_threads_through_fleet_serial(monkeypatch):
 
 def test_runspec_pipeline_run_scan_reads_spec_groups(monkeypatch):
     """AR025: the pipeline consumes spec groups (spot-check the AI gate)."""
-    from attackmap import pipeline
+    from attackmap.orchestration import pipeline
 
     calls: dict = {}
 

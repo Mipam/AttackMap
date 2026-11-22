@@ -1,12 +1,20 @@
 """Launch the real headless C# fleet consumer in an owned Windows Job."""
 import argparse
 import os
-from pathlib import Path
 import subprocess
 import sys
 import time
+from pathlib import Path
 
-from verify_wp018_native import ROOT, WindowsJob, census, descendants, require, save, inherited_error_mode
+from verify_wp018_native import (
+    ROOT,
+    WindowsJob,
+    census,
+    descendants,
+    inherited_error_mode,
+    require,
+    save,
+)
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--engine", type=Path, required=True)

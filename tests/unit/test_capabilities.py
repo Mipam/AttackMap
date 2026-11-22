@@ -7,8 +7,8 @@ import json
 from typer.testing import CliRunner
 
 from attackmap import __version__
-from attackmap.cli import app
-from attackmap.progress import PROGRESS_PROTOCOL_VERSION
+from attackmap.extraction.progress import PROGRESS_PROTOCOL_VERSION
+from attackmap.surfaces.cli import app
 
 
 def test_capabilities_json() -> None:

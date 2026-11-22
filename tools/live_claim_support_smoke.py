@@ -16,8 +16,8 @@ from pathlib import Path
 os.environ.setdefault("OPENAI_BASE_URL", "http://127.0.0.1:1234/v1")
 os.environ.setdefault("OPENAI_API_KEY", "attackmap-local")
 
-from attackmap.llm_review import generate_llm_review  # noqa: E402
 from attackmap.models import AttackPath, AttackSurface, Finding, ScanResult  # noqa: E402
+from attackmap.output.llm_review import generate_llm_review  # noqa: E402
 
 GENERATION = sorted(
     p for p in Path(".pytest_cache/m5-juice-shop").iterdir()

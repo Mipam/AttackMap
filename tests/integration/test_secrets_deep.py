@@ -18,12 +18,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from attackmap.cli import app
-from attackmap.config_scanner import scan_config_repo
-from attackmap.recon_to_analysis import translate_recon
-from attackmap.scanner import scan_repo
-from attackmap.secrets_history import scan_secret_history
-from attackmap.threat_model import rule_catalog
+from attackmap.extraction.config_scanner import scan_config_repo
+from attackmap.extraction.scanner import scan_repo
+from attackmap.extraction.secrets_history import scan_secret_history
+from attackmap.orchestration.recon_to_analysis import translate_recon
+from attackmap.reasoning.threat_model import rule_catalog
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
@@ -236,7 +236,7 @@ def test_history_does_not_run_repo_config_or_hooks(history_repo, tmp_path: Path)
 
 
 def test_history_on_a_non_git_directory() -> None:
-    from attackmap.gitref import hardened_git_command, hardened_git_env
+    from attackmap.foundation.gitref import hardened_git_command, hardened_git_env
 
     with tempfile.TemporaryDirectory(prefix="attackmap-non-git-test-") as owned:
         root = Path(owned)

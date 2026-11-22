@@ -5,11 +5,16 @@ import sys
 
 import pytest
 
-from attackmap.artifact_manifest import write_artifact_manifest
-from attackmap.artifact_publisher import (
-    current_generation, export_compatibility, generation_dir, publish_generation, validate_generation, write_diagnostic,
+from attackmap.foundation.artifact_manifest import write_artifact_manifest
+from attackmap.foundation.artifact_publisher import (
+    current_generation,
+    export_compatibility,
+    generation_dir,
+    publish_generation,
+    validate_generation,
+    write_diagnostic,
 )
-from attackmap.safe_fs import UnsafePathError, safe_write_text
+from attackmap.foundation.safe_fs import UnsafePathError, safe_write_text
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Actual Windows junction destination")
@@ -35,7 +40,7 @@ def test_owned_junction_blocks_diagnostics_and_generation_without_feature_skip(t
         write_diagnostic(output, "junction-run", state="failed")
     with pytest.raises(UnsafePathError, match="redirected"):
         generation_dir(output, "junction-run")
-    from attackmap.artifact_publisher import prepare_output_root
+    from attackmap.foundation.artifact_publisher import prepare_output_root
     with pytest.raises(UnsafePathError, match="redirected"):
         prepare_output_root(output)
     assert sentinel.read_bytes() == before
@@ -44,7 +49,7 @@ def test_owned_junction_blocks_diagnostics_and_generation_without_feature_skip(t
 
 
 def test_safe_artifact_path_allows_missing_normal_components(tmp_path):
-    from attackmap.artifact_publisher import _safe
+    from attackmap.foundation.artifact_publisher import _safe
     output = tmp_path / "not-created" / "reports"
     assert _safe(output) == output
     path = write_diagnostic(output, "normal", state="failed")
@@ -52,8 +57,8 @@ def test_safe_artifact_path_allows_missing_normal_components(tmp_path):
 
 
 def test_prepare_output_root_creates_only_marker_and_missing_parents(tmp_path):
-    from attackmap.artifact_publisher import prepare_output_root
-    from attackmap.safe_fs import OUTPUT_MARKER
+    from attackmap.foundation.artifact_publisher import prepare_output_root
+    from attackmap.foundation.safe_fs import OUTPUT_MARKER
     output = tmp_path / "missing-parent" / "reports"
     assert prepare_output_root(output) == output
     assert [path.name for path in output.iterdir()] == [OUTPUT_MARKER]
@@ -61,7 +66,8 @@ def test_prepare_output_root_creates_only_marker_and_missing_parents(tmp_path):
 
 def test_artifact_lstat_io_failure_is_typed_and_fails_closed(tmp_path, monkeypatch):
     from pathlib import Path
-    from attackmap.artifact_publisher import _safe
+
+    from attackmap.foundation.artifact_publisher import _safe
     real = Path.lstat
     def denied(self):
         if self == tmp_path:
@@ -70,10 +76,10 @@ def test_artifact_lstat_io_failure_is_typed_and_fails_closed(tmp_path, monkeypat
     monkeypatch.setattr(Path, "lstat", denied)
     with pytest.raises(UnsafePathError, match="Cannot verify artifact path"):
         _safe(tmp_path / "missing")
-    from attackmap.artifact_publisher import prepare_output_root
+    from attackmap.foundation.artifact_publisher import prepare_output_root
     def should_not_create(*args, **kwargs):
         raise AssertionError("Output creation preceded validation")
-    monkeypatch.setattr("attackmap.artifact_publisher.ensure_output_dir", should_not_create)
+    monkeypatch.setattr("attackmap.foundation.artifact_publisher.ensure_output_dir", should_not_create)
     with pytest.raises(UnsafePathError, match="Cannot verify artifact path"):
         prepare_output_root(tmp_path / "missing")
 
@@ -81,7 +87,8 @@ def test_artifact_lstat_io_failure_is_typed_and_fails_closed(tmp_path, monkeypat
 def test_reparse_ancestor_checked_before_descendant(tmp_path, monkeypatch):
     from pathlib import Path
     from types import SimpleNamespace
-    from attackmap.artifact_publisher import _safe
+
+    from attackmap.foundation.artifact_publisher import _safe
     real = Path.lstat
     inspected = []
     def redirected(self):
@@ -97,7 +104,7 @@ def test_reparse_ancestor_checked_before_descendant(tmp_path, monkeypatch):
 
 
 def test_diagnostic_fallback_preserves_rich_context_and_safe_timing(tmp_path):
-    from attackmap.diagnostics import startup_diagnostic, unknown_diagnostic
+    from attackmap.foundation.diagnostics import startup_diagnostic, unknown_diagnostic
     rich = startup_diagnostic("select_analyzers", duration_milliseconds=12.5, requested_analyzers=["python"])
     timing = {"schema_version": "1.0", "clock": "engine_utc", "scope": "analysis_pipeline_before_publication",
               "started_at": "2026-10-15T00:00:00+00:00", "finished_at": "2026-10-15T00:00:01+00:00", "outcome": "failed"}
@@ -115,8 +122,8 @@ def test_diagnostic_fallback_preserves_rich_context_and_safe_timing(tmp_path):
 
 
 def test_staged_diagnostic_context_is_bounded_and_recovers_nested_failure(tmp_path):
-    from attackmap.diagnostics import startup_diagnostic
-    from attackmap.artifact_publisher import diagnostic_context_from_generation
+    from attackmap.foundation.artifact_publisher import diagnostic_context_from_generation
+    from attackmap.foundation.diagnostics import startup_diagnostic
     folder = tmp_path / "one"
     folder.mkdir()
     (folder / "run-manifest.json").write_text(" " * 1_000_001)
@@ -129,7 +136,7 @@ def test_staged_diagnostic_context_is_bounded_and_recovers_nested_failure(tmp_pa
 
 
 def test_staged_context_refuses_redirected_metadata(tmp_path):
-    from attackmap.artifact_publisher import diagnostic_context_from_generation
+    from attackmap.foundation.artifact_publisher import diagnostic_context_from_generation
     folder = tmp_path / "one"
     folder.mkdir()
     outside = tmp_path / "outside.json"
@@ -143,8 +150,8 @@ def test_staged_context_refuses_redirected_metadata(tmp_path):
 
 @pytest.mark.parametrize("change", [{"run_id": "foreign"}, {"schema_version": "9.0"}])
 def test_foreign_diagnostic_identity_cannot_supply_context(tmp_path, change):
-    from attackmap.diagnostics import startup_diagnostic
-    from attackmap.artifact_publisher import diagnostic_context_from_generation
+    from attackmap.foundation.artifact_publisher import diagnostic_context_from_generation
+    from attackmap.foundation.diagnostics import startup_diagnostic
     folder = tmp_path / "one"
     path = write_diagnostic(folder, "one", state="failed", context=startup_diagnostic("select_analyzers", duration_milliseconds=12))
     payload = json.loads(path.read_text())
@@ -156,8 +163,8 @@ def test_foreign_diagnostic_identity_cannot_supply_context(tmp_path, change):
 
 
 def test_reversed_timing_and_foreign_generation_are_not_borrowed(tmp_path):
-    from attackmap.diagnostics import startup_diagnostic
-    from attackmap.artifact_publisher import diagnostic_context_from_generation
+    from attackmap.foundation.artifact_publisher import diagnostic_context_from_generation
+    from attackmap.foundation.diagnostics import startup_diagnostic
     folder = tmp_path / "one"
     timing = {"schema_version": "1.0", "clock": "engine_utc", "scope": "analysis_pipeline_before_publication",
               "started_at": "2026-10-15T00:00:02+00:00", "finished_at": "2026-10-15T00:00:01+00:00", "outcome": "failed"}
@@ -258,7 +265,7 @@ def test_replace_failure_preserves_current(tmp_path, monkeypatch):
     stage(tmp_path, "new")
     def fail(*args):
         raise OSError("replace denied")
-    monkeypatch.setattr("attackmap.artifact_publisher.os.replace", fail)
+    monkeypatch.setattr("attackmap.foundation.artifact_publisher.os.replace", fail)
     with pytest.raises(OSError):
         publish_generation(tmp_path, "new")
     assert current_generation(tmp_path) == old
@@ -275,14 +282,14 @@ def test_interrupted_write_preserves_current(tmp_path, monkeypatch, filename):
             original(base, path, text[:len(text) // 2])
             raise OSError("interrupted write")
         original(base, path, text)
-    monkeypatch.setattr("attackmap.artifact_publisher.safe_write_text", interrupted)
+    monkeypatch.setattr("attackmap.foundation.artifact_publisher.safe_write_text", interrupted)
     with pytest.raises(OSError):
         publish_generation(tmp_path, "new")
     assert current_generation(tmp_path) == old
 
 
 def test_compatibility_export_and_generated_pointer(tmp_path):
-    from attackmap.artifact_manifest import generated_artifact_names
+    from attackmap.foundation.artifact_manifest import generated_artifact_names
     folder = stage(tmp_path, "new")
     publish_generation(tmp_path, "new")
     exported = export_compatibility(tmp_path, folder)
@@ -296,13 +303,13 @@ def test_compatibility_export_and_generated_pointer(tmp_path):
 
 
 def test_invalid_pointer_is_not_generated(tmp_path):
-    from attackmap.artifact_manifest import generated_artifact_names
+    from attackmap.foundation.artifact_manifest import generated_artifact_names
     (tmp_path / "current-generation.json").write_text('{"generation":"invented"}')
     assert not generated_artifact_names(tmp_path, ["current-generation.json"])
 
 
 def test_fleet_verifies_bound_children(tmp_path):
-    from attackmap.artifact_publisher import write_fleet_manifest
+    from attackmap.foundation.artifact_publisher import write_fleet_manifest
     fleet = generation_dir(tmp_path, "fleet-run")
     child = stage(fleet / "service", "child-run")
     publish_generation(fleet / "service", "child-run")
@@ -348,7 +355,7 @@ def test_process_exit_before_commit_preserves_previous(tmp_path, point):
     stage(tmp_path, "new")
     script = (
         "import os, sys\nfrom pathlib import Path\n"
-        "from attackmap.artifact_publisher import publish_generation\n"
+        "from attackmap.foundation.artifact_publisher import publish_generation\n"
         "def boundary(name):\n"
         "    if name == sys.argv[2]: os._exit(99)\n"
         "publish_generation(Path(sys.argv[1]), 'new', boundary=boundary)\n"
@@ -373,7 +380,7 @@ def test_pointer_symlink_cannot_redirect_publication(tmp_path):
 
 
 def test_failed_diagnostics_do_not_become_source_inputs(tmp_path):
-    from attackmap.safe_fs import walk_repo
+    from attackmap.foundation.safe_fs import walk_repo
     source = tmp_path / "app.py"
     source.write_text("print('source')")
     diagnostic = write_diagnostic(tmp_path, "failed-run", state="failed", error="parser failed")
@@ -382,7 +389,7 @@ def test_failed_diagnostics_do_not_become_source_inputs(tmp_path):
 
 
 def fleet_stage(base, run):
-    from attackmap.artifact_publisher import write_fleet_manifest
+    from attackmap.foundation.artifact_publisher import write_fleet_manifest
     fleet = generation_dir(base, run)
     child = stage(fleet / "service", "child-run")
     (child / "user-source.py").write_text("must not export")
@@ -502,7 +509,7 @@ def _terminate_worker_at_hold(base, run_id, mode, target, marker, timeout=25.0):
 
 
 def _assert_recovery_after_fault(base, old):
-    from attackmap.artifact_publisher import diagnostic_context_from_generation
+    from attackmap.foundation.artifact_publisher import diagnostic_context_from_generation
     context = diagnostic_context_from_generation(base, "new", outcome="failed")
     diagnostic = write_diagnostic(base, "new", state="failed", context=context)
     payload = json.loads(diagnostic.read_text())
@@ -520,7 +527,7 @@ def _assert_recovery_after_fault(base, old):
 @pytest.mark.skipif(os.name != "nt", reason="Real-OS Windows interrupted-write matrix")
 @pytest.mark.parametrize("target", ["run-manifest.json", "artifact-manifest.json", "pointer"])
 def test_terminated_process_midwrite_keeps_previous_generation_current(tmp_path, target):
-    from attackmap.artifact_publisher import CURRENT_POINTER
+    from attackmap.foundation.artifact_publisher import CURRENT_POINTER
     base = tmp_path / "reports"
     old = stage(base, "old")
     publish_generation(base, "old")
@@ -545,7 +552,7 @@ def test_terminated_process_midwrite_keeps_previous_generation_current(tmp_path,
 
 @pytest.mark.skipif(os.name != "nt", reason="Real-OS Windows interrupted-write matrix")
 def test_terminated_process_before_commit_leaves_stray_tmp_but_never_mixes(tmp_path):
-    from attackmap.artifact_publisher import CURRENT_POINTER
+    from attackmap.foundation.artifact_publisher import CURRENT_POINTER
     base = tmp_path / "reports"
     old = stage(base, "old")
     publish_generation(base, "old")
@@ -586,7 +593,7 @@ def test_crash_remnant_artifacts_never_publish_or_replace_current(tmp_path, name
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows share-mode file locking semantics")
 def test_locked_current_pointer_blocks_switch_and_preserves_previous(tmp_path):
-    from attackmap.artifact_publisher import CURRENT_POINTER
+    from attackmap.foundation.artifact_publisher import CURRENT_POINTER
     base = tmp_path / "reports"
     old = stage(base, "old")
     publish_generation(base, "old")

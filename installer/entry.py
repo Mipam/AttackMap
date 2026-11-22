@@ -1,4 +1,4 @@
-"""PyInstaller entry point: run attackmap.cli as a top-level script."""
+"""PyInstaller entry point: run attackmap.surfaces.cli as a top-level script."""
 
 import sys
 
@@ -21,12 +21,12 @@ def main() -> None:
     # The isolated analyzer supervisor uses this fixed Python-style worker
     # invocation. A frozen executable has no interpreter -m dispatcher.
     if getattr(sys, "frozen", False) and sys.argv[1:4] == [
-        "-m", "attackmap.analyzer_host", "--worker",
+        "-m", "attackmap.extraction.analyzer_host", "--worker",
     ]:
-        from attackmap.analyzer_host import _main
+        from attackmap.extraction.analyzer_host import _main
 
         raise SystemExit(_main(sys.argv[3:]))
-    from attackmap.cli import app
+    from attackmap.surfaces.cli import app
 
     app()
 

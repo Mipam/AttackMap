@@ -5,7 +5,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const { test } = require("node:test");
 
-const scripts = path.join(__dirname, "../src/attackmap/ui/web/src");
+const scripts = path.join(__dirname, "../src/attackmap/surfaces/ui/web/src");
 const copy = (value) => JSON.parse(JSON.stringify(value));
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 function deferred() {

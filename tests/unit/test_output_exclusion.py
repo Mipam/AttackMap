@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import os
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
-from attackmap.cli import app
-from attackmap.artifact_manifest import generated_artifact_names, write_artifact_manifest
-from attackmap.config_scanner import scan_config_repo
-from attackmap.index import RepoIndex
-from attackmap.safe_fs import OUTPUT_MARKER
+from attackmap.extraction.config_scanner import scan_config_repo
+from attackmap.extraction.index import RepoIndex
+from attackmap.foundation.artifact_manifest import generated_artifact_names, write_artifact_manifest
+from attackmap.foundation.safe_fs import OUTPUT_MARKER
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 SECRET = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"

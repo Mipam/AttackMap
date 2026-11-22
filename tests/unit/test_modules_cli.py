@@ -4,7 +4,7 @@ import json
 
 from typer.testing import CliRunner
 
-from attackmap.cli import app
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 

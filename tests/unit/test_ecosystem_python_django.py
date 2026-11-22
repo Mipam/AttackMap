@@ -3,8 +3,13 @@ from __future__ import annotations
 
 import pytest
 
-import attackmap.python_django_routes as django_routes
-from attackmap.python_django_routes import DJANGO_ADMIN_TARGET, DjangoAuthResolver, django_view_auth, extract_django_url_entries
+import attackmap.extraction.ecosystems.python_django_routes as django_routes
+from attackmap.extraction.ecosystems.python_django_routes import (
+    DJANGO_ADMIN_TARGET,
+    DjangoAuthResolver,
+    django_view_auth,
+    extract_django_url_entries,
+)
 
 
 def extract(source):

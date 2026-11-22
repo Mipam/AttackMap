@@ -6,14 +6,25 @@ normalized observations are injected, and no provider/network option is enabled.
 from __future__ import annotations
 
 import argparse
-from collections import Counter
-from copy import deepcopy
 import json
 import os
+from collections import Counter
+from copy import deepcopy
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from verify_wp018_closeout import ROOT, cli_matrix, collect, input_hashes, launch, read, require, save, sha
+from verify_wp018_closeout import (
+    ROOT,
+    cli_matrix,
+    collect,
+    input_hashes,
+    launch,
+    read,
+    require,
+    save,
+    sha,
+)
+
 from attackmap.models import ScanResult
 
 FIXTURE = ROOT / "tests/fixtures/wp032_namespace_reference"

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attackmap.analyzers import BuiltinConfigAnalyzer, analyze_repository
-from attackmap.config_scanner import scan_config_repo, should_scan_config_file
-
+from attackmap.extraction.config_scanner import scan_config_repo, should_scan_config_file
+from attackmap.orchestration.analyzers import BuiltinConfigAnalyzer, analyze_repository
 
 # ---------------------------------------------------------------------------
 # File selection
@@ -269,8 +268,8 @@ def test_analyze_repository_preserves_provenance_on_config_signals(tmp_path: Pat
 # Large-file / feedback-loop hang regression (config_scanner _line_of O(n^2))
 # ---------------------------------------------------------------------------
 
-import attackmap.config_scanner as _cfg
-from attackmap.config_scanner import _LineIndex
+import attackmap.extraction.config_scanner as _cfg
+from attackmap.extraction.config_scanner import _LineIndex
 
 
 def test_line_index_matches_naive_line_numbers() -> None:
@@ -309,7 +308,7 @@ def test_skips_oversized_config_file(tmp_path: Path, monkeypatch) -> None:
 # deployment seam extraction (C28)
 # ---------------------------------------------------------------------------
 
-from attackmap.config_scanner import extract_deployment_aliases  # noqa: E402
+from attackmap.extraction.config_scanner import extract_deployment_aliases  # noqa: E402
 
 
 def _service_yaml(name: str, port: int, *, target_port: int | None = None, port_name: str = "web") -> str:

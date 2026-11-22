@@ -7,11 +7,11 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from attackmap.cli import TRIAGE_BANNER, app
-from attackmap.diff import finding_id
 from attackmap.models import Finding, ScanResult
-from attackmap.review_prompts import render_triage_prompts
-from attackmap.triage import rank_findings, render_triage_fallback
+from attackmap.output.diff import finding_id
+from attackmap.output.review_prompts import render_triage_prompts
+from attackmap.output.triage import rank_findings, render_triage_fallback
+from attackmap.surfaces.cli import TRIAGE_BANNER, app
 
 runner = CliRunner()
 
@@ -160,12 +160,12 @@ def _write_repo(tmp_path: Path) -> Path:
 def test_cli_triage_deterministic_fallback(tmp_path: Path, monkeypatch) -> None:
     """With no LLM backend, --triage writes triage.md via the deterministic
     fallback rather than erroring (AC)."""
-    from attackmap.llm_review import LlmReviewError
+    from attackmap.output.llm_review import LlmReviewError
 
     def boom(*args, **kwargs):
         raise LlmReviewError("no backend")
 
-    monkeypatch.setattr("attackmap.pipeline.generate_llm_review", boom)
+    monkeypatch.setattr("attackmap.orchestration.pipeline.generate_llm_review", boom)
     repo = _write_repo(tmp_path)
     out = tmp_path / "out"
     result = runner.invoke(app, ["analyze", str(repo), "--output", str(out), "--triage"])
@@ -178,7 +178,7 @@ def test_cli_triage_deterministic_fallback(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_cli_triage_uses_llm_when_available(tmp_path: Path, monkeypatch) -> None:
-    from attackmap.llm_review import LlmReviewResult
+    from attackmap.output.llm_review import LlmReviewResult
 
     def fake(*args, **kwargs):
         assert kwargs.get("mode") == "triage"
@@ -190,7 +190,7 @@ def test_cli_triage_uses_llm_when_available(tmp_path: Path, monkeypatch) -> None
             backend="api",
         )
 
-    monkeypatch.setattr("attackmap.pipeline.generate_llm_review", fake)
+    monkeypatch.setattr("attackmap.orchestration.pipeline.generate_llm_review", fake)
     repo = _write_repo(tmp_path)
     out = tmp_path / "out"
     result = runner.invoke(app, ["analyze", str(repo), "--output", str(out), "--triage"])

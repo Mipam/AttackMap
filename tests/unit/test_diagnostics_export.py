@@ -4,14 +4,22 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.artifact_manifest import (
-    MANIFEST_FILENAME, generated_artifact_names, write_artifact_manifest,
+from attackmap.foundation.artifact_manifest import (
+    MANIFEST_FILENAME,
+    generated_artifact_names,
+    write_artifact_manifest,
 )
-from attackmap.artifact_publisher import generation_dir, publish_generation, write_diagnostic
-from attackmap.diagnostics_export import (
-    EXPORT_FILENAME, collect_diagnostic_export, export_diagnostics,
+from attackmap.foundation.artifact_publisher import (
+    generation_dir,
+    publish_generation,
+    write_diagnostic,
 )
-from attackmap.safe_fs import safe_write_text
+from attackmap.foundation.safe_fs import safe_write_text
+from attackmap.orchestration.diagnostics_export import (
+    EXPORT_FILENAME,
+    collect_diagnostic_export,
+    export_diagnostics,
+)
 
 SOURCE_MARKER = "SOURCE_EXCERPT_MARKER_7c3f"
 
@@ -36,7 +44,7 @@ def staged_base(base: Path, count: int) -> None:
 
 
 def test_preview_lists_generations_current_pins_and_retention(tmp_path):
-    from attackmap.retention import pin_generation
+    from attackmap.orchestration.retention import pin_generation
     base = tmp_path / "out"
     base.mkdir()
     staged_base(base, 3)
@@ -127,7 +135,8 @@ def test_missing_base_is_rejected(tmp_path):
 
 def test_cli_preview_and_out_round_trip(tmp_path):
     from typer.testing import CliRunner
-    from attackmap.cli import app as cli_app
+
+    from attackmap.surfaces.cli import app as cli_app
     base = tmp_path / "out"
     base.mkdir()
     staged_base(base, 1)

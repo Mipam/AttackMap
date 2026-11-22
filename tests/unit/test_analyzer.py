@@ -1,5 +1,9 @@
-from attackmap.analyzer import identify_attack_surfaces, summarize_architecture, summarize_attack_surface
 from attackmap.models import AuthHint, DatabaseHint, ExternalCall, Route, ScanResult
+from attackmap.reasoning.analyzer import (
+    identify_attack_surfaces,
+    summarize_architecture,
+    summarize_attack_surface,
+)
 
 
 def test_identify_attack_surfaces_classifies_routes_for_attacker_review() -> None:

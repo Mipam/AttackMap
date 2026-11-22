@@ -24,8 +24,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.analyzers import merge_analyzer_results
 from attackmap.models import ScanResult
+from attackmap.orchestration.analyzers import merge_analyzer_results
 
 FIXTURE_DIR = Path(__file__).parents[1] / "fixtures" / "signal_conflicts"
 SCENARIOS = sorted(path.stem for path in FIXTURE_DIR.glob("*.json"))

@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.recon_to_analysis import translate_recon
-from attackmap.scanner import scan_repo
-from attackmap.threat_model import rule_catalog
-from attackmap.workflow_scanner import scan_workflows
+from attackmap.extraction.scanner import scan_repo
+from attackmap.extraction.workflow_scanner import scan_workflows
+from attackmap.orchestration.recon_to_analysis import translate_recon
+from attackmap.reasoning.threat_model import rule_catalog
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "workflows"
 RULES = sorted(p.name for p in FIXTURES.iterdir() if p.is_dir())

@@ -5,14 +5,27 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.artifact_manifest import (
-    MANIFEST_FILENAME, PINS_FILENAME, generated_artifact_names, write_artifact_manifest,
+from attackmap.foundation.artifact_manifest import (
+    MANIFEST_FILENAME,
+    PINS_FILENAME,
+    generated_artifact_names,
+    write_artifact_manifest,
 )
-from attackmap.artifact_publisher import current_generation, generation_dir, publish_generation, write_diagnostic
-from attackmap.retention import (
-    apply_retention, enumerate_generations, pin_generation, read_pins, retain_after_publish, unpin_generation,
+from attackmap.foundation.artifact_publisher import (
+    current_generation,
+    generation_dir,
+    publish_generation,
+    write_diagnostic,
 )
-from attackmap.safe_fs import safe_write_text
+from attackmap.foundation.safe_fs import safe_write_text
+from attackmap.orchestration.retention import (
+    apply_retention,
+    enumerate_generations,
+    pin_generation,
+    read_pins,
+    retain_after_publish,
+    unpin_generation,
+)
 
 
 def stage(base: Path, run: str, created: str) -> Path:
@@ -230,7 +243,8 @@ def _tiny_repo(root: Path) -> Path:
 
 def test_two_cli_scans_keep_both_generations_without_warning(tmp_path):
     from typer.testing import CliRunner
-    from attackmap.cli import app as cli_app
+
+    from attackmap.surfaces.cli import app as cli_app
     repo = _tiny_repo(tmp_path)
     out = tmp_path / "out"
     for _ in range(2):
@@ -244,12 +258,13 @@ def test_two_cli_scans_keep_both_generations_without_warning(tmp_path):
 
 def test_pipeline_retention_failure_never_fails_the_scan(tmp_path, monkeypatch):
     from typer.testing import CliRunner
-    from attackmap.cli import app as cli_app
+
+    from attackmap.surfaces.cli import app as cli_app
 
     def boom(*args, **kwargs):
         raise RuntimeError("retention bug")
 
-    monkeypatch.setattr("attackmap.retention.apply_retention", boom)
+    monkeypatch.setattr("attackmap.orchestration.retention.apply_retention", boom)
     repo = _tiny_repo(tmp_path)
     out = tmp_path / "out"
     result = CliRunner().invoke(cli_app, ["analyze", str(repo), "-o", str(out)])

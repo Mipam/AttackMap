@@ -14,8 +14,8 @@ import threading
 
 import pytest
 
-from attackmap.errors import BudgetExpired
-from attackmap.pipeline import TimeBudget  # the pipeline re-export (AR007)
+from attackmap.foundation.errors import BudgetExpired
+from attackmap.orchestration.pipeline import TimeBudget  # the pipeline re-export (AR007)
 
 THREADS = 8
 ITERATIONS = 1000

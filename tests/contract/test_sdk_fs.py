@@ -8,8 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.safe_fs import OUTPUT_MARKER
-from attackmap.sdk import DEFAULT_SKIP_DIRS, iter_repo_files, line_of, line_snippet, read_source, rel
+from attackmap.foundation.safe_fs import OUTPUT_MARKER
+from attackmap.sdk import (
+    DEFAULT_SKIP_DIRS,
+    iter_repo_files,
+    line_of,
+    line_snippet,
+    read_source,
+    rel,
+)
 
 needs_chmod = pytest.mark.skipif(
     sys.platform == "win32" or (hasattr(os, "geteuid") and os.geteuid() == 0),

@@ -100,6 +100,11 @@ a major-version bump; deprecations get one release of overlap.
 
 from __future__ import annotations
 
+from attackmap.foundation.safe_fs import contained_file, is_contained, read_repo_text, walk_repo
+from attackmap.reasoning.taint_sinks import PLUGIN_GROUP as TAINT_SINK_PLUGIN_GROUP
+from attackmap.reasoning.taint_sinks import SINK_KINDS as TAINT_SINK_KINDS
+from attackmap.reasoning.taint_sinks import validate_sink_entry as validate_taint_sink
+
 from ..extraction.adapters import (
     merge_extraction_results,
     to_extraction_result,
@@ -120,10 +125,6 @@ from ..model.observations import (
     WeaknessObservation,
     WorkflowObservation,
 )
-from ..safe_fs import contained_file, is_contained, read_repo_text, walk_repo
-from ..taint_sinks import PLUGIN_GROUP as TAINT_SINK_PLUGIN_GROUP
-from ..taint_sinks import SINK_KINDS as TAINT_SINK_KINDS
-from ..taint_sinks import validate_sink_entry as validate_taint_sink
 from . import fs
 from .contracts import (
     EXTRACTION_CONTRACT_VERSION,

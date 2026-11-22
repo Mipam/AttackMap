@@ -5,9 +5,8 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from attackmap import analyzers
-from attackmap.analyzer_contracts import AnalyzerMetadata
-from attackmap.analyzer_profiles import (
+from attackmap.orchestration import analyzers
+from attackmap.orchestration.analyzer_profiles import (
     ANALYZER_PROFILES_SCHEMA_VERSION,
     AnalyzerProfileError,
     MissingProfileModulesError,
@@ -15,6 +14,7 @@ from attackmap.analyzer_profiles import (
     get_analyzer_profiles,
     resolve_analyzer_profile,
 )
+from attackmap.reasoning.analyzer_contracts import AnalyzerMetadata
 
 PROFILE_MODULES = {
     "automatic": (),

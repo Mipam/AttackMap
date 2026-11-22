@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attackmap.scanner import scan_repo
-from attackmap.taint import _find_sanitizer
-from attackmap.threat_model import generate_findings
+from attackmap.extraction.scanner import scan_repo
+from attackmap.reasoning.taint import _find_sanitizer
+from attackmap.reasoning.threat_model import generate_findings
 
 
 def _write(tmp_path: Path, body: str) -> Path:

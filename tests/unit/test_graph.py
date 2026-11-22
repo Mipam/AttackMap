@@ -1,5 +1,5 @@
-from attackmap.graph import build_graph
 from attackmap.models import DatabaseHint, Route, ScanResult
+from attackmap.output.graph import build_graph
 
 
 def test_build_graph_creates_web_and_db_nodes() -> None:

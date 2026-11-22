@@ -1,6 +1,12 @@
 import pytest
 from pydantic import ValidationError
-from attackmap.provider_options import LOCAL_ENDPOINT, LOCAL_MODEL, ProviderOptions, ProviderOptionsV13
+
+from attackmap.orchestration.provider_options import (
+    LOCAL_ENDPOINT,
+    LOCAL_MODEL,
+    ProviderOptions,
+    ProviderOptionsV13,
+)
 
 
 def test_defaults_are_local_disabled_and_credential_free():

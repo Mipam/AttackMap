@@ -3,21 +3,24 @@
 No analyzer-emitted observations are injected. JSON declarations are operator
 assertions, never evidence of live Kafka delivery or database connectivity.
 """
-from collections import Counter
-from copy import deepcopy
-from dataclasses import replace
 import hashlib
 import json
 import ntpath
 import os
-from pathlib import Path
 import shutil
+from collections import Counter
+from copy import deepcopy
+from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
-from attackmap.fleet_architecture import aggregate_fleet_architecture, build_fleet_architecture
+from attackmap.orchestration.fleet_architecture import (
+    aggregate_fleet_architecture,
+    build_fleet_architecture,
+)
 from attackmap.orchestration.run_spec import AnalyzerSelection, RunSpec
-from attackmap.scan_service import ScanRequest, execute_scan_request
+from attackmap.orchestration.scan_service import ScanRequest, execute_scan_request
 
 FIXTURE = Path(__file__).parents[1] / "fixtures/wp044_qualified_fleet16"
 ORACLE = json.loads((FIXTURE / "expected.json").read_text(encoding="utf-8"))

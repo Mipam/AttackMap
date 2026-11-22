@@ -1,10 +1,9 @@
 """Evidence comparison must ignore clocks without hiding semantic changes."""
-from copy import deepcopy
 import importlib.util
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
-
 
 _SPEC = importlib.util.spec_from_file_location(
     "wp018_closeout_verifier", Path(__file__).resolve().parents[2] / "tools/verify_wp018_closeout.py"

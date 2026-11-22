@@ -1,5 +1,5 @@
-from attackmap.defensive_review import render_defensive_review
 from attackmap.models import AttackPath, AttackSurface, AuthHint, Finding, Route, ScanResult
+from attackmap.output.defensive_review import render_defensive_review
 
 
 def test_render_defensive_review_contains_expected_sections() -> None:

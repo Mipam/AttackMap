@@ -1,7 +1,7 @@
 import pytest
 
 from attackmap.models import AttackSurface, Finding, ScanResult
-from attackmap.review_json import build_defensive_review_json
+from attackmap.output.review_json import build_defensive_review_json
 
 
 @pytest.mark.parametrize("overlap", ["auth", "/unrelated", "other.py"])

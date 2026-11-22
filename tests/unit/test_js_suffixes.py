@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attackmap.analyzers import analyze_repository
-from attackmap.scanner import CODE_EXTENSIONS
-from attackmap.srcpaths import JS_TS_SUFFIXES
+from attackmap.extraction.scanner import CODE_EXTENSIONS
+from attackmap.foundation.srcpaths import JS_TS_SUFFIXES
+from attackmap.orchestration.analyzers import analyze_repository
 
 
 def test_routes_from_mjs_cjs_jsx(tmp_path: Path) -> None:

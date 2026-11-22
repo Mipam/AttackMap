@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attackmap.analyzer import identify_attack_surfaces
-from attackmap.analyzers import merge_analyzer_results
 from attackmap.models import AuthHint, Route, ScanResult
-from attackmap.route_auth_fusion import synthesize_unauthenticated_routes
+from attackmap.orchestration.analyzers import merge_analyzer_results
+from attackmap.reasoning.analyzer import identify_attack_surfaces
+from attackmap.reasoning.route_auth_fusion import synthesize_unauthenticated_routes
 from attackmap.sdk import Route as SdkRoute
 
 CS = """using Microsoft.AspNetCore.Authorization;

@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from attackmap.analyzers import merge_analyzer_results
-from attackmap.merge import MERGE_SCHEMA, MergeRule, initial_seen, merge_into
+from attackmap.extraction.merge import MERGE_SCHEMA, MergeRule, initial_seen, merge_into
+from attackmap.orchestration.analyzers import merge_analyzer_results
 from attackmap.sdk import (
     AnalyzerResult,
     AuthHint,
@@ -30,7 +30,6 @@ from attackmap.sdk import (
     SecretHint,
     ServiceHint,
 )
-
 
 # ---------------------------------------------------------------------------
 # Schema coverage

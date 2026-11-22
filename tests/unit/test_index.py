@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attackmap.index import IndexedFile, RepoIndex
-from attackmap.scanner import scan_files
+from attackmap.extraction.index import IndexedFile, RepoIndex
+from attackmap.extraction.scanner import scan_files
 
 
 def test_index_walks_and_reads_once(tmp_path: Path) -> None:
@@ -36,7 +36,7 @@ def test_scan_files_uses_index_without_rewalking(tmp_path: Path, monkeypatch) ->
         walks["n"] += 1
         raise AssertionError("scan_files should not walk when an index is provided")
 
-    monkeypatch.setattr("attackmap.safe_fs.walk_repo", boom)
+    monkeypatch.setattr("attackmap.foundation.safe_fs.walk_repo", boom)
     result = scan_files(tmp_path, suffixes={".py"}, index=index)
     assert walks["n"] == 0
     assert any(r.path == "/x" for r in result.routes)
@@ -243,7 +243,7 @@ def test_file_count_limit_env_override(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_index_file_limit_default_matches_c35_target(tmp_path: Path) -> None:
-    from attackmap.index import DEFAULT_INDEX_FILE_LIMIT
+    from attackmap.extraction.index import DEFAULT_INDEX_FILE_LIMIT
     (tmp_path / "a.py").write_text("x\n", encoding="utf-8")
     index = RepoIndex.build(tmp_path)
     assert DEFAULT_INDEX_FILE_LIMIT == 100_000

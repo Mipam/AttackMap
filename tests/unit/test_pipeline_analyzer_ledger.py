@@ -4,11 +4,11 @@ import json
 
 import pytest
 
-from attackmap import analyzers as registry
-from attackmap.analyzer_contracts import AnalyzerMetadata
 from attackmap.models import ScanResult
+from attackmap.orchestration import analyzers as registry
+from attackmap.orchestration.pipeline import TimeBudget, run_scan
 from attackmap.orchestration.run_spec import AnalyzerSelection, FeatureFlags, RunSpec
-from attackmap.pipeline import TimeBudget, run_scan
+from attackmap.reasoning.analyzer_contracts import AnalyzerMetadata
 
 
 class CountingPlugin:
@@ -135,12 +135,12 @@ def test_selection_progress_exists_before_detection_and_stops_on_failure(tmp_pat
         def done(self):
             self.done_calls += 1
     progress = Progress()
-    monkeypatch.setattr("attackmap.pipeline.create_progress", lambda *args, **kwargs: progress)
+    monkeypatch.setattr("attackmap.orchestration.pipeline.create_progress", lambda *args, **kwargs: progress)
     if selection_failure:
         def unavailable(*args, **kwargs):
             progress.stage("Analyzer discovery started")
             raise ValueError("PIPELINE_LEDGER_PRIVATE")
-        monkeypatch.setattr("attackmap.pipeline.resolve_run_analyzers", unavailable)
+        monkeypatch.setattr("attackmap.orchestration.pipeline.resolve_run_analyzers", unavailable)
         with pytest.raises(ValueError, match="PIPELINE_LEDGER_PRIVATE"):
             _run(tmp_path, plugins=[CountingPlugin()], monkeypatch=monkeypatch)
         assert progress.labels == ["Analyzer discovery started"]

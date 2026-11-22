@@ -95,7 +95,7 @@ class Finding(_RedactedEvidence):
 
     @model_validator(mode="after")
     def _apply_rule_taxonomy(self) -> Finding:
-        from ..taxonomy import ATTACK_TECHNIQUES, attack_url, taxonomy_for
+        from attackmap.model.taxonomy import ATTACK_TECHNIQUES, attack_url, taxonomy_for
 
         entry = taxonomy_for(self.rule_id)
         if entry is None:

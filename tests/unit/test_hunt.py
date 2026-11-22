@@ -8,17 +8,17 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from attackmap.cli import HUNT_BANNER
-from attackmap.llm_review import generate_llm_review
 from attackmap.models import (
-    AttackSurface,
     Anomaly,
+    AttackSurface,
     Finding,
     Route,
     ScanResult,
     TaintChain,
 )
-from attackmap.review_prompts import render_hunt_prompts
+from attackmap.output.llm_review import generate_llm_review
+from attackmap.output.review_prompts import render_hunt_prompts
+from attackmap.surfaces.cli import HUNT_BANNER
 
 
 def _scan() -> ScanResult:
@@ -103,7 +103,7 @@ def test_hunt_pack_includes_taint_exploit_and_anomaly_ids() -> None:
 
 
 def test_hunt_and_review_use_distinct_system_prompts() -> None:
-    from attackmap.review_prompts import render_review_prompts
+    from attackmap.output.review_prompts import render_review_prompts
 
     hunt = render_hunt_prompts(_scan(), _surfaces(), _findings(), []).system
     review = render_review_prompts(_scan(), _surfaces(), _findings(), []).system
@@ -173,9 +173,10 @@ def test_banner_states_hypotheses_not_detections() -> None:
 def test_hunt_verify_prompt_adjudicates_with_excerpts(tmp_path) -> None:
     """--hunt --verify feeds actual source excerpts and asks for verdicts."""
     from pathlib import Path as _P
-    from attackmap.scanner import scan_repo
-    from attackmap.recon_to_analysis import translate_recon
-    from attackmap.review_prompts import render_hunt_verify_prompts
+
+    from attackmap.extraction.scanner import scan_repo
+    from attackmap.orchestration.recon_to_analysis import translate_recon
+    from attackmap.output.review_prompts import render_hunt_verify_prompts
     (tmp_path / "app.py").write_text(
         "from flask import Flask, request\n"
         "app = Flask(__name__)\n"

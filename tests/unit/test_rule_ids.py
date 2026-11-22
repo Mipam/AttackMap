@@ -8,14 +8,14 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from attackmap import suppress
-from attackmap.cli import app
+from attackmap.extraction.scanner import scan_repo
 from attackmap.models import Finding, finding_rule_id, title_slug
-from attackmap.recon_to_analysis import translate_recon
-from attackmap.sarif import build_sarif
-from attackmap.scanner import scan_repo
-from attackmap.suppress import Suppression, SuppressionSet, apply_suppressions
-from attackmap.threat_model import rule_catalog
+from attackmap.orchestration.recon_to_analysis import translate_recon
+from attackmap.output import suppress
+from attackmap.output.sarif import build_sarif
+from attackmap.output.suppress import Suppression, SuppressionSet, apply_suppressions
+from attackmap.reasoning.threat_model import rule_catalog
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 RULE_IDS = {r for r, _, _ in rule_catalog()}

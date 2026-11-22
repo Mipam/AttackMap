@@ -7,23 +7,34 @@ from __future__ import annotations
 
 import argparse
 import ctypes
-from ctypes import wintypes as w
 import hashlib
 import json
 import os
-from pathlib import Path
 import queue
 import subprocess
 import sys
 import threading
 import time
+from ctypes import wintypes as w
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from attackmap.desktop_fleet import FleetRepository, FleetRunRequest, FleetTerminal, repository_set_id, child_run_id
-from attackmap.fleet import fleet_repo_ids
-from attackmap.artifact_publisher import validate_generation, current_generation, CURRENT_POINTER
 from run_wp017_native_modes import WindowsJob, inherited_error_mode, launch
+
+from attackmap.foundation.artifact_publisher import (
+    CURRENT_POINTER,
+    current_generation,
+    validate_generation,
+)
+from attackmap.orchestration.desktop_fleet import (
+    FleetRepository,
+    FleetRunRequest,
+    FleetTerminal,
+    child_run_id,
+    repository_set_id,
+)
+from attackmap.orchestration.fleet import fleet_repo_ids
 
 
 def require(value, message):
@@ -122,7 +133,7 @@ def run_case(engine, frozen, folder, scenario, large_files, seed_previous=False)
                              else {"timeout_seconds": 180, "time_budget_seconds": 60})
     request_path = folder / "request.json"
     request_path.write_text(request.model_dump_json(), encoding="utf-8")
-    argv = [str(engine), *([] if frozen else ["-m", "attackmap.desktop_worker"]),
+    argv = [str(engine), *([] if frozen else ["-m", "attackmap.orchestration.desktop_worker"]),
             *(["desktop-worker"] if frozen else []), "--request", str(request_path)]
     events, pending, observed = [], queue.Queue(), {}
     job = WindowsJob()
@@ -241,7 +252,7 @@ def run_case(engine, frozen, folder, scenario, large_files, seed_previous=False)
                 observed_processes=list(observed.values()), current_preserved=True,
                 current_scope="Valid prior published fleet and every generation byte preserved" if previous else "Exact invalid sentinel bytes preserved; not a qualified prior generation",
                 engine=dict(path=str(engine), sha256=sha(engine), argv=argv, runtime="frozen" if frozen else "source-python",
-                            command_kind_verified=(argv[1] == "desktop-worker" if frozen else argv[1:3] == ["-m", "attackmap.desktop_worker"])),
+                            command_kind_verified=(argv[1] == "desktop-worker" if frozen else argv[1:3] == ["-m", "attackmap.orchestration.desktop_worker"])),
                 sibling_manifests_verified=len(completed))
             save(folder / "result.json", result)
             return result

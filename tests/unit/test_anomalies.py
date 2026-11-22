@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attackmap.anomalies import _peer_key, find_anomalies
 from attackmap.models import Route, ScanResult, TaintChain
-from attackmap.threat_model import generate_findings
+from attackmap.reasoning.anomalies import _peer_key, find_anomalies
+from attackmap.reasoning.threat_model import generate_findings
 
 
 def _line_of(content: str, needle: str) -> int:
@@ -376,7 +376,7 @@ def test_progress_reported_per_cohort(tmp_path: Path) -> None:
     import io
     import json
 
-    from attackmap.progress import JsonScanProgress
+    from attackmap.extraction.progress import JsonScanProgress
 
     scan = _scan_with_routes(
         tmp_path,

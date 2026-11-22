@@ -1,8 +1,8 @@
 """Complete deterministic artifact generations for UI fake workers."""
 import json
 
-from attackmap.artifact_manifest import write_artifact_manifest
-from attackmap.safe_fs import safe_write_text
+from attackmap.foundation.artifact_manifest import write_artifact_manifest
+from attackmap.foundation.safe_fs import safe_write_text
 
 
 def write_generation(folder, report=None):

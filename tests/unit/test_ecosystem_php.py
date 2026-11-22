@@ -10,12 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attackmap.analyzers import merge_analyzer_results
-from attackmap.analyzer_contracts import (
-    EXTRACTION_PROTOCOL_VERSION,
-    check_extraction_compatibility,
-)
-from attackmap.ecosystem_php import (
+from attackmap.extraction.ecosystems.ecosystem_php import (
     OmekaSAnalyzer,
     PhpLaminasAnalyzer,
     PhpWebAnalyzer,
@@ -27,6 +22,11 @@ from attackmap.ecosystem_php import (
     scan_php_web_repo,
 )
 from attackmap.models import ScanResult
+from attackmap.orchestration.analyzers import merge_analyzer_results
+from attackmap.reasoning.analyzer_contracts import (
+    EXTRACTION_PROTOCOL_VERSION,
+    check_extraction_compatibility,
+)
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 OMEKA = FIXTURES / "php-omeka-app"
@@ -377,7 +377,7 @@ def test_merge_across_layers_dedups_routes() -> None:
 
 
 def test_index_path_matches_direct_walk() -> None:
-    from attackmap.index import RepoIndex
+    from attackmap.extraction.index import RepoIndex
 
     index = RepoIndex.build(OMEKA)
     direct = scan_php_web_repo(OMEKA)

@@ -3,13 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.analyzers import analyze_repository, merge_analyzer_results
-from attackmap.analyzer_contracts import AnalyzerMetadata
-from attackmap.config_scanner import scan_config_repo
-from attackmap.index import RepoIndex
+from attackmap.extraction.config_scanner import scan_config_repo
+from attackmap.extraction.index import RepoIndex
+from attackmap.extraction.scanner import scan_files
 from attackmap.models import Route, ScanResult, Signal, SignalOrigin
-from attackmap.scanner import scan_files
-from attackmap.signal_provenance import stamp_scan_provenance
+from attackmap.orchestration.analyzers import analyze_repository, merge_analyzer_results
+from attackmap.reasoning.analyzer_contracts import AnalyzerMetadata
+from attackmap.reasoning.signal_provenance import stamp_scan_provenance
 
 
 def test_source_enumerates_accepted_files_without_requiring_a_signal(tmp_path, monkeypatch):
@@ -88,7 +88,7 @@ def test_overlap_counts_unique_files_and_legacy_plugin_remains_unknown():
 
 @pytest.mark.parametrize("declared", [False, True])
 def test_only_declared_metadata_versions_are_propagated_and_original_result_is_owned(tmp_path, monkeypatch, declared):
-    import attackmap.analyzers as analyzers
+    import attackmap.orchestration.analyzers as analyzers
 
     source = ScanResult(root=str(tmp_path), scanned_files=["app.py"], files_scanned=1,
                         routes=[Route(path="/fixture", file="app.py", line=1)])

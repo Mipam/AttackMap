@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.scanner import scan_repo
-from attackmap.safe_fs import DEFAULT_MAX_FILE_BYTES, max_file_bytes
+from attackmap.extraction.scanner import scan_repo
+from attackmap.foundation.safe_fs import DEFAULT_MAX_FILE_BYTES, max_file_bytes
 
 
 def _repo(tmp_path: Path) -> Path:

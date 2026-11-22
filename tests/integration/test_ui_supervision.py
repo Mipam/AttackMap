@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from attackmap.ui.runner import ScanRunner
+from attackmap.surfaces.ui.runner import ScanRunner
 
 
 def wait_for(predicate, timeout=8):
@@ -61,7 +61,7 @@ while True:
         calls.append(kwargs["args"])
         return real_popen(**kwargs)
 
-    monkeypatch.setattr("attackmap.ui.runner.subprocess.Popen", popen)
+    monkeypatch.setattr("attackmap.surfaces.ui.runner.subprocess.Popen", popen)
     gate = threading.Barrier(20)
     done = threading.Event()
 
@@ -151,8 +151,9 @@ def test_cancel_http_ack_is_prompt_and_cleanup_failure_blocks_restart(monkeypatc
     import json
     from http.server import ThreadingHTTPServer
     from urllib.request import Request, urlopen
-    from attackmap.ui.server import LoopbackApp, _handler, _start_scan
-    from attackmap.ui.run_state import GuiRunState
+
+    from attackmap.surfaces.ui.run_state import GuiRunState
+    from attackmap.surfaces.ui.server import LoopbackApp, _handler, _start_scan
 
     app = LoopbackApp()
     app._run_state = GuiRunState.RUNNING
@@ -172,7 +173,7 @@ def test_cancel_http_ack_is_prompt_and_cleanup_failure_blocks_restart(monkeypatc
             return False
 
     app.runner = SlowRunner()
-    monkeypatch.setattr("attackmap.ui.server.has_llm_key", lambda provider: False)
+    monkeypatch.setattr("attackmap.surfaces.ui.server.has_llm_key", lambda provider: False)
     server = ThreadingHTTPServer(("127.0.0.1", 0), _handler(app))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -203,8 +204,8 @@ def test_cancel_http_ack_is_prompt_and_cleanup_failure_blocks_restart(monkeypatc
 
 
 def test_old_cancel_failure_cannot_mutate_new_run():
-    from attackmap.ui.server import LoopbackApp, _request_scan_cancel
-    from attackmap.ui.run_state import GuiRunState
+    from attackmap.surfaces.ui.run_state import GuiRunState
+    from attackmap.surfaces.ui.server import LoopbackApp, _request_scan_cancel
 
     app = LoopbackApp()
     app._run_state = GuiRunState.RUNNING

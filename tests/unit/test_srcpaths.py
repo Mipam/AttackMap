@@ -6,9 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.scanner import scan_repo
-from attackmap.srcpaths import is_test_file, is_vendored_file
-
+from attackmap.extraction.scanner import scan_repo
+from attackmap.foundation.srcpaths import is_test_file, is_vendored_file
 
 # ---------------------------------------------------------------------------
 # is_test_file classification

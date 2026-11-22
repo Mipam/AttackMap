@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from attackmap.diff import DiffReport, FindingSnapshot
 from attackmap.models import Finding
-from attackmap.report import render_pr_comment
+from attackmap.output.diff import DiffReport, FindingSnapshot
+from attackmap.output.report import render_pr_comment
 
 
 def _f(title, sev="high", exploit=None, tier=None):

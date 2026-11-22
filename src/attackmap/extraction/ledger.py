@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
-    from ..analyzer_contracts import AnalyzerProtocol
+    from attackmap.reasoning.analyzer_contracts import AnalyzerProtocol
 
 
 def safe_error_type(value: str) -> str:
@@ -89,8 +89,8 @@ def analyzer_run_identity(analyzer: AnalyzerProtocol) -> dict[str, object]:
     Paths and URLs are deliberately omitted from the report/manifest identity.
     A class-source digest is a bounded observation, not a dependency attestation.
     """
-    from ..analyzer_catalog import AnalyzerDiscoveryCollector, _implementation
-    from ..analyzers import _BUILTIN_ANALYZER_TYPES, _entry_point_distribution
+    from attackmap.orchestration.analyzer_catalog import AnalyzerDiscoveryCollector, _implementation
+    from attackmap.orchestration.analyzers import _BUILTIN_ANALYZER_TYPES, _entry_point_distribution
 
     implementation = _implementation(analyzer)
     implementation.pop("source_file", None)

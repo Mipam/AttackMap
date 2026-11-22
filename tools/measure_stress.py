@@ -161,7 +161,7 @@ def percentile(samples: list[float], fraction: float) -> float | None:
 
 
 def budget_check_overhead_ns(checks: int = 100_000) -> float | None:
-    from attackmap.pipeline import TimeBudget
+    from attackmap.orchestration.pipeline import TimeBudget
 
     budget = TimeBudget(seconds=60)
     start = time.perf_counter()
@@ -171,7 +171,7 @@ def budget_check_overhead_ns(checks: int = 100_000) -> float | None:
 
 
 def run_once(repo: Path, output: Path, *, time_budget_seconds: int | None) -> dict:
-    from attackmap.pipeline import AnalyzeOptions, run_scan
+    from attackmap.orchestration.pipeline import AnalyzeOptions, run_scan
 
     started = time.perf_counter()
     state = run_scan(AnalyzeOptions(

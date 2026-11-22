@@ -8,18 +8,18 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from attackmap import taxonomy
-from attackmap.attack_taxonomy import annotate_findings, techniques_for_finding
-from attackmap.detection_opportunities import generate_detection_opportunities
-from attackmap.diff import FindingSnapshot
+from attackmap.extraction.scanner import scan_repo
+from attackmap.model.taxonomy import RULE_TAXONOMY, RuleTaxonomy, taxonomy_for, validate_entry
 from attackmap.models import Finding, Insight
-from attackmap.recon_to_analysis import translate_recon
-from attackmap.report import render_pr_comment
-from attackmap.review_json import build_defensive_review_json
-from attackmap.sarif import build_sarif
-from attackmap.scanner import scan_repo
-from attackmap.taxonomy import RULE_TAXONOMY, RuleTaxonomy, taxonomy_for, validate_entry
-from attackmap.threat_model import rule_catalog
+from attackmap.orchestration.recon_to_analysis import translate_recon
+from attackmap.output.attack_taxonomy import annotate_findings, techniques_for_finding
+from attackmap.output.detection_opportunities import generate_detection_opportunities
+from attackmap.output.diff import FindingSnapshot
+from attackmap.output.report import render_pr_comment
+from attackmap.output.review_json import build_defensive_review_json
+from attackmap.output.sarif import build_sarif
+from attackmap.model import taxonomy
+from attackmap.reasoning.threat_model import rule_catalog
 
 ROOT = Path(__file__).resolve().parents[2]
 SARIF_SCHEMA = json.loads((ROOT / "tests" / "fixtures" / "sarif" / "sarif-schema-2.1.0.json").read_text(encoding="utf-8"))
@@ -164,7 +164,7 @@ def _insight(kind: str) -> Insight:
 
 
 def test_detection_opportunities_link_findings_by_rule_id() -> None:
-    from attackmap.attack_taxonomy import annotate_insights
+    from attackmap.output.attack_taxonomy import annotate_insights
 
     insights = annotate_insights([_insight("shared_secret_blast_radius")])
     by_rule = Finding(title="Reworded secret finding", severity="high", mitigation="m", rule_id="hardcoded-secret")
@@ -237,7 +237,7 @@ def test_pr_comment_labels_new_findings_with_taxonomy() -> None:
 
 def test_workflow_cwe_tags_come_from_the_registry_once() -> None:
     from attackmap.models import ScanResult, WorkflowIssue
-    from attackmap.threat_model import generate_findings
+    from attackmap.reasoning.threat_model import generate_findings
 
     scan = ScanResult(
         root="/",

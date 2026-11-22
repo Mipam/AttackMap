@@ -8,15 +8,15 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from attackmap import analyzers as analyzers_mod
-from attackmap.analyzers import (
+from attackmap.orchestration import analyzers as analyzers_mod
+from attackmap.orchestration.analyzers import (
     BuiltinPythonWebAnalyzer,
     analyze_repository,
     get_builtin_repository_analyzers,
     resolve_run_analyzers,
 )
-from attackmap.cli import app
 from attackmap.sdk.models import Route, ScanResult
+from attackmap.surfaces.cli import app
 
 APP = "from flask import Flask\napp = Flask(__name__)\n\n@app.route('/hash', methods=['POST'])\ndef h():\n    return 'ok'\n"
 

@@ -2,12 +2,12 @@
 from pathlib import Path
 
 import pytest
-
 from artifact_fixture import write_generation
-from attackmap.artifact_publisher import current_generation, validate_generation
+
+from attackmap.foundation.artifact_publisher import current_generation, validate_generation
 from attackmap.models import ScanResult
-from attackmap.pipeline import RunState
-from attackmap.scan_service import ScanRequest, execute_scan_request
+from attackmap.orchestration.pipeline import RunState
+from attackmap.orchestration.scan_service import ScanRequest, execute_scan_request
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def fleet_inputs(tmp_path, monkeypatch):
         scan = ScanResult(root=str(kwargs["repo_path"]))
         write_generation(kwargs["output"], {"scan": scan.model_dump(mode="json")})
         return RunState(spec=spec, scan=scan)
-    monkeypatch.setattr("attackmap.pipeline._run_scan", fake_scan)
+    monkeypatch.setattr("attackmap.orchestration.pipeline._run_scan", fake_scan)
     return tmp_path / "reports", repos, failed
 
 
@@ -53,7 +53,7 @@ def test_export_failure_does_not_return_stale_flat_summary(fleet_inputs, monkeyp
     previous_flat = (base / "fleet-summary.json").read_bytes()
     def fail_export(*args, **kwargs):
         raise OSError("injected export failure")
-    monkeypatch.setattr("attackmap.artifact_publisher.export_compatibility", fail_export)
+    monkeypatch.setattr("attackmap.foundation.artifact_publisher.export_compatibility", fail_export)
     summary = execute_scan_request(request(base, repos, "new"))
     assert summary.exit_code == 0
     assert current_generation(base) == base / "new"
@@ -63,7 +63,7 @@ def test_export_failure_does_not_return_stale_flat_summary(fleet_inputs, monkeyp
 
 
 def test_cancel_racing_parent_publication_is_cancelled_not_failed(fleet_inputs, monkeypatch):
-    from attackmap.artifact_publisher import publish_generation
+    from attackmap.foundation.artifact_publisher import publish_generation
     base, repos, _ = fleet_inputs
     execute_scan_request(request(base, repos, "old"))
     cancelled = False
@@ -72,7 +72,7 @@ def test_cancel_racing_parent_publication_is_cancelled_not_failed(fleet_inputs, 
         if Path(output_base) == base:
             cancelled = True
         return publish_generation(output_base, run_id, **kwargs)
-    monkeypatch.setattr("attackmap.artifact_publisher.publish_generation", racing_publish)
+    monkeypatch.setattr("attackmap.foundation.artifact_publisher.publish_generation", racing_publish)
     summary = execute_scan_request(request(base, repos, "new", cancel_check=lambda: cancelled))
     assert summary.exit_code == 130
     assert current_generation(base) == base / "old"
@@ -88,7 +88,7 @@ def test_atomic_single_result_never_falls_back_to_stale_flat_report(fleet_inputs
     def corrupt_after_commit(output_base, folder, **kwargs):
         (folder / "findings.json").write_text("corrupted after commit")
         raise OSError("export interrupted")
-    monkeypatch.setattr("attackmap.artifact_publisher.export_compatibility", corrupt_after_commit)
+    monkeypatch.setattr("attackmap.foundation.artifact_publisher.export_compatibility", corrupt_after_commit)
     summary = execute_scan_request(request(base, repos[:1], "new"))
     assert current_generation(base) is None
     assert (base / "attackmap-report.json").read_bytes() == old_flat

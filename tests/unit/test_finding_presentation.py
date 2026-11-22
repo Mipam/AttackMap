@@ -3,11 +3,11 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.exploitability import score_exploitability
-from attackmap.index import ScanSnapshot
-from attackmap.finding_presentation import FindingPresentationIndex, MAX_CANDIDATES
+from attackmap.extraction.index import ScanSnapshot
 from attackmap.models import AttackSurface, Finding, ScanResult, Signal, TaintChain
-from attackmap.report import write_reports
+from attackmap.output.finding_presentation import MAX_CANDIDATES, FindingPresentationIndex
+from attackmap.output.report import write_reports
+from attackmap.reasoning.exploitability import score_exploitability
 
 
 def finding(**kwargs):

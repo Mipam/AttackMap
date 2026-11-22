@@ -8,10 +8,10 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from attackmap.analyzers import resolve_run_analyzers
-from attackmap.cli import app
-from attackmap.scanner import scan_repo
-from attackmap.srcpaths import SKIP_DIRS, in_skipped_dir
+from attackmap.extraction.scanner import scan_repo
+from attackmap.foundation.srcpaths import SKIP_DIRS, in_skipped_dir
+from attackmap.orchestration.analyzers import resolve_run_analyzers
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")

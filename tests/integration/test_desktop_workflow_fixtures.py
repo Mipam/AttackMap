@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.diff import FindingSnapshot, diff_findings, load_baseline
-from attackmap.finding_identity import finding_id
 from attackmap.models import Finding, ScanResult
-from attackmap.suppress import SuppressionSet, apply_suppressions, parse_suppress_text
+from attackmap.output.diff import FindingSnapshot, diff_findings, load_baseline
+from attackmap.output.finding_identity import finding_id
+from attackmap.output.suppress import SuppressionSet, apply_suppressions, parse_suppress_text
 
 ROOT = Path(__file__).parents[2] / "fixtures" / "desktop-workflows"
 EXPECTED = json.loads((ROOT / "expected.json").read_text(encoding="utf-8"))
@@ -81,7 +81,7 @@ def test_conflicting_missing_unicode_long_and_source_changed_cases_are_explicit(
 
 
 def test_partial_coverage_removal_is_uncertain_rather_than_resolved():
-    from attackmap.comparison import compare_report_files
+    from attackmap.output.comparison import compare_report_files
     data = report("partial-coverage.json")
     assert data["fixture"]["coverage"]["status"] == "partial"
     result = compare_report_files(ROOT / "previous.json", ROOT / "partial-coverage.json")

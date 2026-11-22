@@ -18,10 +18,10 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.artifact_publisher import current_generation
-from attackmap.errors import UnsupportedInFleet
+from attackmap.foundation.artifact_publisher import current_generation
+from attackmap.foundation.errors import UnsupportedInFleet
 from attackmap.orchestration.run_spec import AiSpec, FeatureFlags, RunSpec
-from attackmap.scan_service import ScanRequest, execute_scan_request
+from attackmap.orchestration.scan_service import ScanRequest, execute_scan_request
 
 _APP = "from flask import Flask\napp = Flask(__name__)\n"
 _ALPHA_SECRET = "wJalrXUtnFEMI/K7MDENG/" + "bPxRfiCYzQ9xLmP4tR"

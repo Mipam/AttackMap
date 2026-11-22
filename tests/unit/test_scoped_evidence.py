@@ -2,17 +2,24 @@ import json
 
 import pytest
 
-from attackmap.analyzer import identify_attack_surfaces, summarize_attack_surface
-from attackmap.defensive_review import render_defensive_review
-from attackmap.evidence import surface_evidence_basis
+from attackmap.extraction.evidence import surface_evidence_basis
+from attackmap.extraction.scanner import scan_files
 from attackmap.models import (
-    AttackSurface, AuthHint, DatabaseHint, ExternalCall, Finding, Route,
-    ScanResult, ServiceHint, TaintChain,
+    AttackSurface,
+    AuthHint,
+    DatabaseHint,
+    ExternalCall,
+    Finding,
+    Route,
+    ScanResult,
+    ServiceHint,
+    TaintChain,
 )
-from attackmap.review_json import build_defensive_review_json
-from attackmap.review_prompts import render_review_prompts
-from attackmap.scanner import scan_files
-from attackmap.threat_model import generate_findings
+from attackmap.output.defensive_review import render_defensive_review
+from attackmap.output.review_json import build_defensive_review_json
+from attackmap.output.review_prompts import render_review_prompts
+from attackmap.reasoning.analyzer import identify_attack_surfaces, summarize_attack_surface
+from attackmap.reasoning.threat_model import generate_findings
 
 
 @pytest.mark.parametrize("path", ["/orders", "/internal/jobs", "/debug"])

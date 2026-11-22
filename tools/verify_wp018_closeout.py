@@ -6,21 +6,27 @@ separate matrix. A fresh output directory is mandatory; failed evidence stays.
 from __future__ import annotations
 
 import argparse
-from copy import deepcopy
 import hashlib
 import json
 import math
 import os
-from pathlib import Path
 import subprocess
 import sys
 import time
+from copy import deepcopy
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from attackmap.artifact_publisher import current_generation, validate_generation
-from attackmap.desktop_fleet import FleetRepository, FleetRunRequest, FleetTerminal, child_run_id, repository_set_id
-from attackmap.fleet import fleet_repo_ids
+from attackmap.foundation.artifact_publisher import current_generation, validate_generation
+from attackmap.orchestration.desktop_fleet import (
+    FleetRepository,
+    FleetRunRequest,
+    FleetTerminal,
+    child_run_id,
+    repository_set_id,
+)
+from attackmap.orchestration.fleet import fleet_repo_ids
 
 
 def require(value, message):
@@ -332,7 +338,7 @@ def main(argv=None):
             prefix = [str(engine_path)] if args.engine else [str(engine_path), "-m", "attackmap"]
             result["cli"] = cli_matrix(prefix, output, roots[:3], args.timeout, args.budget, args.modules)
         if args.suite in {"all", "desktop16"}:
-            prefix = [str(engine_path), "desktop-worker"] if args.engine else [str(engine_path), "-m", "attackmap.desktop_worker"]
+            prefix = [str(engine_path), "desktop-worker"] if args.engine else [str(engine_path), "-m", "attackmap.orchestration.desktop_worker"]
             result["desktop"] = desktop_matrix(prefix, output, roots, args.timeout, args.budget, tuple(dict.fromkeys(args.workers)), args.modules)
         require(before == input_hashes(roots), "Source fixtures changed")
         require(sha(engine_path) == identity["sha256"], "Engine changed during qualification")

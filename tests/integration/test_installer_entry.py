@@ -1,8 +1,8 @@
 import importlib.util
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 ENTRY = Path(__file__).parents[2] / "installer" / "entry.py"
 
@@ -49,14 +49,14 @@ def test_import_is_guarded_and_unavailable_streams_are_tolerated(monkeypatch):
 def test_actual_child_entry_roundtrips_utf8_under_forced_legacy_encoding():
     script = r'''
 import runpy,sys,types
-module=types.ModuleType("attackmap.cli")
+module=types.ModuleType("attackmap.surfaces.cli")
 def app():
     assert sys.stdin.encoding.lower()==sys.stdout.encoding.lower()==sys.stderr.encoding.lower()=="utf-8"
     text=sys.stdin.read()
     sys.stdout.write(text)
     sys.stderr.write(text)
 module.app=app
-sys.modules["attackmap.cli"]=module
+sys.modules["attackmap.surfaces.cli"]=module
 runpy.run_path(sys.argv[1],run_name="__main__")
 '''
     text = '{"synthetic":"žluťoučký → 🔒"}\n'

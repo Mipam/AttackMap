@@ -5,8 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.ecosystem_node_atproto import scan_node_atproto
-
+from attackmap.extraction.ecosystems.ecosystem_node_atproto import scan_node_atproto
 
 NSID = "com.example.events.stream"
 PATH = "/xrpc/" + NSID

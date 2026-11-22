@@ -26,7 +26,8 @@ def test_version_matches_source() -> None:
 
 
 def test_cli_preserves_review_banner_imports() -> None:
-    from attackmap import cli, pipeline
+    from attackmap.orchestration import pipeline
+    from attackmap.surfaces import cli
 
     for name in ("HUNT_BANNER", "REMEDIATION_BANNER", "TRIAGE_BANNER"):
         assert getattr(cli, name) == getattr(pipeline, name)

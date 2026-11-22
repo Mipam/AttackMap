@@ -14,10 +14,11 @@ from pathlib import Path
 
 import pytest
 
-from attackmap import taint_sinks
+from attackmap.model.taxonomy import taxonomy_for
 from attackmap.models import Route, ScanResult, TaintChain
-from attackmap.taint import analyze_taint
-from attackmap.taint_sinks import (
+from attackmap.reasoning import taint_sinks
+from attackmap.reasoning.taint import analyze_taint
+from attackmap.reasoning.taint_sinks import (
     KINDS,
     SINK_KINDS,
     SINKS,
@@ -25,8 +26,11 @@ from attackmap.taint_sinks import (
     load_registry,
     validate_sink_entry,
 )
-from attackmap.taxonomy import taxonomy_for
-from attackmap.threat_model import _FLOW_FINDING_SPEC, _TAINT_FINDING_SPEC, generate_findings
+from attackmap.reasoning.threat_model import (
+    _FLOW_FINDING_SPEC,
+    _TAINT_FINDING_SPEC,
+    generate_findings,
+)
 
 FIX = Path(__file__).parents[1] / "fixtures" / "sinks"
 CASES = sorted((p.parent.name, p.name) for p in FIX.glob("*/*") if p.is_file())
@@ -133,7 +137,7 @@ def test_taint_chain_schema_enumerates_every_registry_kind() -> None:
 
 
 def test_every_kind_has_a_finding_and_a_taxonomy_entry() -> None:
-    from attackmap.threat_model import _rule_slug_kind
+    from attackmap.reasoning.threat_model import _rule_slug_kind
 
     for kind, meta in KINDS.items():
         target = meta.alias_of or kind
@@ -197,6 +201,6 @@ def test_plugins_contribute_sinks_and_bad_entries_are_skipped(
 
 
 def test_core_registry_is_the_module_table() -> None:
-    from attackmap import taint
+    from attackmap.reasoning import taint
 
     assert taint._SINK_PATTERNS is SINKS

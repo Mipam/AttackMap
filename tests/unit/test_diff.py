@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from attackmap.cli import app
-from attackmap.diff import (
+from attackmap.models import Finding
+from attackmap.output.diff import (
     DiffReport,
     FindingSnapshot,
     diff_findings,
@@ -17,8 +17,7 @@ from attackmap.diff import (
     load_baseline,
     render_diff_markdown,
 )
-from attackmap.models import Finding
-
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 
@@ -331,7 +330,7 @@ def test_cli_baseline_missing_file_errors(tmp_path: Path) -> None:
 def test_json_report_findings_carry_stable_id(tmp_path: Path) -> None:
     """attackmap-report.json findings should carry the same id we'd
     compute independently — so downstream tooling can trust the field."""
-    from attackmap.diff import finding_id as compute_id
+    from attackmap.output.diff import finding_id as compute_id
 
     repo = _tiny_repo(tmp_path)
     out = tmp_path / "reports"

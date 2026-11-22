@@ -6,10 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.analyzer_host import HostLimits
-from attackmap.analyzers import (BuiltinPythonServiceAnalyzer, analyze_repository,
-    discover_installed_analyzers, get_builtin_repository_analyzers, resolve_analyzer_run)
-from attackmap.merge import MERGE_SCHEMA
+from attackmap.extraction.analyzer_host import HostLimits
+from attackmap.extraction.merge import MERGE_SCHEMA
+from attackmap.orchestration.analyzers import (
+    BuiltinPythonServiceAnalyzer,
+    analyze_repository,
+    discover_installed_analyzers,
+    get_builtin_repository_analyzers,
+    resolve_analyzer_run,
+)
 
 pytestmark = pytest.mark.skipif(not os.environ.get("WP039_PINNED_TARGET"),
     reason="Requires task-owned offline pinned installation; use tools/verify_wp039_installed_python.py")

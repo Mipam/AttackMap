@@ -1,0 +1,1122 @@
+from __future__ import annotations
+
+import json
+import os
+import shlex
+import sys
+import time
+from contextlib import suppress
+from pathlib import Path
+
+import typer
+
+from attackmap import __version__
+from attackmap.extraction.incremental import INCREMENTAL_ENV
+from attackmap.foundation.safe_fs import UnsafePathError, ensure_output_dir, safe_write_text
+from attackmap.orchestration.analyzers import (
+    ALLOW_UNTRUSTED_ENV,
+    TRUSTED_ONLY_ENV,
+    MissingAnalyzersError,
+    analyzer_install_command,
+    get_available_modules,
+    get_available_repository_modules,
+    install_analyzer_module,
+    select_requested_analyzers,
+)
+from attackmap.orchestration.pipeline import (
+    HUNT_BANNER as HUNT_BANNER,
+)
+from attackmap.orchestration.pipeline import (
+    REMEDIATION_BANNER as REMEDIATION_BANNER,
+)
+from attackmap.orchestration.pipeline import (
+    TRIAGE_BANNER as TRIAGE_BANNER,
+)
+from attackmap.orchestration.run_spec import RunSpec
+from attackmap.orchestration.scan_service import ScanRequest, ScanRequestError, execute_scan_request
+from attackmap.output.report import OUTPUT_FORMATS
+from attackmap.output.review_prompts import HUNT_LENSES
+from attackmap.surfaces.suggest import detect_ecosystems
+
+app = typer.Typer(help="AttackMap: understand your system and map your attack surface.")
+
+
+def _select_modules(module: list[str], install_missing: bool) -> list:
+    """Resolve `-m` names (#237). Only official, lock-pinned plugins can be
+    installed by name, and only with --install-missing or an interactive
+    confirmation; otherwise the exact pinned pip command is printed."""
+    try:
+        return select_requested_analyzers(module, auto_install=False)
+    except MissingAnalyzersError as exc:
+        commands = [shlex.join(analyzer_install_command(name)) for name in exc.missing]
+        interactive = sys.stdin.isatty() and sys.stderr.isatty()
+        if install_missing or (
+            interactive
+            and typer.confirm(
+                "Install missing official analyzer(s) at their pinned commits?\n  "
+                + "\n  ".join(commands),
+                default=False,
+                err=True,
+            )
+        ):
+            try:
+                return select_requested_analyzers(module, auto_install=True)
+            except ValueError as install_exc:
+                raise typer.BadParameter(str(install_exc)) from install_exc
+        raise typer.BadParameter(
+            f"{exc} Install with:\n  " + "\n  ".join(commands) + "\nor re-run with --install-missing."
+        ) from exc
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def _select_analyzer_profile(profile_name: str, module: list[str] | None, install_missing: bool) -> list | None:
+    """Expand an offline profile without entering the interactive install path."""
+    from attackmap.orchestration.analyzer_profiles import (
+        get_analyzer_profiles,
+        resolve_analyzer_profile,
+    )
+    from attackmap.orchestration.analyzers import get_analyzer_metadata, get_registered_analyzers
+
+    if install_missing:
+        raise typer.BadParameter("--install-missing cannot be combined with --analyzer-profile.")
+    if module:
+        raise typer.BadParameter("--module cannot be combined with --analyzer-profile.")
+    definition = next((item for item in get_analyzer_profiles()
+                       if profile_name in (item.name, item.qualified_name)), None)
+    if definition is None or definition.selection_mode == "automatic":
+        try:
+            resolve_analyzer_profile(profile_name, [])
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        return None
+    registered = get_registered_analyzers()
+    try:
+        metadata = [get_analyzer_metadata(a) for a in registered]
+        if any(a.name != meta.name for a, meta in zip(registered, metadata, strict=True)):
+            raise ValueError("Analyzer runtime names do not match their declared metadata; profile unavailable.")
+        selection = resolve_analyzer_profile(profile_name, metadata)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if selection.module_names is None:
+        return None
+    by_name = {analyzer.name: analyzer for analyzer in registered}
+    typer.echo(
+        f"Analyzer profile {selection.qualified_name}: {', '.join(selection.module_names)}. "
+        "Repository detection still applies.", err=True,
+    )
+    if selection.experimental_module_names:
+        typer.echo(f"Experimental modules selected: {', '.join(selection.experimental_module_names)}.", err=True)
+    if selection.opt_in_module_names:
+        typer.echo(f"Opt-in modules selected: {', '.join(selection.opt_in_module_names)}.", err=True)
+    return [by_name[name] for name in selection.module_names]
+
+
+
+def _select_modules_for_output(module: list[str], install_missing: bool, output: Path,
+                               run_id: str | None, *, diagnostics: bool = True) -> list:
+    selection_started = time.perf_counter()
+    try:
+        return _select_modules(module, install_missing)
+    except typer.BadParameter:
+        selection_duration = round((time.perf_counter() - selection_started) * 1000)
+        if diagnostics:
+            from attackmap.foundation.artifact_manifest import make_run_id
+            from attackmap.foundation.artifact_publisher import write_diagnostic
+            from attackmap.foundation.diagnostics import startup_diagnostic
+            # Diagnostic storage must not replace the original usage error.
+            with suppress(OSError, ValueError):
+                write_diagnostic(Path(output), run_id or make_run_id(), state="failed",
+                                 error="Requested analyzer configuration unavailable.",
+                                 context=startup_diagnostic("select_analyzers",
+                                     duration_milliseconds=selection_duration,
+                                     requested_analyzers=module))
+        raise
+
+
+def _ensure_output_dir(path: Path, *, mark: bool = False) -> Path:
+    try:
+        return ensure_output_dir(path, mark=mark)
+    except UnsafePathError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+
+def _write_text(path: Path, text: str) -> None:
+    """Write a CLI artifact without following symlinks (#228)."""
+    path = Path(path)
+    try:
+        safe_write_text(ensure_output_dir(path.parent), path, text)
+    except UnsafePathError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"attackmap {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the AttackMap version and exit.",
+    ),
+) -> None:
+    """AttackMap: understand your system and map your attack surface."""
+
+PROGRESS_FORMATS = ("auto", "tty", "json", "none")
+LLM_PROVIDERS = ("claude", "openai")
+LLM_SPEEDS = ("standard", "fast")
+LLM_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+LLM_BACKENDS = ("auto", "api", "cli")
+
+
+def _given(ctx: typer.Context, name: str) -> bool:
+    """True when the user passed the option (not just its default)."""
+    source = ctx.get_parameter_source(name)
+    return source is not None and source.name not in {"DEFAULT", "DEFAULT_MAP"}
+
+
+def _validate_analyze_options(
+    ctx: typer.Context,
+    *,
+    progress_format: str,
+    output_format: str,
+    llm_provider: str,
+    llm_speed: str,
+    llm_effort: str | None,
+    llm_backend: str,
+    hunt: bool,
+    verify: bool,
+    verify_votes: int,
+    hunt_lenses: int,
+    hunt_rounds: int,
+    hunt_budget: int,
+    baseline: str | None,
+    diff_output: str | None,
+    secrets_history: int = 0,
+) -> None:
+    """Reject bad values and orphaned flags before any scanning starts (#229).
+
+    A typo in an LLM option used to surface only after the full scan, CVE
+    lookup and report writing; flags whose parent option was missing were
+    silently ignored with exit 0.
+    """
+
+    def _choice(flag: str, value: str | None, allowed: tuple[str, ...]) -> None:
+        if value is not None and value not in allowed:
+            raise typer.BadParameter(f"{flag} must be one of: {', '.join(allowed)} (got {value!r}).")
+
+    _choice("--progress-format", progress_format, PROGRESS_FORMATS)
+    _choice("--format", output_format, tuple(OUTPUT_FORMATS))
+    _choice("--llm-provider", llm_provider, LLM_PROVIDERS)
+    _choice("--llm-speed", llm_speed, LLM_SPEEDS)
+    _choice("--llm-effort", llm_effort, LLM_EFFORTS)
+    _choice("--llm-backend", llm_backend, LLM_BACKENDS)
+
+    hunt_only = ("verify", "verify_votes", "hunt_lenses", "hunt_rounds", "hunt_budget")
+    orphaned = [f"--{name.replace('_', '-')}" for name in hunt_only if _given(ctx, name)]
+    if orphaned and not hunt:
+        verb = "only applies" if len(orphaned) == 1 else "only apply"
+        raise typer.BadParameter(f"{', '.join(orphaned)} {verb} with --hunt.")
+    if _given(ctx, "diff_output") and diff_output is not None and baseline is None:
+        raise typer.BadParameter("--diff-output requires --baseline to be set.")
+
+    if not 0 <= secrets_history <= 5000:
+        raise typer.BadParameter(f"--secrets-history must be between 0 (off) and 5000 commits (got {secrets_history}).")
+    if verify_votes < 1:
+        raise typer.BadParameter(f"--verify-votes must be at least 1 (got {verify_votes}).")
+    if not 1 <= hunt_lenses <= len(HUNT_LENSES):
+        raise typer.BadParameter(f"--hunt-lenses must be between 1 and {len(HUNT_LENSES)} (got {hunt_lenses}).")
+    if hunt_rounds < 1:
+        raise typer.BadParameter(f"--hunt-rounds must be at least 1 (got {hunt_rounds}).")
+    if hunt_budget < 0:
+        raise typer.BadParameter(f"--hunt-budget must be 0 (no cap) or more (got {hunt_budget}).")
+
+
+def _parse_deployment_aliases(
+    service_alias: list[str],
+    service_dns_suffix: list[str],
+    service_port: list[str],
+    service_protocol: list[str],
+    via_proxy: list[str],
+):
+    """Build a validated DeploymentAliases from CLI declarations, or None."""
+    if not any((service_alias, service_dns_suffix, service_port, service_protocol, via_proxy)):
+        return None
+    from attackmap.extraction.contracts import DeploymentAliases
+
+    def _pairs(items: list[str], flag: str, shape: str) -> dict[str, str]:
+        out: dict[str, str] = {}
+        for item in items:
+            key, sep, value = item.partition("=")
+            if not sep or not key.strip() or not value.strip():
+                raise typer.BadParameter(f"{flag} expects {shape}, got: {item!r}")
+            out[key.strip()] = value.strip()
+        return out
+
+    try:
+        return DeploymentAliases(
+            hosts=_pairs(service_alias, "--service-alias", "HOST=REPO"),
+            dns_suffixes=tuple(service_dns_suffix),
+            service_ports=_pairs(service_port, "--service-port", "REPO=PORT"),
+            service_protocols=_pairs(service_protocol, "--service-protocol", "REPO=SCHEME"),
+            proxies=_pairs(via_proxy, "--via-proxy", "PROXY=REPO"),
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def _validate_fleet_options(fleet_incompatible: dict[str, bool]) -> None:
+    active_flags = [flag for flag, on in fleet_incompatible.items() if on]
+    if active_flags:
+        raise typer.BadParameter(
+            f"{', '.join(sorted(active_flags))} not yet supported in multi-repo mode — "
+            "run one repository at a time for these (fleet-aware wiring lands in #146b+)."
+        )
+
+
+
+def _run_fleet(
+    repo_paths: list[Path],
+    *,
+    output: str,
+    spec: RunSpec,
+    module: list[str] | None,
+    fleet_incompatible: dict[str, bool],
+    output_format: str = "all",
+    install_missing: bool = False,
+    max_workers: int = 1,
+    startup_diagnostics: bool = True,
+    resolved_analyzers: list | None = None,
+    deployment_aliases=None,
+    run_id: str | None = None,
+) -> None:
+    """Multi-repo fleet scan adapter around the shared ``execute_scan_request``."""
+    _validate_fleet_options(fleet_incompatible)
+
+    selected_analyzers = resolved_analyzers
+    if selected_analyzers is None and module:
+        selected_analyzers = _select_modules_for_output(
+            module, install_missing, Path(output), run_id,
+            diagnostics=startup_diagnostics)
+
+    request = ScanRequest(
+        repo_paths=repo_paths,
+        output=Path(output),
+        output_format=output_format,
+        spec=spec,
+        analyzers=selected_analyzers,
+        run_id=run_id,
+        max_workers=max_workers,
+        deployment_aliases=deployment_aliases,
+    )
+    try:
+        summary = execute_scan_request(request)
+    except ScanRequestError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if summary.exit_code:
+        if summary.error:
+            typer.echo(f"Error: {summary.error}", err=True)
+        raise typer.Exit(code=summary.exit_code)
+
+
+@app.command()
+def analyze(
+    ctx: typer.Context,
+    paths: list[str] | None = typer.Argument(
+        None,
+        help="Path(s) to the repository(ies) to analyze. Pass two or more for a "
+        "cross-repo fleet scan (#146a): each is scanned into its own report "
+        "subdirectory and a fleet summary is written alongside. Defaults to '.'.",
+    ),
+    output: str = typer.Option("reports", "--output", "-o", help="Directory for generated reports."),
+    format: str = typer.Option(
+        "all",
+        "--format",
+        help="Which report artifacts to write: 'all' (default), 'json' (machine-readable "
+        "*.json + SARIF), or 'markdown' (human-readable *.md + Graphviz *.dot). Opt-in "
+        "outputs (--baseline diff, --pr-comment, LLM passes) are always written.",
+    ),
+    module: list[str] | None = typer.Option(
+        None,
+        "--module",
+        "-m",
+        help="Analyzer module(s) to run. Repeat to select multiple. A missing official analyzer is installed (at its pinned commit) only with --install-missing or after an interactive confirmation.",
+    ),
+    analyzer_profile: str | None = typer.Option(
+        None, "--analyzer-profile",
+        help="Versioned analyzer selection: automatic, node-atproto, php-laminas-omeka, or python. "
+        "Preserves base layers; missing modules fail without installation. Cannot be combined with --module or --install-missing.",
+    ),
+    install_missing: bool = typer.Option(
+        False,
+        "--install-missing",
+        help="Install missing official analyzers named by --module, pinned to the commits in attackmap's plugin lock.",
+    ),
+    trusted_analyzers_only: bool = typer.Option(
+        False,
+        "--trusted-analyzers-only",
+        help=f"Legacy compatibility flag (no effect): non-official analyzers are now refused by default; use --allow-untrusted-analyzers to opt in. Still accepted, also settable via {TRUSTED_ONLY_ENV}=1.",
+    ),
+    allow_untrusted_analyzers: bool = typer.Option(
+        False,
+        "--allow-untrusted-analyzers",
+        help="Load non-official analyzer plugins (secure default refuses them). "
+        f"Also via {ALLOW_UNTRUSTED_ENV}=1. Only official, lock-pinned plugins load otherwise.",
+    ),
+    llm: bool = typer.Option(
+        False,
+        "--llm",
+        help="Generate a narrative defensive review by calling Claude with the evidence pack. Auth resolves automatically: ANTHROPIC_API_KEY → ANTHROPIC_AUTH_TOKEN → `claude` CLI (subscription auth). Force a backend with --llm-backend.",
+    ),
+    llm_provider: str = typer.Option(
+        "claude",
+        "--llm-provider",
+        help="LLM provider for --llm/--hunt/--remediate: 'claude' (default, Anthropic) or 'openai' (OpenAI/Codex).",
+    ),
+    llm_model: str | None = typer.Option(
+        None,
+        "--llm-model",
+        help="Model ID for --llm. Claude provider: e.g. claude-opus-4-8 (default), claude-fable-5, claude-sonnet-5, claude-opus-4-7. OpenAI provider: e.g. gpt-5-codex (default), gpt-5.5, gpt-5.4, gpt-5.4-mini — any model ID is passed through verbatim.",
+    ),
+    llm_effort: str | None = typer.Option(
+        None,
+        "--llm-effort",
+        help="Effort for --llm: low|medium|high|xhigh|max. Defaults to high. For OpenAI, xhigh/max clamp to high (Responses API reasoning effort tops out at high).",
+    ),
+    llm_backend: str = typer.Option(
+        "auto",
+        "--llm-backend",
+        help="Which backend --llm uses. Claude: 'auto' tries ANTHROPIC_API_KEY → ANTHROPIC_AUTH_TOKEN → `claude` CLI; 'api' forces the SDK; 'cli' forces the `claude` CLI. OpenAI: 'auto' tries OPENAI_API_KEY then the `codex` CLI; 'api' forces the OpenAI SDK; 'cli' forces `codex exec` (your `codex login` subscription).",
+    ),
+    llm_speed: str = typer.Option(
+        "standard",
+        "--llm-speed",
+        help="LLM output speed: 'standard' (default) or 'fast'. Fast mode (~2.5x output speed, premium price) applies only to Opus 4.8/4.7 via the API backend; other models/backends fall back to standard.",
+    ),
+    hunt: bool = typer.Option(
+        False,
+        "--hunt",
+        help="Vulnerability-hypothesis mode (#80): have Claude reason over the full evidence pack as a red-team analyst and propose ranked, human-verifiable exploit-chain HYPOTHESES (leads, not detections) to vulnerability-hypotheses.md. Uses the same LLM auth/backend as --llm.",
+    ),
+    verify: bool = typer.Option(
+        False,
+        "--verify",
+        help="With --hunt: obtain a model assessment of each hypothesis against source at cited locations — CONFIRMED / REFUTED / NEEDS HUMAN REVIEW (#hunt-verify). AttackMap feeds code excerpts to the model; this does not establish verified runtime exploitability.",
+    ),
+    verify_votes: int = typer.Option(
+        3,
+        "--verify-votes",
+        help="With --hunt --verify: number of independent skeptic passes to adjudicate each hypothesis. Each model assessment requires a strict majority of planned votes. Missing or failed votes abstain; ties and no-majority outcomes are INCONCLUSIVE. Model assessment does not establish verified exploitability.",
+    ),
+    hunt_lenses: int = typer.Option(
+        1,
+        "--hunt-lenses",
+        help="With --hunt --verify: run N independent generation passes, each specialised in a distinct failure mode (auth-bypass, TOCTOU, IDOR, deserialization, SSRF, secret-misuse), then dedupe across them before verifying (#147b). 1 = a single generalist pass. Costs one extra LLM call per lens.",
+    ),
+    hunt_rounds: int = typer.Option(
+        1,
+        "--hunt-rounds",
+        help="With --hunt --verify: loop generation for up to N rounds, accumulating new (deduped) leads while a completeness critic seeds each next round with untried angles; stops early once a round finds nothing new (#147c). 1 = a single round.",
+    ),
+    hunt_budget: int = typer.Option(
+        0,
+        "--hunt-budget",
+        help="With --hunt-rounds: stop launching new hunting rounds after this many output tokens (0 disables only this hunt sublimit; the whole-scan AI allowance still applies).",
+    ),
+    ai_max_calls: int = typer.Option(8, "--ai-max-calls", min=1, max=64,
+        help="Per-repository whole-scan provider attempt limit shared by narrative, hunt/jury, remediation and triage. Fleet AI features are unsupported."),
+    ai_output_tokens: int = typer.Option(32000, "--ai-output-tokens", min=1, max=256000,
+        help="Whole-scan OUTPUT-token allowance; API backend required. Does not cap input tokens, hidden reasoning or billing."),
+    ai_timeout_seconds: int = typer.Option(600, "--ai-timeout-seconds", min=1, max=86400,
+        help="Whole-scan elapsed AI allowance in seconds; no provider attempt begins after its deadline."),
+    time_budget_seconds: int | None = typer.Option(None, "--time-budget-seconds", min=1, max=604800,
+        help="Elapsed ceiling in seconds for the deterministic pipeline (no AI). Default 600 (10 minutes); env override ATTACKMAP_TIME_BUDGET_SECONDS. On breach the run ends COMPLETED with explicit partial coverage — skipped stages are named in run-manifest.json. Use a large value rather than expecting 'unlimited'."),
+    remediate: bool = typer.Option(
+        False,
+        "--remediate",
+        help="Remediation mode (#106): have Claude propose concrete, review-first fixes per finding (suggested diffs / precise instructions, grounded in evidence) to remediation.md. Uses the same LLM auth/backend as --llm.",
+    ),
+    triage: bool = typer.Option(
+        False,
+        "--triage",
+        help="Triage mode (#145): cluster, de-duplicate, and rank the EXISTING heuristic findings into a prioritized shortlist (citing real finding IDs) at triage.md. LLM-backed when available; degrades to a deterministic score-ordered fallback when no backend is present.",
+    ),
+    recall: bool = typer.Option(
+        False,
+        "--recall",
+        help="Recall mode (#148a): widen taint discovery — deeper import-hop depth and surfacing reaches the default pass conservatively hides. The extra reach is marked SPECULATIVE and kept out of --fail-on-new-high; pair with --hunt --verify to adjudicate it. Off by default (higher recall, lower precision).",
+    ),
+    baseline: str | None = typer.Option(
+        None,
+        "--baseline",
+        help="Path to a prior `attackmap-report.json`. When set, emit a diff (new/persisted/resolved) alongside the fresh report.",
+    ),
+    diff_output: str | None = typer.Option(
+        None,
+        "--diff-output",
+        help="Path to write the Markdown diff. Defaults to <output>/attackmap-diff.md when --baseline is set.",
+    ),
+    fail_on_new_high: bool = typer.Option(
+        False,
+        "--fail-on-new-high",
+        help="Exit non-zero if the diff introduces any new HIGH-severity findings. Requires --baseline.",
+    ),
+    suppress_from_ref: str | None = typer.Option(
+        None,
+        "--suppress-from-ref",
+        help="Trust only suppressions that exist at this git ref (e.g. the PR's base branch). Suppress-file entries and inline directives added since are reported as pending and not applied.",
+    ),
+    allow_pr_suppressions: bool = typer.Option(
+        False,
+        "--allow-pr-suppressions",
+        help="With --suppress-from-ref, apply suppressions added since the ref anyway (they are still listed).",
+    ),
+    strict_suppressions: bool = typer.Option(
+        False,
+        "--strict-suppressions",
+        help="Exit 2 if any suppression has expired (past its `expires:` / `until=` date).",
+    ),
+    strict_analyzers: bool = typer.Option(
+        False,
+        "--strict-analyzers",
+        help="Fail fast if any analyzer raises or returns an invalid result, instead of skipping it and listing it under analyzer_errors (for plugin development and CI).",
+    ),
+    isolated_analyzers: bool = typer.Option(
+        False,
+        "--isolated-analyzers",
+        help="Run plugin analyzers in isolated worker processes with time/output/memory limits; a crashing or hanging analyzer becomes a named partial-coverage result instead of killing the scan. Built-in analyzers always run in-process. Fault containment, not a security sandbox.",
+    ),
+    incremental: bool = typer.Option(
+        False,
+        "--incremental",
+        help="Reuse cached per-file analysis results for unchanged files (default off). Internal accelerator only — reports and artifacts remain the published contract and are byte-identical to a full run. The cache lives under the system temp dir (attackmap-incremental/<repo-digest>/), outside the repository and report outputs, and is bounded (oldest entries evicted first). An entry is reused only when file content, engine code identity, the analyzer pass set and the source-role policy (ATTACKMAP_INCLUDE_TESTS/_VENDORED) are all unchanged; anything else means a safe full recompute. Low-level env form: ATTACKMAP_INCREMENTAL=1.",
+    ),
+    fail_on_new_suppression: bool = typer.Option(
+        False,
+        "--fail-on-new-suppression",
+        help="Exit non-zero if a finding active in the baseline is suppressed in this run (e.g. a suppression added by the PR). Requires --baseline.",
+    ),
+    secrets_history: int = typer.Option(
+        0,
+        "--secrets-history",
+        help="Also scan the patches of the last N commits (all refs) for hard-coded secrets, reporting the introducing commit and whether each is still in HEAD. Off by default (0); capped at 5000 commits and 64 MB of patch text. Git runs with hooks, pagers, external diff and textconv disabled.",
+    ),
+    cve: bool = typer.Option(
+        False,
+        "--cve",
+        help="Cross-reference SBOM entries against OSV.dev and surface vulnerable dependencies as findings. Cached under ~/.attackmap/cache/osv/ (24h TTL). Off by default because it does network I/O.",
+    ),
+    no_progress: bool = typer.Option(
+        False,
+        "--no-progress",
+        help="Disable the live progress bar / ETA during scanning. Progress auto-disables when stderr isn't a terminal (CI, piped output).",
+    ),
+    progress_format: str = typer.Option(
+        "auto",
+        "--progress-format",
+        help="Progress reporting: 'auto' (TTY bar when stderr is a terminal), 'tty' (always the bar), 'json' (newline-delimited JSON events on stderr, for GUI/tool front-ends), or 'none'. --no-progress is equivalent to 'none'.",
+    ),
+    pr_comment: str | None = typer.Option(
+        None,
+        "--pr-comment",
+        help="Write a Markdown PR summary comment to this path (for the GitHub Action / bot to post). Includes the baseline diff and top exploitability when available.",
+    ),
+    no_suppress: bool = typer.Option(
+        False,
+        "--no-suppress",
+        help="Ignore all suppressions — the .attackmap-suppress.yaml baseline and inline `attackmap:ignore` directives (#144). Use for a full, unfiltered audit.",
+    ),
+    suppress_file: str | None = typer.Option(
+        None,
+        "--suppress-file",
+        help="Path to a suppression baseline, overriding auto-discovery of .attackmap-suppress.yaml at the repo root (#144).",
+    ),
+    run_id: str | None = typer.Option(
+        None,
+        "--run-id",
+        help="Optional run identifier written into artifact-manifest.json. Useful for GUI/CI correlation.",
+    ),
+    fleet_workers: int = typer.Option(
+        1,
+        "--fleet-workers",
+        help="Maximum parallel repository scans in multi-repo mode. Default 1 (serial). "
+        "Capped by ATTACKMAP_FLEET_MAX_WORKERS if set.",
+    ),
+    fleet_result: Path | None = typer.Option(None, "--fleet-result", hidden=True),
+    direct_generation_output: bool = typer.Option(False, "--direct-generation-output", hidden=True),
+    service_alias: list[str] = typer.Option(
+        [],
+        "--service-alias",
+        help="Fleet only. Declare a deployment alias HOST=REPO for cross-repo link resolution (C28); "
+        "repeatable. Positive declarations only — destinations are never resolved by similarity.",
+    ),
+    service_dns_suffix: list[str] = typer.Option(
+        [],
+        "--service-dns-suffix",
+        help="Fleet only. Declare a DNS namespace suffix (e.g. .internal) that may strip to a repo "
+        "identity; repeatable. Undeclared suffixes never strip.",
+    ),
+    service_port: list[str] = typer.Option(
+        [],
+        "--service-port",
+        help="Fleet only. Declare a service's listen port REPO=PORT (C28); repeatable. An "
+        "explicitly-ported call resolves only against declared ports or host:port aliases. "
+        "Listen ports in k8s/compose manifests are also read automatically; this flag overrides them.",
+    ),
+    service_protocol: list[str] = typer.Option(
+        [],
+        "--service-protocol",
+        help="Fleet only. Declare the scheme a service serves, REPO=http|https (C28); repeatable. "
+        "A call whose URL scheme contradicts the declaration stays a candidate.",
+    ),
+    via_proxy: list[str] = typer.Option(
+        [],
+        "--via-proxy",
+        help="Fleet only. Declare PROXY=REPO: calls to PROXY reach REPO through it (C28); repeatable. "
+        "Such links resolve as observed via the proxy, never as direct service-to-service edges. "
+        "Single-backend nginx upstreams are also read automatically; this flag overrides them.",
+    ),
+) -> None:
+    validation_started = time.perf_counter()
+    # AR026/AC-106: no feature flags are written to the environment. The
+    # elapsed-time ceiling travels on RunSpec.budget (in-process) and reaches
+    # fleet worker subprocesses via --time-budget-seconds argv; the
+    # incremental flag travels on RunSpec.features and reaches workers via
+    # --incremental argv. Operator-set ATTACKMAP_TIME_BUDGET_SECONDS /
+    # ATTACKMAP_INCREMENTAL=1 remain honored as documented env escape hatches
+    # (read-only) by the pipeline and the spec build below.
+    fleet_incompatible = {
+        "--baseline": baseline is not None,
+        "--diff-output": diff_output is not None,
+        "--fail-on-new-high": fail_on_new_high,
+        "--fail-on-new-suppression": fail_on_new_suppression,
+        "--pr-comment": pr_comment is not None,
+        "--llm": llm,
+        "--hunt": hunt,
+        "--remediate": remediate,
+        "--triage": triage,
+        "--secrets-history": secrets_history > 0,
+    }
+    profile_analyzers = None
+    try:
+        repo_paths = [Path(p).resolve() for p in (paths or ["."])]
+        for rp in repo_paths:
+            if not rp.exists():
+                raise typer.BadParameter(f"Path does not exist: {rp}")
+
+        # Validate progress format before either branch, so the fleet path enforces
+        # the same option semantics as a single-repo run (#146a).
+        # AR026/AC-106: --trusted-analyzers-only stays an accepted no-op; it no
+        # longer publishes ATTACKMAP_TRUSTED_ANALYZERS_ONLY into the process
+        # environment. Non-official analyzers are refused by default, and the
+        # operator escape hatch (setting the env var) is still honored read-only.
+        _validate_analyze_options(
+            ctx,
+            progress_format=progress_format,
+            output_format=format,
+            llm_provider=llm_provider,
+            llm_speed=llm_speed,
+            llm_effort=llm_effort,
+            llm_backend=llm_backend,
+            hunt=hunt,
+            verify=verify,
+            verify_votes=verify_votes,
+            hunt_lenses=hunt_lenses,
+            hunt_rounds=hunt_rounds,
+            hunt_budget=hunt_budget,
+            baseline=baseline,
+            diff_output=diff_output,
+            secrets_history=secrets_history,
+        )
+
+        deployment_aliases = _parse_deployment_aliases(
+            service_alias, service_dns_suffix, service_port, service_protocol, via_proxy
+        )
+        if len(repo_paths) == 1 and deployment_aliases is not None:
+            raise typer.BadParameter(
+                "--service-alias/--service-dns-suffix/--service-port/--service-protocol/--via-proxy "
+                "apply to multi-repo fleet scans only."
+            )
+        if len(repo_paths) > 1:
+            _validate_fleet_options(fleet_incompatible)
+        if analyzer_profile is not None:
+            profile_analyzers = _select_analyzer_profile(analyzer_profile, module, install_missing)
+    except typer.BadParameter:
+        validation_duration = round((time.perf_counter() - validation_started) * 1000)
+        if not direct_generation_output:
+            from attackmap.foundation.artifact_manifest import make_run_id
+            from attackmap.foundation.artifact_publisher import write_diagnostic
+            from attackmap.foundation.diagnostics import startup_diagnostic
+            # Keep the original semantic usage error if storage is unavailable.
+            with suppress(OSError, ValueError):
+                write_diagnostic(Path(output), run_id or make_run_id(), state="failed",
+                    error="Request configuration unavailable.",
+                    context=startup_diagnostic("request_validation",
+                        duration_milliseconds=validation_duration))
+        raise
+
+    # AR025/AC-105: the CLI is a RunSpec adapter — every flag value maps into
+    # the frozen run configuration exactly once, then travels with the
+    # transport-only request.
+    spec = RunSpec.from_cli({
+        "module": list(module or []),
+        "analyzer_profile": analyzer_profile,
+        "install_missing": install_missing,
+        "allow_untrusted_analyzers": allow_untrusted_analyzers,
+        "strict_analyzers": strict_analyzers,
+        "isolated_analyzers": isolated_analyzers,
+        "recall": recall,
+        "cve": cve,
+        "incremental": incremental or os.environ.get(INCREMENTAL_ENV) == "1",
+        "no_suppress": no_suppress,
+        "suppress_file": suppress_file,
+        "suppress_from_ref": suppress_from_ref,
+        "allow_pr_suppressions": allow_pr_suppressions,
+        "strict_suppressions": strict_suppressions,
+        "secrets_history": secrets_history,
+        "time_budget_seconds": time_budget_seconds,
+        "llm": llm,
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+        "llm_effort": llm_effort,
+        "llm_backend": llm_backend,
+        "llm_speed": llm_speed,
+        "hunt": hunt,
+        "verify": verify,
+        "verify_votes": verify_votes,
+        "hunt_lenses": hunt_lenses,
+        "hunt_rounds": hunt_rounds,
+        "hunt_budget": hunt_budget,
+        "remediate": remediate,
+        "triage": triage,
+        "ai_max_calls": ai_max_calls,
+        "ai_output_tokens": ai_output_tokens,
+        "ai_timeout_seconds": ai_timeout_seconds,
+        "fleet_workers": fleet_workers,
+        "format": format,
+        "progress_format": progress_format,
+        "no_progress": no_progress,
+        "atomic_output": not direct_generation_output,
+        "run_id": run_id,
+        "baseline": baseline,
+        "diff_output": diff_output,
+        "fail_on_new_high": fail_on_new_high,
+        "fail_on_new_suppression": fail_on_new_suppression,
+        "pr_comment": pr_comment,
+    })
+
+    # Multi-repo fleet mode (#146a): scan each repo independently and assemble a
+    # fleet view. Dispatched here so the single-repo path below is untouched.
+    if len(repo_paths) > 1:
+        _run_fleet(
+            repo_paths,
+            output=output,
+            spec=spec,
+            module=module,
+            resolved_analyzers=profile_analyzers,
+            output_format=format,
+            install_missing=install_missing,
+            run_id=run_id,
+            max_workers=fleet_workers,
+            deployment_aliases=deployment_aliases,
+            startup_diagnostics=not direct_generation_output,
+            # Single-repo-only features aren't fleet-aware yet — reject rather
+            # than silently ignore, so the user isn't surprised (#146b+ wire them).
+            fleet_incompatible=fleet_incompatible,
+        )
+        return
+
+    selected_analyzers = profile_analyzers
+    if selected_analyzers is None and module:
+        selected_analyzers = _select_modules_for_output(
+            module, install_missing, Path(output), run_id, diagnostics=not direct_generation_output)
+    request = ScanRequest(
+        repo_paths=repo_paths,
+        output=Path(output),
+        output_format=format,
+        spec=spec,
+        analyzers=selected_analyzers,
+        run_id=run_id,
+        fleet_result=fleet_result,
+    )
+    try:
+        summary = execute_scan_request(request)
+    except ScanRequestError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if summary.exit_code:
+        if summary.error:
+            typer.echo(f"Error: {summary.error}", err=True)
+        raise typer.Exit(code=summary.exit_code)
+
+
+
+
+
+@app.command("capabilities")
+def capabilities() -> None:
+    """Describe what this CLI supports, for GUIs and wrappers.
+
+    Front-ends (e.g. the macOS app) used to scrape `analyze --help`, which
+    breaks when help wording or terminal width changes. This prints a stable
+    JSON document instead: the version, the subcommands, every long option
+    `analyze` accepts, and whether `analyze` takes multiple repo paths.
+    """
+    from attackmap.orchestration.desktop_capabilities import build_capabilities
+    payload = build_capabilities(app)
+    typer.echo(json.dumps(payload, indent=2))
+
+
+@app.command("modules")
+def modules(
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit the installed analyzer modules as a JSON array "
+        "(name/display_name/description/scope/ecosystems/enabled_by_default). "
+        "Network-free — the remote module-repository section is omitted. "
+        "Intended for tool / GUI front-ends that offer analyzer selection.",
+    ),
+    catalog_json: bool = typer.Option(
+        False, "--catalog-json",
+        help="Emit an offline engine-bound catalog including effective and shadowed implementations, load errors and selection profiles.",
+    ),
+    profiles_json: bool = typer.Option(
+        False, "--profiles-json",
+        help="Emit offline versioned profiles with missing, experimental and opt-in modules from this engine's inventory.",
+    ),
+) -> None:
+    if sum((json_output, catalog_json, profiles_json)) > 1:
+        raise typer.BadParameter("Choose only one of --json, --catalog-json or --profiles-json.")
+    if catalog_json or profiles_json:
+        from attackmap.orchestration.desktop_capabilities import build_analyzer_catalog_payload
+        payload = build_analyzer_catalog_payload()
+        if profiles_json:
+            payload = {"schema": 1, "engine_identity": payload["engine_identity"],
+                       "analyzer_profiles": payload["analyzer_profiles"]}
+        typer.echo(json.dumps(payload, indent=2))
+        return
+    available_modules = get_available_modules()
+    if json_output:
+        from attackmap.orchestration.desktop_capabilities import module_inventory
+        payload = module_inventory(available_modules)
+        typer.echo(json.dumps(payload, indent=2))
+        return
+
+    if not available_modules:
+        typer.echo("No analyzer modules are currently available.")
+    else:
+        typer.echo("Available analyzer modules (installed, in run order):")
+        for module_metadata in available_modules:
+            ecosystems = ", ".join(module_metadata.ecosystems) if module_metadata.ecosystems else "none"
+            mode = "default" if module_metadata.enabled_by_default else f"opt-in (-m {module_metadata.name})"
+            typer.echo(f"- {module_metadata.name}: {module_metadata.description}")
+            typer.echo(f"  scope: {module_metadata.scope}")
+            typer.echo(f"  ecosystems: {ecosystems}")
+            typer.echo(f"  priority: {module_metadata.priority}  runs: {mode}")
+            if module_metadata.experimental and module_metadata.enabled_by_default:
+                typer.echo("  note: experimental but enabled by default")
+
+    typer.echo("")
+    typer.echo("Available module repositories (mlaify GitHub org):")
+    try:
+        repository_modules = get_available_repository_modules()
+    except ValueError as exc:
+        typer.echo(f"- Unable to fetch remote module repositories: {exc}")
+        return
+
+    if not repository_modules:
+        typer.echo("- No module repositories were discovered.")
+        return
+
+    for module in repository_modules:
+        typer.echo(f"- {module.analyzer_name} ({module.repo_name})")
+        typer.echo(f"  repo: {module.web_url}")
+
+
+@app.command("suggest")
+def suggest(
+    path: str = typer.Argument(".", help="Path to the repository to inspect."),
+    install: bool = typer.Option(
+        False,
+        "--install",
+        help="After printing, offer to `pip install` the missing recommended plugins.",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Skip the confirmation prompt when used with --install.",
+    ),
+    show_installed: bool = typer.Option(
+        False,
+        "--show-installed",
+        help="Include already-installed plugins in the output (marked accordingly).",
+    ),
+) -> None:
+    """Recommend analyzer plugins for the shape of the given repository."""
+    repo = Path(path).resolve()
+    if not repo.exists() or not repo.is_dir():
+        typer.echo(f"Path does not exist or is not a directory: {repo}")
+        raise typer.Exit(code=1)
+
+    suggestions = detect_ecosystems(repo)
+    missing = [s for s in suggestions if not s.installed]
+    installed = [s for s in suggestions if s.installed]
+
+    if not suggestions:
+        typer.echo(f"No AttackMap plugins matched the shape of {repo}.")
+        raise typer.Exit(code=0)
+
+    shown = suggestions if show_installed else missing
+    if not shown:
+        typer.echo("All recommended plugins are already installed:")
+        for s in installed:
+            typer.echo(f"  - {s.plugin} (installed)")
+        raise typer.Exit(code=0)
+
+    typer.echo(f"Recommended plugins for {repo}:")
+    for s in shown:
+        tag = " (installed)" if s.installed else ""
+        typer.echo(f"  - {s.plugin}{tag}")
+        typer.echo(f"      matches: {', '.join(s.matched_signals)}")
+        if not s.installed:
+            typer.echo(f"      install: {s.pip_install}")
+
+    if not install:
+        return
+    if not missing:
+        typer.echo("Nothing to install — all recommended plugins are already present.")
+        return
+
+    typer.echo("")
+    typer.echo("The following plugins will be installed via pip:")
+    for s in missing:
+        typer.echo(f"  - {s.plugin}")
+    if not yes and not typer.confirm("Proceed?", default=False):
+        typer.echo("Aborted.")
+        raise typer.Exit(code=1)
+
+    for s in missing:
+        typer.echo(f"Installing {s.plugin}…")
+        try:
+            install_analyzer_module(s.plugin)
+        except Exception as exc:
+            typer.echo(f"  Failed: {exc}")
+            raise typer.Exit(code=1) from exc
+    typer.echo("Done.")
+
+
+@app.command("rules")
+def rules(
+    as_json: bool = typer.Option(False, "--json", help="Emit the rule catalog as JSON."),
+) -> None:
+    """List every core detector's stable rule id (#223) — the SARIF ruleId and
+    the value for `rule:` suppressions and `attackmap:ignore[...]`."""
+    from attackmap.reasoning.threat_model import rule_catalog
+
+    catalog = rule_catalog()
+    if as_json:
+        typer.echo(json.dumps([{"rule_id": r, "title": t, "severity": sev} for r, t, sev in catalog], indent=2))
+        return
+    width = max(len(r) for r, _, _ in catalog)
+    for rule_id, title, severity in catalog:
+        typer.echo(f"{rule_id.ljust(width)}  {severity:<7}  {title}")
+
+
+@app.command("bench")
+def bench(
+    benchmark: str = typer.Option(
+        "evals/benchmark/benchmark.json",
+        "--benchmark",
+        help="Path to the benchmark manifest (labeled ground-truth corpus).",
+    ),
+    root: str = typer.Option(
+        ".",
+        "--root",
+        help="Repository root the manifest's case paths are relative to.",
+    ),
+    output: str | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Directory to write benchmark-results.md + .json (also printed to stdout).",
+    ),
+    fail_under: float | None = typer.Option(
+        None,
+        "--fail-under",
+        help="Exit non-zero if any scored detector class falls below this precision/recall (0-1). For CI regression gating.",
+    ),
+) -> None:
+    """Score AttackMap findings against the labeled benchmark corpus (#197).
+
+    The 1.0 precision gate: reports precision/recall/F1 per detector class.
+    Contributor/CI tool — run from the repo root (the manifest ships in `evals/`,
+    not the installed wheel).
+    """
+    from attackmap.orchestration.bench import (
+        bench_json,
+        load_benchmark,
+        min_scored_metric,
+        render_markdown,
+        run_benchmark,
+    )
+
+    manifest = Path(benchmark)
+    if not manifest.exists():
+        typer.echo(f"Benchmark manifest not found: {manifest}")
+        typer.echo("Pass --benchmark <path>, or run from a checkout that has evals/benchmark/.")
+        raise typer.Exit(code=2)
+
+    results = run_benchmark(load_benchmark(manifest), root)
+    markdown = render_markdown(results)
+    typer.echo(markdown)
+
+    if output:
+        out = Path(output)
+        _ensure_output_dir(out)
+        _write_text(out / "benchmark-results.md", markdown + "\n")
+        _write_text(out / "benchmark-results.json", json.dumps(bench_json(results), indent=2) + "\n")
+        typer.echo(f"Written to: {out.resolve()}")
+
+    errored = [r.id for r in results if r.error]
+    if errored:
+        typer.echo(f"Cases that failed to scan: {', '.join(errored)}")
+        raise typer.Exit(code=1)
+
+    if fail_under is not None:
+        worst = min_scored_metric(results)
+        if worst < fail_under:
+            typer.echo(f"FAIL: lowest scored precision/recall {worst:.2f} < --fail-under {fail_under:.2f}")
+            raise typer.Exit(code=1)
+        typer.echo(f"OK: lowest scored precision/recall {worst:.2f} ≥ --fail-under {fail_under:.2f}")
+
+
+@app.command("evaluate")
+def evaluate(
+    corpus: str = typer.Option(
+        "fixtures/evaluation/corpus.json",
+        "--corpus",
+        help="Path to the versioned evaluation corpus manifest (C27).",
+    ),
+    root: str = typer.Option(
+        ".",
+        "--root",
+        help="Repository root the corpus's case paths are relative to.",
+    ),
+    output: str | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Directory to write evaluation-report.md + .json (also printed to stdout).",
+    ),
+) -> None:
+    """Run the versioned detector-evaluation corpus (AM037 / C27).
+
+    Scores labeled positive/negative/clean expectations per detector family
+    with repository-level tuning/holdout split, Wilson intervals, sample
+    counts, and explicit experimental flags.
+    """
+    from attackmap.orchestration.evaluation import (
+        load_corpus,
+        render_markdown,
+        report_json,
+        run_evaluation,
+    )
+
+    manifest = Path(corpus)
+    if not manifest.exists():
+        typer.echo(f"Corpus manifest not found: {manifest}")
+        typer.echo("Pass --corpus <path>, or run from a checkout that has fixtures/evaluation/.")
+        raise typer.Exit(code=2)
+
+    report = run_evaluation(load_corpus(manifest), root)
+    markdown = render_markdown(report)
+    typer.echo(markdown)
+
+    if output:
+        out = Path(output)
+        _ensure_output_dir(out)
+        _write_text(out / "evaluation-report.md", markdown + "\n")
+        _write_text(out / "evaluation-report.json", json.dumps(report_json(report), indent=2) + "\n")
+        typer.echo(f"Written to: {out.resolve()}")
+
+    errored = [r.case.case_id for r in report.results if r.error]
+    if errored:
+        typer.echo(f"Cases that failed to scan: {', '.join(errored)}")
+        raise typer.Exit(code=1)
+
+
+@app.command("diagnostics")
+def diagnostics(
+    output_dir: Path = typer.Argument(
+        ..., help="AttackMap output base containing report generations.",
+        exists=True, file_okay=False, resolve_path=True),
+    out: Path = typer.Option(
+        None, "--out",
+        help="Also write the previewed bundle to this JSON file (existing file is overwritten)."),
+    max_generations: int = typer.Option(
+        50, "--max-generations", min=1, max=500,
+        help="How many recent generations to include in the export."),
+) -> None:
+    """Preview a redacted, source-free diagnostic export for an output base.
+
+    Prints the exact bounded JSON payload that --out would write: generation
+    timing/coverage summaries, terminal diagnostics, pins, and a dry-run
+    retention posture. Report contents and source excerpts are never included;
+    free text is redacted.
+    """
+    from attackmap.orchestration.diagnostics_export import (
+        collect_diagnostic_export,
+        export_diagnostics,
+    )
+    try:
+        if out is not None:
+            payload, target = export_diagnostics(output_dir, out, max_generations=max_generations)
+            typer.echo(json.dumps(payload, indent=2))
+            typer.echo(f"Diagnostic export written: {target}")
+        else:
+            typer.echo(json.dumps(collect_diagnostic_export(output_dir, max_generations=max_generations), indent=2))
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Diagnostic export failed: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+
+@app.command("ui")
+def ui() -> None:
+    """Open the Windows desktop GUI (WebView2 window, loopback-hosted)."""
+    from attackmap.surfaces.ui.launch import main
+
+    main()
+
+
+if __name__ == "__main__":
+    app()
+
+
+@app.command("desktop-worker", hidden=True)
+def desktop_worker_command(
+    request: Path = typer.Option(..., "--request"),
+    engine: bool = typer.Option(False, "--engine", hidden=True),
+) -> None:
+    """Internal native desktop transport adapter."""
+    from attackmap.orchestration.desktop_worker import run_request_file
+    raise typer.Exit(run_request_file(request, engine=engine))
+
+
+@app.command("desktop-action", hidden=True)
+def desktop_action_command(
+    request: Path = typer.Option(..., "--request"),
+    engine: bool = typer.Option(False, "--engine", hidden=True),
+    expected_sha256: str | None = typer.Option(None, "--expected-sha256", hidden=True),
+) -> None:
+    """Internal typed desktop action broker."""
+    from attackmap.orchestration.desktop_actions import run_action_file
+    raise typer.Exit(run_action_file(request, engine=engine, expected_sha256=expected_sha256))

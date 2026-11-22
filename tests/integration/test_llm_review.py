@@ -6,14 +6,14 @@ from typing import Any
 
 import pytest
 
-from attackmap.llm_review import (
+from attackmap.models import AttackPath, AttackSurface, Finding, Route, ScanResult
+from attackmap.output.llm_review import (
     DEFAULT_MAX_TOKENS,
     DEFAULT_MODEL,
     OPENAI_DEFAULT_MODEL,
     LlmReviewError,
     generate_llm_review,
 )
-from attackmap.models import AttackPath, AttackSurface, Finding, Route, ScanResult
 
 
 @dataclass
@@ -425,7 +425,7 @@ def test_auto_backend_picks_api_when_api_key_present(monkeypatch) -> None:
 def test_auto_backend_falls_back_to_cli_when_no_creds(monkeypatch) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
-    monkeypatch.setattr("attackmap.llm_review._claude_cli_available", lambda: True)
+    monkeypatch.setattr("attackmap.output.llm_review._claude_cli_available", lambda: True)
 
     payload = {"type": "result", "is_error": False, "result": "hi"}
     runner, _ = _make_cli_runner(json.dumps(payload))
@@ -440,8 +440,8 @@ def test_auto_backend_falls_back_to_cli_when_key_set_but_sdk_missing(monkeypatch
     # A core-only install has no anthropic SDK. A key set in that
     # environment must fall back to the `claude` CLI, not error.
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
-    monkeypatch.setattr("attackmap.llm_review._anthropic_sdk_available", lambda: False)
-    monkeypatch.setattr("attackmap.llm_review._claude_cli_available", lambda: True)
+    monkeypatch.setattr("attackmap.output.llm_review._anthropic_sdk_available", lambda: False)
+    monkeypatch.setattr("attackmap.output.llm_review._claude_cli_available", lambda: True)
 
     payload = {"type": "result", "is_error": False, "result": "hi"}
     runner, _ = _make_cli_runner(json.dumps(payload))
@@ -454,8 +454,8 @@ def test_auto_backend_falls_back_to_cli_when_key_set_but_sdk_missing(monkeypatch
 
 def test_openai_auto_falls_back_to_codex_when_key_set_but_sdk_missing(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-test")
-    monkeypatch.setattr("attackmap.llm_review._openai_sdk_available", lambda: False)
-    monkeypatch.setattr("attackmap.llm_review._codex_cli_available", lambda: True)
+    monkeypatch.setattr("attackmap.output.llm_review._openai_sdk_available", lambda: False)
+    monkeypatch.setattr("attackmap.output.llm_review._codex_cli_available", lambda: True)
     runner, _ = _make_cli_runner("hi")
 
     result = generate_llm_review(
@@ -468,14 +468,14 @@ def test_openai_auto_falls_back_to_codex_when_key_set_but_sdk_missing(monkeypatc
 def test_auto_backend_raises_when_no_creds_and_no_cli(monkeypatch) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
-    monkeypatch.setattr("attackmap.llm_review._claude_cli_available", lambda: False)
+    monkeypatch.setattr("attackmap.output.llm_review._claude_cli_available", lambda: False)
 
     with pytest.raises(LlmReviewError, match="No LLM backend available"):
         generate_llm_review(_trivial_scan(), _surfaces(), _findings(), [], backend="auto")
 
 
 def test_explicit_cli_backend_raises_when_cli_missing(monkeypatch) -> None:
-    monkeypatch.setattr("attackmap.llm_review._claude_cli_available", lambda: False)
+    monkeypatch.setattr("attackmap.output.llm_review._claude_cli_available", lambda: False)
     with pytest.raises(LlmReviewError, match="--llm-backend cli.*not on PATH"):
         generate_llm_review(_trivial_scan(), _surfaces(), _findings(), [], backend="cli")
 
@@ -723,7 +723,7 @@ def test_codex_cli_login_error_surfaces_hint() -> None:
 
 def test_openai_auto_backend_falls_back_to_codex_when_no_key(monkeypatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setattr("attackmap.llm_review._codex_cli_available", lambda: True)
+    monkeypatch.setattr("attackmap.output.llm_review._codex_cli_available", lambda: True)
     runner, _ = _make_cli_runner("hi")
 
     result = generate_llm_review(
@@ -735,7 +735,7 @@ def test_openai_auto_backend_falls_back_to_codex_when_no_key(monkeypatch) -> Non
 
 def test_openai_auto_raises_when_no_key_and_no_codex(monkeypatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setattr("attackmap.llm_review._codex_cli_available", lambda: False)
+    monkeypatch.setattr("attackmap.output.llm_review._codex_cli_available", lambda: False)
     with pytest.raises(LlmReviewError, match="No OpenAI backend available"):
         generate_llm_review(
             _trivial_scan(), _surfaces(), _findings(), [],
@@ -744,7 +744,7 @@ def test_openai_auto_raises_when_no_key_and_no_codex(monkeypatch) -> None:
 
 
 def test_explicit_codex_backend_raises_when_cli_missing(monkeypatch) -> None:
-    monkeypatch.setattr("attackmap.llm_review._codex_cli_available", lambda: False)
+    monkeypatch.setattr("attackmap.output.llm_review._codex_cli_available", lambda: False)
     with pytest.raises(LlmReviewError, match="--llm-backend cli.*not on PATH"):
         generate_llm_review(
             _trivial_scan(), _surfaces(), _findings(), [],

@@ -8,9 +8,9 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from attackmap import __version__
-from attackmap.cli import app
+from attackmap.orchestration.pipeline import run_scan
 from attackmap.orchestration.run_spec import RunSpec
-from attackmap.pipeline import run_scan
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 

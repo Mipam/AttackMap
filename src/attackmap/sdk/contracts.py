@@ -15,13 +15,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from ..analyzer_contracts import (
+from attackmap.reasoning.analyzer_contracts import (
     AnalyzerMetadata,
     AnalyzerProtocol,
     AnalyzerRepositoryModule,
     AnalyzerResult,
     normalize_analyzer_metadata,
 )
+
 from ..model.observations import (
     AnalyzerError,
     Anomaly,

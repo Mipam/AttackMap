@@ -3,11 +3,11 @@ import json
 
 import pytest
 
-from attackmap.config_scanner import scan_config_repo
-from attackmap.fleet import FleetRepoResult, FleetScan, fleet_summary_json
-from attackmap.fleet_resource_identity import extract_shared_datastore_declarations
-from attackmap.index import RepoIndex
-from attackmap.signal_provenance import stamp_scan_provenance
+from attackmap.extraction.config_scanner import scan_config_repo
+from attackmap.extraction.index import RepoIndex
+from attackmap.foundation.fleet_resource_identity import extract_shared_datastore_declarations
+from attackmap.orchestration.fleet import FleetRepoResult, FleetScan, fleet_summary_json
+from attackmap.reasoning.signal_provenance import stamp_scan_provenance
 
 CONFIG = """production:
   adapter: postgresql

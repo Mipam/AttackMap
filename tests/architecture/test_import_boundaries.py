@@ -65,9 +65,16 @@ def test_allowlist_has_no_stale_entries() -> None:
 
 
 def test_allowlist_never_grows() -> None:
-    """The allowlist length is capped at the AR002 freeze (49 entries)."""
+    """The allowlist length is capped at the AR002 freeze, tightened at AR029.
+
+    AR002 froze 49 canonical cycles. AR020+AR021 shrank the measured set to
+    43 and AR022/AR023 kept it there; AR029's subpackage restructure preserves
+    the import edges exactly but renames the nodes, which changes the DFS
+    canonicalisation the cycle finder reports — the same tooling re-measures
+    41 entries, so the cap tightens from 49 to 41.
+    """
     allowlist, _ = _load_allowlist()
-    frozen_max = 49
+    frozen_max = 41
     assert len(allowlist) <= frozen_max, (
         f"cycle allowlist grew to {len(allowlist)}; the freeze is {frozen_max}"
     )

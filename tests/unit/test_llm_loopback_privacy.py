@@ -3,8 +3,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from attackmap.llm_review import (LlmReviewError, _resolve_backend, _resolve_openai_backend,
-                                 _resolve_openai_client, _resolve_sdk_client)
+from attackmap.output.llm_review import (
+    LlmReviewError,
+    _resolve_backend,
+    _resolve_openai_backend,
+    _resolve_openai_client,
+    _resolve_sdk_client,
+)
 
 
 @pytest.mark.parametrize("endpoint", ["http://127.0.0.1:1234/v1", "http://127.2.3.4:1234/v1", "http://[::1]:1234/v1"])
@@ -67,12 +72,12 @@ def test_auto_local_endpoint_never_falls_back_to_cloud_cli(monkeypatch, provider
     monkeypatch.setenv(f"{provider.upper()}_BASE_URL", "http://127.0.0.1:1234/v1")
     monkeypatch.delenv(f"{provider.upper()}_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
-    monkeypatch.setattr(f"attackmap.llm_review._{provider}_sdk_available", lambda: False)
+    monkeypatch.setattr(f"attackmap.output.llm_review._{provider}_sdk_available", lambda: False)
     if provider == "openai":
-        monkeypatch.setattr("attackmap.llm_review._codex_cli_available", lambda: True)
+        monkeypatch.setattr("attackmap.output.llm_review._codex_cli_available", lambda: True)
         assert _resolve_openai_backend("auto", api_key=None, client=None, codex_runner=None) == "api"
     else:
-        monkeypatch.setattr("attackmap.llm_review._claude_cli_available", lambda: True)
+        monkeypatch.setattr("attackmap.output.llm_review._claude_cli_available", lambda: True)
         assert _resolve_backend("auto", api_key=None, client=None) == "api"
 
 

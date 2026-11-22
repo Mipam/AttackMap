@@ -6,11 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from attackmap.extraction.scanner import scan_repo
 from attackmap.models import Route, ScanResult, TaintChain
-from attackmap.scanner import scan_repo
-from attackmap.taint import analyze_taint
-from attackmap.threat_model import generate_findings
-
+from attackmap.reasoning.taint import analyze_taint
+from attackmap.reasoning.threat_model import generate_findings
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 PY_REPO = FIXTURES / "taint_repo"

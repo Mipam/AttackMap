@@ -6,8 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.ecosystem_php import scan_omeka_s_repo, scan_php_laminas_repo
-
+from attackmap.extraction.ecosystems.ecosystem_php import scan_omeka_s_repo, scan_php_laminas_repo
 
 SCANNERS = (scan_php_laminas_repo, scan_omeka_s_repo)
 CONFIG = "module/Demo/config/module.config.php"

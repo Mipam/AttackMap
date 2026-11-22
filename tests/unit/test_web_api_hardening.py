@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
+from attackmap.extraction.scanner import scan_repo
+from attackmap.model.taxonomy import taxonomy_for
 from attackmap.models import Route, ScanResult, WebHardeningIssue
-from attackmap.scanner import scan_repo
-from attackmap.taxonomy import taxonomy_for
-from attackmap.threat_model import generate_findings
-from attackmap.weaknesses import find_code_weaknesses
-from attackmap.webhardening import find_web_hardening_issues, has_csrf_protection
+from attackmap.reasoning.threat_model import generate_findings
+from attackmap.reasoning.weaknesses import find_code_weaknesses
+from attackmap.reasoning.webhardening import find_web_hardening_issues, has_csrf_protection
 
 
 def _issues(content: str, name: str = "app.js") -> dict[str, str]:

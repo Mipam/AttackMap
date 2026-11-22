@@ -5,14 +5,17 @@ from pathlib import Path
 import pytest
 import yaml
 
-from attackmap.finding_identity import finding_id, legacy_finding_id
-from attackmap.safe_fs import UnsafePathError
-from attackmap.suppression_actions import (
-    apply_suppression_action, execute_suppression_action, preview_suppression_action,
-    recover_suppression_action, undo_suppression_action,
-)
-from attackmap.suppress import apply_suppressions, collect_suppressions
+from attackmap.foundation.safe_fs import UnsafePathError
 from attackmap.models import Finding, FindingLocation
+from attackmap.output.finding_identity import finding_id, legacy_finding_id
+from attackmap.output.suppress import apply_suppressions, collect_suppressions
+from attackmap.output.suppression_actions import (
+    apply_suppression_action,
+    execute_suppression_action,
+    preview_suppression_action,
+    recover_suppression_action,
+    undo_suppression_action,
+)
 
 
 @pytest.fixture
@@ -178,7 +181,7 @@ def test_apply_and_undo_refuse_changed_files(tmp_path, finding):
 
 
 def test_postcommit_exception_can_recover_receipt_from_durable_plan(tmp_path, finding, monkeypatch):
-    import attackmap.suppression_actions as module
+    import attackmap.output.suppression_actions as module
     plan = preview(tmp_path, finding)
     original = module.os.replace
     def interrupted(source, target):
@@ -207,7 +210,7 @@ def test_replace_failure_preserves_original(tmp_path, finding, monkeypatch):
     plan = preview(tmp_path, finding)
     def fail(*args):
         raise OSError("replace failed")
-    monkeypatch.setattr("attackmap.suppression_actions.os.replace", fail)
+    monkeypatch.setattr("attackmap.output.suppression_actions.os.replace", fail)
     with pytest.raises(OSError):
         apply_suppression_action(plan)
     assert target.read_bytes() == before
@@ -216,7 +219,7 @@ def test_replace_failure_preserves_original(tmp_path, finding, monkeypatch):
 
 
 def test_file_mutation_during_flush_is_not_overwritten(tmp_path, finding, monkeypatch):
-    import attackmap.suppression_actions as module
+    import attackmap.output.suppression_actions as module
     plan = preview(tmp_path, finding)
     target = tmp_path / ".attackmap-suppress.yaml"
     original = module.os.fsync

@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap import taint_flow
-from attackmap.scanner import scan_repo
+from attackmap.extraction.scanner import scan_repo
+from attackmap.reasoning import taint_flow
 
 
 def _linear(funcs, line):

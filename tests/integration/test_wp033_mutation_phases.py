@@ -13,20 +13,24 @@ import json
 from pathlib import Path
 
 import pytest
+from test_wp033_mutation_campaign import _app, _canonical, _record, _seed, _sha
 
-import attackmap.artifact_manifest as manifest_mod
-import attackmap.index as index_mod
-from attackmap.analyzers import (
+import attackmap.extraction.index as index_mod
+import attackmap.foundation.artifact_manifest as manifest_mod
+from attackmap.extraction.index import RepoIndex, clear_pinned_index
+from attackmap.foundation.safe_fs import ensure_output_dir, safe_write_text
+from attackmap.orchestration.analyzers import (
     BuiltinConfigAnalyzer,
     BuiltinJavaScriptWebAnalyzer,
     BuiltinPythonWebAnalyzer,
     analyze_repository,
 )
-from attackmap.citations import capture_source_spans, context_from_payload, validate_references
-from attackmap.index import RepoIndex, clear_pinned_index
-from attackmap.recon_to_analysis import translate_recon
-from attackmap.safe_fs import ensure_output_dir, safe_write_text
-from test_wp033_mutation_campaign import _app, _canonical, _record, _seed, _sha
+from attackmap.orchestration.recon_to_analysis import translate_recon
+from attackmap.output.citations import (
+    capture_source_spans,
+    context_from_payload,
+    validate_references,
+)
 
 
 @pytest.fixture

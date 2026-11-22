@@ -235,6 +235,6 @@ class ScanResult(BaseModel):
                     },
                 )
             )
-        from ..signal_provenance import normalized_view
+        from attackmap.reasoning.signal_provenance import normalized_view
         return normalized_view(self, signals)
 

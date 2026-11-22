@@ -9,10 +9,10 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import zipfile
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN = "1bcce0dd5d639cb83ada65cc3f5024bb5a1d9782"

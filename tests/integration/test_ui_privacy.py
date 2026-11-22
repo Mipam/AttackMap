@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.ui import secrets
-from attackmap.ui.config import ScanConfig
-from attackmap.ui.runner import ScanRunner, child_python_env
+from attackmap.surfaces.ui import secrets
+from attackmap.surfaces.ui.config import ScanConfig
+from attackmap.surfaces.ui.runner import ScanRunner, child_python_env
 
 SENTINEL = "privacy-sentinel-do-not-export-7H2k9P4x"
 
@@ -74,7 +74,7 @@ def test_spawn_boundary_strips_inherited_credentials_before_selected_overlay(mon
         captured.update(kwargs)
         raise OSError("fixture spawn stopped")
 
-    monkeypatch.setattr("attackmap.ui.runner.subprocess.Popen", popen)
+    monkeypatch.setattr("attackmap.surfaces.ui.runner.subprocess.Popen", popen)
     runner = ScanRunner()
     assert not runner.start(tmp_path, tmp_path / "reports", env=selected)
     assert SENTINEL not in json.dumps(captured)
@@ -101,8 +101,8 @@ def test_windows_dpapi_blob_is_not_plaintext(monkeypatch, tmp_path):
 
 def test_sentinel_source_secret_is_masked_in_verification_prompt_and_report(tmp_path):
     from attackmap.models import Finding, ScanResult
-    from attackmap.review_json import build_defensive_review_json
-    from attackmap.review_prompts import render_hunt_verify_prompts
+    from attackmap.output.review_json import build_defensive_review_json
+    from attackmap.output.review_prompts import render_hunt_verify_prompts
 
     (tmp_path / "app.py").write_text(f'API_KEY = "{SENTINEL}"\nprint("context retained")\n', encoding="utf-8")
     scan = ScanResult(root=str(tmp_path))

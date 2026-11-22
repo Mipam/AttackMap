@@ -9,8 +9,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 
 MODES = {"review": "defensive-review-llm.md", "hunt": "vulnerability-hypotheses.md",
          "hunt_verify": "vulnerability-hypotheses.md", "remediate": "remediation.md", "triage": "triage.md"}

@@ -1,20 +1,20 @@
 """Deterministic desktop fleet contract and process-boundary seams; no repo scan."""
 import io
 import json
-from pathlib import Path
 import sys
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from artifact_fixture import write_generation
 from pydantic import ValidationError
 
-from attackmap import desktop_fleet as fleet
-from attackmap.desktop_capabilities import validate_desktop_request
-from attackmap.run_contract import RunProgress, accepts_update, parse_run_message
-from attackmap import scan_service as service
-from attackmap.fleet import FleetScan, fleet_repo_ids
-from artifact_fixture import write_generation
+from attackmap.orchestration import desktop_fleet as fleet
+from attackmap.orchestration import scan_service as service
+from attackmap.orchestration.desktop_capabilities import validate_desktop_request
+from attackmap.orchestration.fleet import FleetScan, fleet_repo_ids
+from attackmap.orchestration.run_contract import RunProgress, accepts_update, parse_run_message
 
 
 def request(tmp_path, **changes):
@@ -81,14 +81,14 @@ def test_unsafe_root(path):
 
 def test_source_and_frozen_broker_are_distinct(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "frozen", False, raising=False)
-    assert fleet.broker_argv(tmp_path / "request.json")[:3] == [sys.executable, "-m", "attackmap.desktop_worker"]
+    assert fleet.broker_argv(tmp_path / "request.json")[:3] == [sys.executable, "-m", "attackmap.orchestration.desktop_worker"]
     monkeypatch.setattr(sys, "frozen", True)
     argv = fleet.broker_argv(tmp_path / "request.json")
     assert argv[:2] == [sys.executable, "desktop-worker"] and "-m" not in argv
 
 
 def child_generations(run, folder, count=2):
-    from attackmap.artifact_publisher import generation_dir, publish_generation
+    from attackmap.foundation.artifact_publisher import generation_dir, publish_generation
     for slug, repository in list(zip(fleet_repo_ids([Path(r.repository_path) for r in run.repositories]), run.repositories))[:count]:
         base = folder / slug
         child_id = fleet.child_run_id(run, repository)
@@ -220,10 +220,13 @@ def test_fleet_never_silently_discards_selection_or_unwired_admission(tmp_path, 
 
 
 def test_profile_requires_explicit_fleet_capability(tmp_path):
-    from attackmap.cli import app
-    from attackmap.analyzer_contracts import AnalyzerMetadata
-    from attackmap.analyzer_profiles import get_analyzer_profiles
-    from attackmap.desktop_capabilities import build_capabilities, preflight_capabilities
+    from attackmap.orchestration.analyzer_profiles import get_analyzer_profiles
+    from attackmap.orchestration.desktop_capabilities import (
+        build_capabilities,
+        preflight_capabilities,
+    )
+    from attackmap.reasoning.analyzer_contracts import AnalyzerMetadata
+    from attackmap.surfaces.cli import app
     definition = next(item for item in get_analyzer_profiles() if item.name == "node-atproto")
     caps = build_capabilities(app, metadata=[AnalyzerMetadata(name=name) for name in definition.module_names])
     raw = request(tmp_path, options={"analyzer_profile": "node-atproto@1.0"}).model_dump(mode="json")
@@ -238,7 +241,7 @@ def test_profile_requires_explicit_fleet_capability(tmp_path):
 
 @pytest.mark.parametrize("version", ["1.0", "1.1", "1.2", "1.3"])
 def test_existing_request_defaults_and_bytes_unchanged(version):
-    from attackmap.run_contract import CURRENT_SCHEMA_VERSION, RunRequest
+    from attackmap.orchestration.run_contract import CURRENT_SCHEMA_VERSION, RunRequest
     raw = dict(schema_version=version, run_id="old", repository_id="one", generation=1,
                revision=0, kind="request", repository_path="C:/repo", output_path="C:/out")
     before = RunRequest.model_validate(raw).model_dump_json()
@@ -249,7 +252,7 @@ def test_existing_request_defaults_and_bytes_unchanged(version):
 
 
 def test_broker_partial_preserves_previous_current_and_rejects_stale_progress(tmp_path, monkeypatch):
-    from attackmap.artifact_publisher import generation_dir
+    from attackmap.foundation.artifact_publisher import generation_dir
     run = request(tmp_path)
     folder = generation_dir(Path(run.output_path), run.run_id)
     child_generations(run, folder, 1)
@@ -298,7 +301,7 @@ def test_broker_cancel_owns_one_whole_supervisor_branch(tmp_path, monkeypatch):
 
 
 def test_parent_publication_failure_with_complete_children_is_failed_not_partial(tmp_path, monkeypatch):
-    from attackmap.artifact_publisher import generation_dir
+    from attackmap.foundation.artifact_publisher import generation_dir
     run = request(tmp_path)
     folder = generation_dir(Path(run.output_path), run.run_id)
     child_generations(run, folder)

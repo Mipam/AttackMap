@@ -19,11 +19,11 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.comparison import compare_report_files, compare_reports
-from attackmap.diff import FindingSnapshot
-from attackmap.finding_identity import finding_id, legacy_finding_id, legacy_id_aliases
 from attackmap.models import Finding
-from attackmap.suppress import apply_suppressions, collect_suppressions
+from attackmap.output.comparison import compare_report_files, compare_reports
+from attackmap.output.diff import FindingSnapshot
+from attackmap.output.finding_identity import finding_id, legacy_finding_id, legacy_id_aliases
+from attackmap.output.suppress import apply_suppressions, collect_suppressions
 
 FIXTURES = Path(__file__).parents[2] / "tests" / "fixtures" / "finding-identity"
 

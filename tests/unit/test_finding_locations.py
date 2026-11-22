@@ -8,13 +8,13 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from attackmap.cli import app
+from attackmap.extraction.scanner import scan_repo
+from attackmap.foundation.srcpaths import evidence_locations
 from attackmap.models import Finding, FindingLocation
-from attackmap.recon_to_analysis import translate_recon
-from attackmap.sarif import _finding_locations, _locations_from_evidence, build_sarif
-from attackmap.scanner import scan_repo
-from attackmap.srcpaths import evidence_locations
-from attackmap.suppress import _evidence_paths
+from attackmap.orchestration.recon_to_analysis import translate_recon
+from attackmap.output.sarif import _finding_locations, _locations_from_evidence, build_sarif
+from attackmap.output.suppress import _evidence_paths
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 
@@ -128,7 +128,7 @@ def test_inline_ignore_works_in_tsx_files(tmp_path: Path) -> None:
 def test_line_number_matches_naive_count() -> None:
     import random
 
-    from attackmap.srcpaths import line_number
+    from attackmap.foundation.srcpaths import line_number
 
     rng = random.Random(218)
     text = "".join(rng.choice("ab\n") for _ in range(5000))
@@ -138,7 +138,7 @@ def test_line_number_matches_naive_count() -> None:
 
 
 def test_lineless_citation_dropped_when_file_cited_with_line_elsewhere() -> None:
-    from attackmap.srcpaths import evidence_locations
+    from attackmap.foundation.srcpaths import evidence_locations
 
     evidence = [
         "route POST /orders in app.py",

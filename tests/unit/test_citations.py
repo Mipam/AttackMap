@@ -3,9 +3,15 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.citations import (
-    assess_claim_support, capture_source_spans, citation_scope, claim_support_state,
-    claim_terms, context_from_payload, current_citation_context, matched_claim_terms,
+from attackmap.output.citations import (
+    assess_claim_support,
+    capture_source_spans,
+    citation_scope,
+    claim_support_state,
+    claim_terms,
+    context_from_payload,
+    current_citation_context,
+    matched_claim_terms,
     validate_references,
 )
 
@@ -187,7 +193,7 @@ def test_capture_refuses_symlink_even_with_follow_enabled(tmp_path, monkeypatch)
 
 def test_multiple_locations_read_same_file_once(captured, monkeypatch):
     path, _ = captured
-    import attackmap.citations as module
+    import attackmap.output.citations as module
     original = module.os.open
     opened = []
     def counted(candidate, flags):
@@ -213,10 +219,10 @@ def test_producer_payload_is_captured_once_and_returned_as_isolated_copies(captu
 
 
 def test_hunt_prompts_and_validation_reuse_exact_pre_generation_snapshot(tmp_path):
-    from attackmap.hunt_harness import run_majority_verify
-    from attackmap.llm_review import LlmReviewResult
     from attackmap.models import Finding, FindingLocation, ScanResult
-    from attackmap.review_prompts import render_skeptic_prompts
+    from attackmap.output.hunt_harness import run_majority_verify
+    from attackmap.output.llm_review import LlmReviewResult
+    from attackmap.output.review_prompts import render_skeptic_prompts
     source = tmp_path / "app.py"
     original = b"original_constant = 1\n"
     source.write_bytes(original)
@@ -243,8 +249,8 @@ def test_hunt_prompts_and_validation_reuse_exact_pre_generation_snapshot(tmp_pat
 
 
 def test_hunt_never_disables_reference_checks_when_no_source_was_available():
-    from attackmap.hunt_harness import run_majority_verify
-    from attackmap.llm_review import LlmReviewResult
+    from attackmap.output.hunt_harness import run_majority_verify
+    from attackmap.output.llm_review import LlmReviewResult
     def fake(mode, **kwargs):
         text = ("=== HYPOTHESES ===\nH1: lead [evidence: taint:1]" if mode == "hunt_generate"
                 else "VERDICT H1: REFUTED — taint:1 is safe")
@@ -257,7 +263,7 @@ def test_hunt_never_disables_reference_checks_when_no_source_was_available():
 
 def test_prompt_scope_rejects_foreign_repository_context(captured, tmp_path):
     from attackmap.models import ScanResult
-    from attackmap.review_prompts import render_skeptic_prompts
+    from attackmap.output.review_prompts import render_skeptic_prompts
     _, context = captured
     with citation_scope(context), pytest.raises(ValueError, match="different repository"):
         render_skeptic_prompts(ScanResult(root=str(tmp_path / "different")), [], [], [], [])
@@ -272,7 +278,7 @@ def test_malformed_and_unissued_references_never_gain_association(captured, toke
 
 
 def test_location_parser_remains_full_token_only():
-    from attackmap.citations import _LOCATION
+    from attackmap.output.citations import _LOCATION
     assert _LOCATION.fullmatch("src/app.py:2-4").groupdict() == {"path": "src/app.py", "line": "2", "end": "4"}
     assert _LOCATION.fullmatch("src/app.py:2junk") is None
     assert list(_LOCATION.finditer("a/" * 25000)) == []
@@ -281,7 +287,8 @@ def test_location_parser_remains_full_token_only():
 def test_location_like_predicate_matches_legacy_token_grammar():
     import random
     import re
-    from attackmap.citations import _looks_like_location
+
+    from attackmap.output.citations import _looks_like_location
     legacy = re.compile(r".*[./][^:]*:[0-9].*\Z")
     rng = random.Random(236)
     for _ in range(2000):
@@ -291,7 +298,8 @@ def test_location_like_predicate_matches_legacy_token_grammar():
 
 def test_location_like_hostile_large_token_is_bounded():
     import time
-    from attackmap.citations import _looks_like_location
+
+    from attackmap.output.citations import _looks_like_location
     start = time.perf_counter()
     assert not _looks_like_location("a/" * 500000)
     assert time.perf_counter() - start < 2.0

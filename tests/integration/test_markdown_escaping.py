@@ -9,13 +9,13 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from attackmap.cli import app
-from attackmap.defensive_review import render_defensive_review
-from attackmap.diff import DiffReport, FindingSnapshot, render_diff_markdown
-from attackmap.md import md_code, md_text, sanitize_llm_markdown
 from attackmap.models import AttackPath, AttackSurface, Finding, ScanResult
-from attackmap.report import render_pr_comment
-from attackmap.sarif import build_sarif
+from attackmap.output.defensive_review import render_defensive_review
+from attackmap.output.diff import DiffReport, FindingSnapshot, render_diff_markdown
+from attackmap.output.md import md_code, md_text, sanitize_llm_markdown
+from attackmap.output.report import render_pr_comment
+from attackmap.output.sarif import build_sarif
+from attackmap.surfaces.cli import app
 
 HOSTILE = "/x](https://evil.example/login) <img src=https://evil.example/p.png> @org/security-team ‮gnp.exe ` "
 

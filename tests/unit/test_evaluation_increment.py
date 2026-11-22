@@ -1,9 +1,9 @@
 """Integrity failures that must not silently improve a frozen WP030 corpus."""
-from hashlib import sha1, sha256
 import importlib.util
 import json
-from pathlib import Path
 import shutil
+from hashlib import sha1, sha256
+from pathlib import Path
 
 import jsonschema
 import pytest

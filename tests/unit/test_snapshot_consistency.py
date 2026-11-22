@@ -15,19 +15,23 @@ import json
 import shutil
 from pathlib import Path
 
-from attackmap.analyzers import BuiltinPythonWebAnalyzer, analyze_repository
-from attackmap.anomalies import find_anomalies
-from attackmap.artifact_manifest import write_artifact_manifest
-from attackmap.authz import analyze_authz
-from attackmap.citations import capture_source_spans, context_from_payload, validate_references
-from attackmap.fingerprint import assign_fingerprints
-from attackmap.index import RepoIndex, clear_pinned_index, content_sha256
+from attackmap.ai.sbom import analyze_sbom
+from attackmap.ai.supply_chain import scan_supply_chain
+from attackmap.extraction.index import RepoIndex, clear_pinned_index, content_sha256
+from attackmap.extraction.scanner import scan_files
+from attackmap.extraction.workflow_scanner import scan_workflows
+from attackmap.foundation.artifact_manifest import write_artifact_manifest
 from attackmap.models import Finding, FindingLocation, ScanResult
-from attackmap.recon_to_analysis import translate_recon
-from attackmap.sbom import analyze_sbom
-from attackmap.scanner import scan_files
-from attackmap.supply_chain import scan_supply_chain
-from attackmap.workflow_scanner import scan_workflows
+from attackmap.orchestration.analyzers import BuiltinPythonWebAnalyzer, analyze_repository
+from attackmap.orchestration.recon_to_analysis import translate_recon
+from attackmap.output.citations import (
+    capture_source_spans,
+    context_from_payload,
+    validate_references,
+)
+from attackmap.output.fingerprint import assign_fingerprints
+from attackmap.reasoning.anomalies import find_anomalies
+from attackmap.reasoning.authz import analyze_authz
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "snapshot-shop"
 _ORIGINAL_APP = (FIXTURE / "app.py").read_text(encoding="utf-8")
@@ -196,7 +200,7 @@ def test_excerpts_keep_captured_span_and_record_snapshot_id(tmp_path: Path) -> N
     out = tmp_path / "reports"
     scan = ScanResult(root=str(repo), scan_snapshot=index.snapshot.identity())
     meta = {"citation_context": {"sources": [spans[0].metadata()]}}
-    from attackmap.safe_fs import safe_write_text, ensure_output_dir
+    from attackmap.foundation.safe_fs import ensure_output_dir, safe_write_text
     safe_write_text(ensure_output_dir(out), out / "vulnerability-hypotheses.meta.json",
                     json.dumps(meta))
     write_artifact_manifest(
@@ -478,7 +482,7 @@ def test_translate_recon_threads_index_into_fingerprints(tmp_path: Path, monkeyp
     def fake_assign(findings, root, index=None):  # noqa: ANN001
         seen.append(index)
 
-    monkeypatch.setattr("attackmap.recon_to_analysis.assign_fingerprints", fake_assign)
+    monkeypatch.setattr("attackmap.orchestration.recon_to_analysis.assign_fingerprints", fake_assign)
     translate_recon(scan, index=index)
     assert seen[-1] is index
     translate_recon(scan)
@@ -486,9 +490,9 @@ def test_translate_recon_threads_index_into_fingerprints(tmp_path: Path, monkeyp
 
 
 def test_pipeline_passes_captured_index_to_fingerprints(tmp_path: Path, monkeypatch) -> None:
+    from attackmap.extraction.index import pinned_repo_index
+    from attackmap.orchestration.pipeline import run_scan
     from attackmap.orchestration.run_spec import RunSpec
-    from attackmap.pipeline import run_scan
-    from attackmap.index import pinned_repo_index
 
     repo = _deps_repo(tmp_path)
     out = tmp_path / "reports"
@@ -497,7 +501,7 @@ def test_pipeline_passes_captured_index_to_fingerprints(tmp_path: Path, monkeypa
     def fake_assign(findings, root, index=None):  # noqa: ANN001
         seen.append(index)
 
-    monkeypatch.setattr("attackmap.recon_to_analysis.assign_fingerprints", fake_assign)
+    monkeypatch.setattr("attackmap.orchestration.recon_to_analysis.assign_fingerprints", fake_assign)
     run_scan(RunSpec(atomic_output=False, output_format="all", no_progress=True),
              repo_path=repo, output=out, echo=lambda *a, **k: None)
     assert seen and seen[0] is not None

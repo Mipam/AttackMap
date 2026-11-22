@@ -1,20 +1,24 @@
 """Sealed snapshot protocol, actual child SDK pinning and lease ownership."""
-from dataclasses import replace
 import hashlib
 import importlib.util
 import json
 import os
-from pathlib import Path
 import shutil
 import sys
 import zipfile
+from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
-from attackmap import analyzer_host as host
-from attackmap.index import RepoIndex, active_index_for, pinned_index_scope
-from attackmap.snapshot_transport import (SnapshotBundle, SnapshotInputError, read_snapshot,
-                                         SealedSnapshot)
+from attackmap.extraction import analyzer_host as host
+from attackmap.extraction.index import RepoIndex, active_index_for, pinned_index_scope
+from attackmap.extraction.snapshot_transport import (
+    SealedSnapshot,
+    SnapshotBundle,
+    SnapshotInputError,
+    read_snapshot,
+)
 
 
 def capture(tmp_path):
@@ -189,7 +193,7 @@ def test_actual_background_sdk_read_after_analyze_scope_and_during_shutdown(tmp_
 
 
 def test_process_pin_is_immutable_without_installing_into_parent(tmp_path, monkeypatch):
-    import attackmap.index as module
+    import attackmap.extraction.index as module
     root, index = capture(tmp_path)
     other = tmp_path / "other"
     other.mkdir()

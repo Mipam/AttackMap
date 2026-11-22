@@ -3,10 +3,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from attackmap.ai_budget import AiBudget, AiBudgetExhausted, budget_scope, current_reservation
-from attackmap.hunt_harness import run_majority_verify
-from attackmap.llm_review import LlmReviewError, LlmReviewResult, generate_llm_review
+from attackmap.ai.ai_budget import AiBudget, AiBudgetExhausted, budget_scope, current_reservation
 from attackmap.models import ScanResult
+from attackmap.output.hunt_harness import run_majority_verify
+from attackmap.output.llm_review import LlmReviewError, LlmReviewResult, generate_llm_review
 
 
 def test_reservations_fit_remaining_and_known_usage_refunds_only_unused_output():
@@ -184,7 +184,7 @@ def test_provider_dispatch_after_rendered_deadline_does_not_begin(monkeypatch):
     now = [0.0]
     budget = AiBudget(max_calls=2, max_seconds=5, clock=lambda: now[0])
     client = FakeOpenAI()
-    import attackmap.llm_review as module
+    import attackmap.output.llm_review as module
     render = module.render_review_prompts
     def slow_render(*args):
         result = render(*args)
@@ -245,7 +245,7 @@ def test_each_dispatch_requires_unique_reservation_and_usage_overrun_blocks_next
 
 @pytest.mark.parametrize("invalid", [True, -1, "0", None])
 def test_malformed_usage_is_unknown_instead_of_reported_zero(invalid):
-    from attackmap.llm_review import _openai_usage, _usage_dict
+    from attackmap.output.llm_review import _openai_usage, _usage_dict
     payload = SimpleNamespace(output_tokens=invalid)
     assert "output_tokens" not in _openai_usage(payload)
     assert "output_tokens" not in _usage_dict(payload)

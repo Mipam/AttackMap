@@ -1,10 +1,10 @@
 """Synthetic verifier tests; these do not prove live provider integration."""
-import hashlib
 import copy
+import hashlib
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from verify_wp017_live import ENDPOINT, MODEL, verify
 

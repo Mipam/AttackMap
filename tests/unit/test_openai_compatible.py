@@ -6,7 +6,7 @@ import pytest
 httpx = pytest.importorskip("httpx")
 OpenAI = pytest.importorskip("openai").OpenAI
 
-from attackmap.llm_review import LlmReviewError, _run_via_openai_sdk
+from attackmap.output.llm_review import LlmReviewError, _run_via_openai_sdk
 
 
 def invoke(client):
@@ -69,9 +69,11 @@ def test_chat_failure_is_not_retried_or_treated_as_review(failure):
 
 
 def test_model_listing_warning_is_visible(monkeypatch):
-    import openai
-    from attackmap.desktop_provider import execute_provider_action
     from types import SimpleNamespace
+
+    import openai
+
+    from attackmap.orchestration.desktop_provider import execute_provider_action
     monkeypatch.setenv("ATTACKMAP_ACTION_CREDENTIAL", "test")
     monkeypatch.setattr(openai, "OpenAI", lambda **kwargs: SimpleNamespace(
         models=SimpleNamespace(list=lambda: SimpleNamespace(data=[SimpleNamespace(id="glm-5.3-flash")])), close=lambda: None))

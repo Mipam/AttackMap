@@ -1,18 +1,24 @@
 """Logical reservation contracts plus actual small supervised child processes."""
 import json
-from pathlib import Path
 import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from threading import Barrier
 
 import pytest
 
-from attackmap import scan_service as service
-from attackmap.fleet import FleetScan
-from attackmap.fleet_admission import (FleetAdmissionError, FleetMemoryEstimate, FleetMemoryPolicy,
-    FleetMemoryLedger, current_reservation, unverified_fleet_cleanup)
+from attackmap.orchestration import scan_service as service
+from attackmap.orchestration.fleet import FleetScan
+from attackmap.orchestration.fleet_admission import (
+    FleetAdmissionError,
+    FleetMemoryEstimate,
+    FleetMemoryLedger,
+    FleetMemoryPolicy,
+    current_reservation,
+    unverified_fleet_cleanup,
+)
 
 
 def estimate(live=40, retained=20):
@@ -177,7 +183,7 @@ def test_pre_cancel_with_policy_admits_no_worker(tmp_path, monkeypatch):
 
 
 def test_actual_cancelled_child_keeps_reservation_until_verified_exit(tmp_path):
-    from attackmap.fleet_admission import reservation_scope
+    from attackmap.orchestration.fleet_admission import reservation_scope
     ledger = FleetMemoryLedger(policy())
     reservation = ledger.reserve("a")
     reservation.process_cleanup_verified = False
@@ -201,7 +207,7 @@ def test_actual_hard_timeout_is_not_a_stage_budget():
 
 def test_unknown_supervisor_cleanup_blocks_then_late_verified_callback_releases(monkeypatch):
     import attackmap.execution as execution
-    from attackmap.fleet_admission import reservation_scope
+    from attackmap.orchestration.fleet_admission import reservation_scope
     callbacks = []
     class UnknownSupervisor:
         running = True

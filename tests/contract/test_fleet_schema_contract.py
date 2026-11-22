@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from attackmap.desktop_fleet import FleetRunRequest
+from attackmap.orchestration.desktop_fleet import FleetRunRequest
 
 
 def test_published_fleet_request_schema_matches_model():

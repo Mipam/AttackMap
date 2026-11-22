@@ -2,12 +2,17 @@
 import json
 
 import pytest
-
 from artifact_fixture import write_generation
-from attackmap.artifact_publisher import current_generation, generation_dir, publish_generation, validate_generation
+
+from attackmap.foundation.artifact_publisher import (
+    current_generation,
+    generation_dir,
+    publish_generation,
+    validate_generation,
+)
+from attackmap.foundation.safe_fs import safe_write_text
+from attackmap.orchestration.pipeline import RunState, run_scan
 from attackmap.orchestration.run_spec import AiSpec, RunSpec
-from attackmap.pipeline import RunState, run_scan
-from attackmap.safe_fs import safe_write_text
 
 
 @pytest.mark.parametrize("exit_code", [0, 1])
@@ -33,8 +38,8 @@ def test_export_failure_keeps_successful_generation_and_policy(tmp_path, monkeyp
         assert current_generation(output_base) == folder
         raise error_type("secret export error detail")
 
-    monkeypatch.setattr("attackmap.pipeline._run_scan", fake_scan)
-    monkeypatch.setattr("attackmap.artifact_publisher.export_compatibility", fail_export)
+    monkeypatch.setattr("attackmap.orchestration.pipeline._run_scan", fake_scan)
+    monkeypatch.setattr("attackmap.foundation.artifact_publisher.export_compatibility", fail_export)
     state = run_scan(spec, repo_path=tmp_path, output=base,
                      echo=lambda text, **kwargs: warnings.append(text))
     assert state.exit_code == exit_code
@@ -51,10 +56,10 @@ def test_export_failure_keeps_successful_generation_and_policy(tmp_path, monkeyp
 @pytest.mark.parametrize("failure", [ValueError("startup"), KeyboardInterrupt()])
 def test_failure_diagnostic_has_engine_scan_interval(tmp_path, monkeypatch, failure):
     values = iter(["2026-10-15T10:00:00+00:00", "2026-10-15T10:00:02+00:00"])
-    monkeypatch.setattr("attackmap.pipeline._engine_utc_now", lambda: next(values))
+    monkeypatch.setattr("attackmap.orchestration.pipeline._engine_utc_now", lambda: next(values))
     def fail(options, **kwargs):
         raise failure
-    monkeypatch.setattr("attackmap.pipeline._run_scan", fail)
+    monkeypatch.setattr("attackmap.orchestration.pipeline._run_scan", fail)
     out = tmp_path / "out"
     with pytest.raises(type(failure)):
         run_scan(RunSpec(run_id="failed"), repo_path=tmp_path, output=out)
@@ -68,14 +73,14 @@ def test_failure_diagnostic_has_engine_scan_interval(tmp_path, monkeypatch, fail
 
 def test_publication_failure_preserves_completed_analysis_interval(tmp_path, monkeypatch):
     values = iter(["2026-10-15T10:00:00+00:00", "2026-10-15T10:00:02+00:00"])
-    monkeypatch.setattr("attackmap.pipeline._engine_utc_now", lambda: next(values))
+    monkeypatch.setattr("attackmap.orchestration.pipeline._engine_utc_now", lambda: next(values))
     def complete(options, *, state, **kwargs):
         state.finish_scan("completed")
         return state
     def fail(*args):
         raise OSError("publication unavailable")
-    monkeypatch.setattr("attackmap.pipeline._run_scan", complete)
-    monkeypatch.setattr("attackmap.artifact_publisher.publish_generation", fail)
+    monkeypatch.setattr("attackmap.orchestration.pipeline._run_scan", complete)
+    monkeypatch.setattr("attackmap.foundation.artifact_publisher.publish_generation", fail)
     out = tmp_path / "out"
     with pytest.raises(OSError):
         run_scan(RunSpec(run_id="publish-failed"), repo_path=tmp_path, output=out)
@@ -91,7 +96,7 @@ def test_real_pipeline_failure_retains_timing_and_no_current(tmp_path, monkeypat
         if cancel:
             raise KeyboardInterrupt()
         raise RuntimeError("synthetic analyzer failure")
-    monkeypatch.setattr("attackmap.pipeline.analyze_repository", fail_analysis)
+    monkeypatch.setattr("attackmap.orchestration.pipeline.analyze_repository", fail_analysis)
     out = tmp_path / "out"
     with pytest.raises(KeyboardInterrupt if cancel else RuntimeError):
         run_scan(RunSpec(run_id="analysis-failed", no_progress=True), repo_path=tmp_path, output=out)
@@ -103,7 +108,7 @@ def test_real_pipeline_failure_retains_timing_and_no_current(tmp_path, monkeypat
 
 
 def test_configuration_failure_records_timing_when_output_writable(tmp_path):
-    from attackmap.application_errors import AnalysisConfigurationError
+    from attackmap.foundation.application_errors import AnalysisConfigurationError
     out = tmp_path / "out"
     with pytest.raises(AnalysisConfigurationError):
         run_scan(RunSpec(run_id="invalid", fail_on_new_high=True), repo_path=tmp_path, output=out)
@@ -125,8 +130,8 @@ def test_optional_ai_tail_precedes_scan_end_timestamp(tmp_path, monkeypatch, fai
         if fail:
             raise RuntimeError("synthetic AI tail failure")
         return SimpleNamespace(markdown="Synthetic model assessment", usage={}, backend="fake", model="fake", stop_reason="stop")
-    monkeypatch.setattr("attackmap.pipeline._engine_utc_now", clock)
-    monkeypatch.setattr("attackmap.pipeline.generate_llm_review", review)
+    monkeypatch.setattr("attackmap.orchestration.pipeline._engine_utc_now", clock)
+    monkeypatch.setattr("attackmap.orchestration.pipeline.generate_llm_review", review)
     out = tmp_path / "out"
     spec = RunSpec(run_id="ai-tail", ai=AiSpec(enabled=True), no_progress=True)
     if fail:
@@ -145,15 +150,16 @@ def test_optional_ai_tail_precedes_scan_end_timestamp(tmp_path, monkeypatch, fai
 def test_atomic_pipeline_rejects_junction_before_stage_or_engine(tmp_path, monkeypatch):
     import os
     import subprocess
-    from attackmap.safe_fs import UnsafePathError
+
+    from attackmap.foundation.safe_fs import UnsafePathError
     target = tmp_path / 'outside'
     target.mkdir()
     junction = tmp_path / 'junction'
     result = subprocess.run(['cmd', '/c', 'mklink', '/J', str(junction), str(target)], capture_output=True)
     if result.returncode:
         pytest.skip('Junction creation unavailable')
-    monkeypatch.setattr('attackmap.pipeline._run_scan', lambda *_a, **_k: pytest.fail('engine must not start'))
-    monkeypatch.setattr('attackmap.artifact_publisher.generation_dir', lambda *_a: pytest.fail('stage must not allocate'))
+    monkeypatch.setattr('attackmap.orchestration.pipeline._run_scan', lambda *_a, **_k: pytest.fail('engine must not start'))
+    monkeypatch.setattr('attackmap.foundation.artifact_publisher.generation_dir', lambda *_a: pytest.fail('stage must not allocate'))
     try:
         with pytest.raises(UnsafePathError):
             run_scan(RunSpec(), repo_path=tmp_path, output=junction / 'reports')

@@ -60,12 +60,12 @@ while True:
 """
 
 try:
-    from attackmap.execution import ProcessSupervisor
     import attackmap.execution as _execution_module
+    from attackmap.execution import ProcessSupervisor
 except ImportError:  # direct source checkout without an installed package
     sys.path.insert(0, str(REPO_ROOT / "src"))
-    from attackmap.execution import ProcessSupervisor
     import attackmap.execution as _execution_module
+    from attackmap.execution import ProcessSupervisor
 
 
 def _winapi():

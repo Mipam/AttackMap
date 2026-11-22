@@ -4,12 +4,16 @@ import json
 import threading
 
 import pytest
-
 from artifact_fixture import write_generation
-from attackmap.artifact_publisher import current_generation, generation_dir, publish_generation
-from attackmap.desktop_worker import serve
-from attackmap.run_contract import RunRequest
-from attackmap.safe_fs import UnsafePathError
+
+from attackmap.foundation.artifact_publisher import (
+    current_generation,
+    generation_dir,
+    publish_generation,
+)
+from attackmap.foundation.safe_fs import UnsafePathError
+from attackmap.orchestration.desktop_worker import serve
+from attackmap.orchestration.run_contract import RunRequest
 
 
 def request(tmp_path, output):
@@ -50,7 +54,7 @@ def test_cancel_during_publication_preserves_previous_and_records_cancelled(tmp_
         return publish_generation(output_base, run_id, boundary=boundary, **kwargs)
 
     monkeypatch.setattr("attackmap.execution.ProcessSupervisor", Supervisor)
-    monkeypatch.setattr("attackmap.artifact_publisher.publish_generation", paused_publish)
+    monkeypatch.setattr("attackmap.foundation.artifact_publisher.publish_generation", paused_publish)
     events = io.StringIO()
     assert serve(request(tmp_path, base), control=Control(), events=events) == 0
     for thread in callback_threads:

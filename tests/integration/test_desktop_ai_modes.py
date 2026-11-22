@@ -1,22 +1,27 @@
 """WP014 transport→service→provider matrix. Fake SDK only; no live HTTP or CLI execution."""
-import hashlib
 import dataclasses
+import hashlib
 import json
 from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
-import attackmap.pipeline as pipeline
-from attackmap.ai_budget import AiBudget, budget_scope, current_budget
-from attackmap.artifact_publisher import current_generation, validate_generation
-from attackmap.desktop_ai import ARTIFACTS, MODES, manifest_ai_result, service_ai_options
-from attackmap.desktop_capabilities import validate_desktop_request
-from attackmap.llm_review import generate_llm_review
+import attackmap.orchestration.pipeline as pipeline
+from attackmap.ai.ai_budget import AiBudget, budget_scope, current_budget
+from attackmap.foundation.artifact_publisher import current_generation, validate_generation
 from attackmap.models import Finding, ScanResult
-from attackmap.provider_options import ProviderOptions, ProviderOptionsV13
-from attackmap.run_contract import CURRENT_SCHEMA_VERSION, RunRequest
-from attackmap.scan_service import _fleet_feature_admission, scan_request_from_run
+from attackmap.orchestration.desktop_ai import (
+    ARTIFACTS,
+    MODES,
+    manifest_ai_result,
+    service_ai_options,
+)
+from attackmap.orchestration.desktop_capabilities import validate_desktop_request
+from attackmap.orchestration.provider_options import ProviderOptions, ProviderOptionsV13
+from attackmap.orchestration.run_contract import CURRENT_SCHEMA_VERSION, RunRequest
+from attackmap.orchestration.scan_service import _fleet_feature_admission, scan_request_from_run
+from attackmap.output.llm_review import generate_llm_review
 
 
 def payload(tmp_path, mode="review", schema="1.3", **changes):
@@ -60,8 +65,8 @@ def test_real_effort_speed_and_jury_mapping():
 
 @pytest.mark.parametrize("mode",MODES)
 def test_worker_engine_entry_maps_mode_and_inherits_typed_allowance(tmp_path,monkeypatch,mode):
-    import attackmap.scan_service as service
-    from attackmap.desktop_worker import run_request_file
+    import attackmap.orchestration.scan_service as service
+    from attackmap.orchestration.desktop_worker import run_request_file
     (tmp_path/"repo").mkdir()
     raw=payload(tmp_path,mode,max_calls=2,output_token_limit=7,timeout_seconds=9)
     path=tmp_path/"request.json";path.write_text(json.dumps(raw))
@@ -79,8 +84,8 @@ def test_worker_engine_entry_maps_mode_and_inherits_typed_allowance(tmp_path,mon
 
 
 def test_worker_rejects_cli_before_application_or_provider_dispatch(tmp_path,monkeypatch):
-    import attackmap.scan_service as service
-    from attackmap.desktop_worker import run_request_file
+    import attackmap.orchestration.scan_service as service
+    from attackmap.orchestration.desktop_worker import run_request_file
     (tmp_path/"repo").mkdir()
     path=tmp_path/"request.json";path.write_text(json.dumps(payload(tmp_path,backend="cli")))
     monkeypatch.setattr(service,"execute_scan_request",lambda *_a,**_k:pytest.fail("Unsupported CLI configuration reached dispatch"))
@@ -208,7 +213,7 @@ def test_each_ai_mode_is_wired_into_fleet_worker_argv(tmp_path,mode,flags):
     """AR069 fleet parity: desktop AI modes travel on the fleet child's argv."""
     request=scan_request_from_run(validate_desktop_request(payload(tmp_path,mode)))
     request.repo_paths.append(tmp_path/"other")
-    from attackmap.scan_service import _run_fleet_repo_argv
+    from attackmap.orchestration.scan_service import _run_fleet_repo_argv
     argv=_run_fleet_repo_argv(request,tmp_path/"repo",tmp_path/"child-out",[])
     for flag in flags:
         assert flag in argv

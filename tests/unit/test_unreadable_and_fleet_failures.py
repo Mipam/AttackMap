@@ -11,9 +11,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from attackmap import cli
-from attackmap.cli import app
-from attackmap.scanner import scan_repo
+from attackmap.extraction.scanner import scan_repo
+from attackmap.surfaces import cli
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
@@ -44,7 +44,7 @@ def test_unreadable_file_is_skipped_and_reported(tmp_path: Path) -> None:
         flat = _flat(result.output)
         # Other analyzers can add coverage warnings before this category.
         assert re.search(r"(?:Not analyzed: |, )1 unreadable file skipped(?:, | \()", flat), flat
-        from attackmap.artifact_publisher import current_generation
+        from attackmap.foundation.artifact_publisher import current_generation
         generation = current_generation(tmp_path.parent / "o")
         assert generation is not None
         saved = json.loads((generation / "attackmap-report.json").read_text(encoding="utf-8"))["scan"]
@@ -63,7 +63,7 @@ def test_fleet_continues_past_a_failing_repo(tmp_path: Path, monkeypatch: pytest
     for d in (good, bad):
         d.mkdir()
         (d / "app.py").write_text(APP, encoding="utf-8")
-    import attackmap.pipeline as pipeline
+    import attackmap.orchestration.pipeline as pipeline
 
     real = pipeline.analyze_repository
 
@@ -78,7 +78,7 @@ def test_fleet_continues_past_a_failing_repo(tmp_path: Path, monkeypatch: pytest
     assert result.exit_code == 1, result.output
     flat = _flat(result.output)
     assert "bad failed and was skipped — RuntimeError: analyzer blew up" in flat
-    from attackmap.artifact_publisher import current_generation
+    from attackmap.foundation.artifact_publisher import current_generation
     assert current_generation(out) is None
     partial = next(path for path in out.iterdir()
                    if path.is_dir() and (path / "fleet-summary.json").is_file())

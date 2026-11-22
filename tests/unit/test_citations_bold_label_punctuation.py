@@ -8,8 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from attackmap.citations import CitationContext, EvidenceReference, validate_references
-from attackmap.llm_review import LlmReviewResult, _validate_narrative_references
+from attackmap.output.citations import CitationContext, EvidenceReference, validate_references
+from attackmap.output.llm_review import LlmReviewResult, _validate_narrative_references
 
 # Exact leading excerpt of the retained Flint review, line30 (not a model fixture).
 ACTUAL_LABEL = "- **finding:1:** Investigate unauthenticated or inconsistent access"

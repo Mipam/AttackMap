@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import pytest
 from typer.testing import CliRunner
 
-from attackmap import analyzers
-from attackmap.cli import app
+from attackmap.orchestration import analyzers
+from attackmap.surfaces.cli import app
 
 
 @pytest.fixture
@@ -20,8 +20,8 @@ def dispatch(monkeypatch):
     def forbidden(*args, **kwargs):
         pytest.fail("Profile attempted installation or interactive confirmation")
 
-    monkeypatch.setattr("attackmap.cli.execute_scan_request", execute)
-    monkeypatch.setattr("attackmap.cli.install_analyzer_module", forbidden)
+    monkeypatch.setattr("attackmap.surfaces.cli.execute_scan_request", execute)
+    monkeypatch.setattr("attackmap.surfaces.cli.install_analyzer_module", forbidden)
     monkeypatch.setattr(analyzers, "install_analyzer_module", forbidden)
     monkeypatch.setattr("typer.confirm", forbidden)
     return calls

@@ -9,10 +9,8 @@ import pytest
 from typer.testing import CliRunner
 
 from attackmap import sdk
-from attackmap.cli import app
-from attackmap.models import Finding, ScanResult
-from attackmap.review_prompts import _code_excerpts
-from attackmap.safe_fs import (
+from attackmap.extraction.scanner import scan_repo
+from attackmap.foundation.safe_fs import (
     UnsafePathError,
     contained_file,
     ensure_output_dir,
@@ -20,7 +18,9 @@ from attackmap.safe_fs import (
     safe_write_text,
     walk_repo,
 )
-from attackmap.scanner import scan_repo
+from attackmap.models import Finding, ScanResult
+from attackmap.output.review_prompts import _code_excerpts
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 OUTSIDE_SECRET = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"
@@ -180,14 +180,14 @@ def test_cli_report_symlink_export_preserves_committed_result(tmp_path: Path, mo
     result = runner.invoke(app, ["analyze", "."])
     assert result.exit_code == 0, result.output
     assert "flat export failed" in result.output
-    from attackmap.artifact_publisher import current_generation
+    from attackmap.foundation.artifact_publisher import current_generation
     published = current_generation(repo / "reports")
     assert published is not None and (published / "attackmap-report.json").is_file()
     assert victim.read_text(encoding="utf-8") == "ORIGINAL\n"
 
 
 def test_limitations_are_unioned_across_analyzer_results() -> None:
-    from attackmap.analyzers import merge_analyzer_results
+    from attackmap.orchestration.analyzers import merge_analyzer_results
 
     a = ScanResult(root=".", limitations=["symlink not followed: a.py"])
     b = ScanResult(root=".", limitations=["symlink not followed: a.py", "symlink not followed: b.py"])

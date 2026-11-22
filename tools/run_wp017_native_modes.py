@@ -6,26 +6,26 @@ No process or HTTP request starts without --run. A manifest pin is mandatory for
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
 import ctypes
-from datetime import datetime, timezone
 import hashlib
 import json
 import os
-from pathlib import Path, PurePosixPath
 import re
 import stat
 import subprocess
 import time
 import urllib.request
 import uuid
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath
 
 try:
-    from . import verify_wp017_live as gate
     from . import generate_release_lock as release_lock_tool
+    from . import verify_wp017_live as gate
 except ImportError:
-    import verify_wp017_live as gate
     import generate_release_lock as release_lock_tool
+    import verify_wp017_live as gate
 
 REPOSITORY = Path(r"C:\tmp\juice-shop")
 APP_NAME = "AttackMap.NativeSpike.exe"

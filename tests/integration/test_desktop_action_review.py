@@ -1,15 +1,15 @@
 """Integration boundary regressions; fake providers never make network calls."""
 import sys
-from pathlib import Path
 import threading
-
-import pytest
+from pathlib import Path
 from types import SimpleNamespace
 
-from attackmap.desktop_provider import execute_provider_action
-from attackmap.llm_review import _resolve_openai_client
-from attackmap.provider_options import ProviderOptions
-from attackmap.ui import secrets
+import pytest
+
+from attackmap.orchestration.desktop_provider import execute_provider_action
+from attackmap.orchestration.provider_options import ProviderOptions
+from attackmap.output.llm_review import _resolve_openai_client
+from attackmap.surfaces.ui import secrets
 
 
 def test_local_claude_check_never_loads_or_forwards_cloud_credential(monkeypatch):
@@ -47,7 +47,8 @@ def test_desktop_accepted_localhost_isolates_generation_transport(monkeypatch):
 
 
 def test_action_worker_executes_validated_snapshot_if_original_request_changes(monkeypatch, tmp_path):
-    from attackmap import desktop_actions, execution
+    from attackmap import execution
+    from attackmap.orchestration import desktop_actions
     original = tmp_path / "request.json"
     request = desktop_actions.ActionRequest(request_id="snapshot-test", operation="provider_save",
         output_path=str(tmp_path / "out"), payload={"sentinel": "validated"})
@@ -74,7 +75,7 @@ def test_action_worker_executes_validated_snapshot_if_original_request_changes(m
 
 @pytest.mark.parametrize("boundary", ["fsync", "replace"])
 def test_provider_save_failure_preserves_previous_configuration(monkeypatch, tmp_path, boundary):
-    from attackmap import desktop_provider
+    from attackmap.orchestration import desktop_provider
     path = tmp_path / "provider.json"
     previous = b'{"previous": "exact bytes"}\r\n'
     path.write_bytes(previous)
@@ -90,7 +91,7 @@ def test_provider_save_failure_preserves_previous_configuration(monkeypatch, tmp
 
 
 def test_outer_action_admission_refuses_concurrent_and_failed_replay(monkeypatch, tmp_path):
-    from attackmap import desktop_actions
+    from attackmap.orchestration import desktop_actions
     path = tmp_path / "request.json"
     request = desktop_actions.ActionRequest(request_id="same-id", operation="provider_save",
         output_path=str(tmp_path / "out"), payload={})

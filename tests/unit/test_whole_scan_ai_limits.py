@@ -4,15 +4,15 @@ from types import SimpleNamespace
 import pytest
 from typer.testing import CliRunner
 
-import attackmap.pipeline as pipeline
-from attackmap.ai_budget import AiBudget, budget_scope, current_budget
-from attackmap.artifact_publisher import current_generation, validate_generation
-from attackmap.cli import app
-from attackmap.llm_review import generate_llm_review
+import attackmap.orchestration.pipeline as pipeline
+from attackmap.ai.ai_budget import AiBudget, budget_scope, current_budget
+from attackmap.foundation.artifact_publisher import current_generation, validate_generation
 from attackmap.models import ScanResult
+from attackmap.orchestration.pipeline import run_scan
 from attackmap.orchestration.run_spec import AiSpec, RunSpec
-from attackmap.pipeline import run_scan
-from attackmap.scan_service import ScanRequest
+from attackmap.orchestration.scan_service import ScanRequest
+from attackmap.output.llm_review import generate_llm_review
+from attackmap.surfaces.cli import app
 
 
 class FakeSdk:
@@ -112,7 +112,7 @@ def test_no_ai_does_not_create_budget_or_sdk_side_effects(setup_scan, monkeypatc
 
 @pytest.mark.parametrize("kwargs", [{"max_calls": True}, {"max_calls": 0}, {"output_tokens": 0}, {"timeout_seconds": 0}])
 def test_typed_limit_validation(tmp_path, kwargs):
-    from attackmap.pipeline import AnalysisConfigurationError
+    from attackmap.orchestration.pipeline import AnalysisConfigurationError
     with pytest.raises(AnalysisConfigurationError, match="must be an integer from 1 to"):
         run_scan(RunSpec(ai=AiSpec(enabled=True, **kwargs)), repo_path=tmp_path,
                  output=tmp_path / "out")
@@ -141,7 +141,7 @@ def test_cli_provider_backend_fails_closed_before_dispatch(setup_scan, monkeypat
 
 
 def test_cli_flags_reach_typed_scan_request(tmp_path, monkeypatch):
-    import attackmap.cli as cli
+    import attackmap.surfaces.cli as cli
     received = []
     def execute(request):
         received.append(request)
@@ -156,8 +156,8 @@ def test_cli_flags_reach_typed_scan_request(tmp_path, monkeypatch):
 
 
 def test_requested_limits_reach_serial_and_parallel_child_cli(tmp_path, monkeypatch):
-    import attackmap.cli as cli
-    from attackmap.scan_service import _run_fleet_repo_argv
+    import attackmap.surfaces.cli as cli
+    from attackmap.orchestration.scan_service import _run_fleet_repo_argv
     request = ScanRequest(repo_paths=[tmp_path], output=tmp_path / "out",
                           spec=RunSpec(ai=AiSpec(max_calls=1, output_tokens=9, timeout_seconds=7)))
     argv = _run_fleet_repo_argv(request, tmp_path, request.output, [])
@@ -174,7 +174,7 @@ def test_requested_limits_reach_serial_and_parallel_child_cli(tmp_path, monkeypa
 
 def test_fleet_ai_switches_reach_worker_argv(tmp_path):
     """AR069 fleet parity: every AI switch rides the fleet child's argv."""
-    from attackmap.scan_service import _fleet_feature_admission, _run_fleet_repo_argv
+    from attackmap.orchestration.scan_service import _fleet_feature_admission, _run_fleet_repo_argv
     request = ScanRequest(repo_paths=[tmp_path, tmp_path / "other"], output=tmp_path / "out",
                           spec=RunSpec(ai=AiSpec(enabled=True, hunt=True, remediate=True, triage=True)))
     assert _fleet_feature_admission(request) == []

@@ -5,7 +5,7 @@ import jsonschema
 import pytest
 from pydantic import ValidationError
 
-from attackmap.diagnostics import (
+from attackmap.foundation.diagnostics import (
     DiagnosticContext,
     DiagnosticCoverage,
     DiagnosticResources,
@@ -118,8 +118,8 @@ def test_reported_array_truncation_is_disclosed():
 @pytest.mark.parametrize("cancel", [False, True])
 @pytest.mark.parametrize("atomic", [False, True])
 def test_real_pipeline_midstage_failure_retains_actual_stage_and_no_exception_text(tmp_path, monkeypatch, cancel, atomic):
-    from attackmap import pipeline
-    from attackmap.analyzers import AnalyzerMetadata
+    from attackmap.orchestration import pipeline
+    from attackmap.orchestration.analyzers import AnalyzerMetadata
     class Analyzer:
         name = "diagnostic-fixture"
         metadata = AnalyzerMetadata(name=name, version="1.2.3")
@@ -142,7 +142,7 @@ def test_real_pipeline_midstage_failure_retains_actual_stage_and_no_exception_te
 
 
 def test_real_fake_ai_tail_cancel_is_not_mislabeled_publish(tmp_path, monkeypatch):
-    from attackmap import pipeline
+    from attackmap.orchestration import pipeline
     from attackmap.orchestration.run_spec import AiSpec
     def cancel(*args, **kwargs):
         raise KeyboardInterrupt("AI_SECRET_SENTINEL")
@@ -160,8 +160,8 @@ def test_real_fake_ai_tail_cancel_is_not_mislabeled_publish(tmp_path, monkeypatc
 
 
 def test_completed_policy_failure_is_not_execution_failure(tmp_path):
+    from attackmap.orchestration.pipeline import RunState, _diagnostic_context, write_run_manifest
     from attackmap.orchestration.run_spec import RunSpec
-    from attackmap.pipeline import RunState, _diagnostic_context, write_run_manifest
     state = RunState(spec=RunSpec(), exit_code=1)
     state.finish_scan("completed")
     context = _diagnostic_context(state, "completed")
@@ -178,9 +178,9 @@ def test_schema_exactly_matches_current_typed_model():
 
 
 def test_actual_policy_threshold_publishes_completed_context(tmp_path):
-    from attackmap.artifact_publisher import current_generation, validate_generation
+    from attackmap.foundation.artifact_publisher import current_generation, validate_generation
+    from attackmap.orchestration.pipeline import run_scan
     from attackmap.orchestration.run_spec import RunSpec
-    from attackmap.pipeline import run_scan
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "app.py").write_text("from flask import Flask, request\nfrom worker import run\napp=Flask(__name__)\n@app.route('/admin/users', methods=['DELETE'])\ndef delete_user():\n    return run(request.get_json())\n")
@@ -204,10 +204,10 @@ def test_terminal_outcome_matrix_distinguishes_execution_failure_degraded_covera
     """C15: execution failure, degraded coverage and policy failure are three
     distinguishable terminal outcomes, each with a structured diagnostic
     manifest and no source excerpts or exception text."""
-    from attackmap.analyzers import BuiltinPythonWebAnalyzer
-    from attackmap.artifact_publisher import current_generation
+    from attackmap.foundation.artifact_publisher import current_generation
+    from attackmap.orchestration.analyzers import BuiltinPythonWebAnalyzer
+    from attackmap.orchestration.pipeline import run_scan
     from attackmap.orchestration.run_spec import RunSpec
-    from attackmap.pipeline import run_scan
 
     def echo(*args, **kwargs):
         return None
@@ -218,7 +218,7 @@ def test_terminal_outcome_matrix_distinguishes_execution_failure_degraded_covera
     # (i) Execution failure: the engine dies inside the scan stage.
     def explode(*args, **kwargs):
         raise RuntimeError("EXECUTION_FAILURE_SENTINEL")
-    monkeypatch.setattr("attackmap.pipeline.analyze_repository", explode)
+    monkeypatch.setattr("attackmap.orchestration.pipeline.analyze_repository", explode)
     execution_output = tmp_path / "execution"
     with pytest.raises(RuntimeError):
         run_scan(RunSpec(run_id="execution"), repo_path=repo, output=execution_output, echo=echo)

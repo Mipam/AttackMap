@@ -13,18 +13,18 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from attackmap import analyzers
-from attackmap.analyzers import (
+from attackmap.extraction.workflow_scanner import scan_workflows
+from attackmap.foundation.plugins_lock import OFFICIAL_PLUGINS
+from attackmap.orchestration import analyzers
+from attackmap.orchestration.analyzers import (
     analyzer_install_url,
     discover_installed_analyzers,
     install_analyzer_module,
     official_plugin,
     select_requested_analyzers,
 )
-from attackmap.cli import app
-from attackmap.plugins_lock import OFFICIAL_PLUGINS
 from attackmap.sdk import AnalyzerMetadata, AnalyzerResult
-from attackmap.workflow_scanner import scan_workflows
+from attackmap.surfaces.cli import app
 
 ROOT = Path(__file__).resolve().parents[2]
 runner = CliRunner()

@@ -1,11 +1,11 @@
 """Physical Kubernetes config extraction: explicit scopes and fail-closed seams."""
-from pathlib import Path
 import os
+from pathlib import Path
 
 import pytest
 import yaml
 
-from attackmap.config_scanner import extract_deployment_aliases
+from attackmap.extraction.config_scanner import extract_deployment_aliases
 
 
 def service(namespace="blue", protocol="http", *, name="api", port=8080):

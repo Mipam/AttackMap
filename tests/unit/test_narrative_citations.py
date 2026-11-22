@@ -1,16 +1,18 @@
 """Offline narrative ID checks; reference validity never proves claim support."""
 import json
 from types import SimpleNamespace
+
 import pytest
-from attackmap.llm_review import LlmReviewResult, _validate_narrative_references
+
+from attackmap.output.llm_review import LlmReviewResult, _validate_narrative_references
 
 
 @pytest.mark.parametrize('mode', ['review', 'remediate', 'triage'])
 @pytest.mark.parametrize('reference,status', [('finding:1', 'valid'), ('finding:999', 'invalid')])
 def test_narrative_modes_validate_references_without_another_dispatch(tmp_path, mode, reference, status):
-    from attackmap.ai_budget import AiBudget
-    from attackmap.llm_review import generate_llm_review
+    from attackmap.ai.ai_budget import AiBudget
     from attackmap.models import Finding, ScanResult
+    from attackmap.output.llm_review import generate_llm_review
 
     original = f'Synthetic assessment [{reference}].'
     calls = []
@@ -84,11 +86,11 @@ def test_included_asset_reference_does_not_imply_source_or_claim_support():
 
 
 def test_generate_wrapper_persists_selected_reference_warning_and_original_prose(tmp_path, monkeypatch):
-    import attackmap.pipeline as pipeline
-    from attackmap.artifact_publisher import current_generation, validate_generation
-    from attackmap.llm_review import generate_llm_review
+    import attackmap.orchestration.pipeline as pipeline
+    from attackmap.foundation.artifact_publisher import current_generation, validate_generation
     from attackmap.models import Finding, ScanResult
     from attackmap.orchestration.run_spec import AiSpec, FeatureFlags, RunSpec
+    from attackmap.output.llm_review import generate_llm_review
 
     repo = tmp_path / 'repo'
     repo.mkdir()

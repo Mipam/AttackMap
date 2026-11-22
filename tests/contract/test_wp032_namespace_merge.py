@@ -1,10 +1,15 @@
 """Qualified deployment facts must survive orchestration and report projection."""
 import pytest
 
-from attackmap.contracts import ContractLink, DeclarationSource, DeploymentAliases, ScopedServiceBinding
-from attackmap.fleet import FleetRepoResult, FleetScan, fleet_summary_json
+from attackmap.extraction.contracts import (
+    ContractLink,
+    DeclarationSource,
+    DeploymentAliases,
+    ScopedServiceBinding,
+)
 from attackmap.models import ScanResult
-from attackmap.scan_service import ScanRequest, _effective_deployment_aliases
+from attackmap.orchestration.fleet import FleetRepoResult, FleetScan, fleet_summary_json
+from attackmap.orchestration.scan_service import ScanRequest, _effective_deployment_aliases
 
 
 def extracted_aliases():
@@ -23,7 +28,7 @@ def extracted_aliases():
 
 
 def effective(monkeypatch, aliases, cli=None):
-    monkeypatch.setattr("attackmap.config_scanner.extract_deployment_aliases",
+    monkeypatch.setattr("attackmap.extraction.config_scanner.extract_deployment_aliases",
                         lambda roots: (aliases, []))
     return _effective_deployment_aliases(ScanRequest(
         repo_paths=[], output="/output", deployment_aliases=cli))

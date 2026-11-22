@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.application_errors import AnalysisConfigurationError, AnalysisExit
+from attackmap.foundation.application_errors import AnalysisConfigurationError, AnalysisExit
+from attackmap.orchestration.pipeline import run_scan
 from attackmap.orchestration.run_spec import RunSpec
-from attackmap.pipeline import run_scan
-from attackmap.scan_service import ScanRequest, execute_scan_request
+from attackmap.orchestration.scan_service import ScanRequest, execute_scan_request
 
 
-@pytest.mark.parametrize("name", ["scan_service.py", "pipeline.py", "application_errors.py"])
+@pytest.mark.parametrize("name", ["orchestration/scan_service.py", "orchestration/pipeline.py", "foundation/application_errors.py"])
 def test_core_service_has_no_presentation_import(name):
     path = Path(__file__).resolve().parents[2] / "src" / "attackmap" / name
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -34,13 +34,13 @@ def test_core_service_has_no_presentation_import(name):
 # file is caught, not just at the top of it.
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2] / "src" / "attackmap"
-SERVICE_LAYER_MODULES = ["pipeline", "scan_service", "run_contract", "application_errors"]
-ANALYZER_SURFACE_SEEDS = ["analyzers", "analyzer", "analyzer_contracts", "sdk"]
+SERVICE_LAYER_MODULES = ["orchestration/pipeline", "orchestration/scan_service", "orchestration/run_contract", "foundation/application_errors"]
+ANALYZER_SURFACE_SEEDS = ["orchestration.analyzers", "reasoning.analyzer", "reasoning.analyzer_contracts", "sdk"]
 FORBIDDEN_FOR_ANALYZER_SURFACE = {
     # report rendering
-    "attackmap.report", "attackmap.md", "attackmap.review_json", "attackmap.defensive_review",
+    "attackmap.output.report", "attackmap.output.md", "attackmap.output.review_json", "attackmap.output.defensive_review",
     # scoring policy / ranking
-    "attackmap.threat_model", "attackmap.triage",
+    "attackmap.reasoning.threat_model", "attackmap.output.triage",
 }
 
 
@@ -93,8 +93,8 @@ def test_service_layer_import_matrix_keeps_requests_and_results_neutral(name):
     presentation = sorted(
         target for target in (*imports,)
         if _imports_module({target}, "typer") or _imports_module({target}, "click")
-        or _imports_module({target}, "attackmap.ui") or _imports_module({target}, "attackmap.desktop_worker")
-        or _imports_module({target}, "attackmap.desktop_actions") or _imports_module({target}, "attackmap.desktop_provider"))
+        or _imports_module({target}, "attackmap.surfaces.ui") or _imports_module({target}, "attackmap.orchestration.desktop_worker")
+        or _imports_module({target}, "attackmap.orchestration.desktop_actions") or _imports_module({target}, "attackmap.orchestration.desktop_provider"))
     assert not presentation, (
         f"{name} is shared application service; Typer/Click/UI/desktop modules "
         f"belong to presentation adapters: {presentation}")
@@ -134,9 +134,9 @@ def test_presentation_adapters_translate_while_the_service_stays_neutral():
     tests/test_diagnostic_adapters.py. A macOS adapter does not exist yet
     (no darwin/macos module under src/attackmap as of this check)."""
     adapters = {
-        "cli.py": {"attackmap.scan_service", "attackmap.pipeline"},
-        "desktop_worker.py": {"attackmap.run_contract", "attackmap.pipeline"},
-        "ui/contract_adapter.py": {"attackmap.run_contract"},
+        "surfaces/cli.py": {"attackmap.orchestration.scan_service", "attackmap.orchestration.pipeline"},
+        "orchestration/desktop_worker.py": {"attackmap.orchestration.run_contract", "attackmap.orchestration.pipeline"},
+        "surfaces/ui/contract_adapter.py": {"attackmap.orchestration.run_contract"},
     }
     for adapter, expected in adapters.items():
         path = PACKAGE_ROOT / adapter
@@ -155,7 +155,7 @@ def test_invalid_configuration_is_neutral(tmp_path):
 def test_controlled_engine_exit_translates_to_application_result(tmp_path, monkeypatch):
     def stop(_spec, **kwargs):
         raise AnalysisExit(2)
-    monkeypatch.setattr("attackmap.scan_service.run_scan", stop)
+    monkeypatch.setattr("attackmap.orchestration.scan_service.run_scan", stop)
     result = execute_scan_request(ScanRequest(repo_paths=[tmp_path], output=tmp_path / "reports"))
     assert result.exit_code == 2 and result.report_path is None
 
@@ -164,14 +164,14 @@ def test_atomic_service_rejects_junction_before_output_marking_or_engine(tmp_pat
     import os
     import subprocess
 
-    from attackmap.scan_service import ScanRequestError
+    from attackmap.orchestration.scan_service import ScanRequestError
     target = tmp_path / 'outside'
     target.mkdir()
     junction = tmp_path / 'junction'
     result = subprocess.run(['cmd', '/c', 'mklink', '/J', str(junction), str(target)], capture_output=True)
     if result.returncode:
         pytest.skip('Junction creation unavailable')
-    monkeypatch.setattr('attackmap.scan_service._run_single_repo', lambda *_: pytest.fail('engine must not start'))
+    monkeypatch.setattr('attackmap.orchestration.scan_service._run_single_repo', lambda *_: pytest.fail('engine must not start'))
     try:
         with pytest.raises(ScanRequestError):
             execute_scan_request(ScanRequest(repo_paths=[tmp_path], output=junction / 'reports'))
@@ -181,11 +181,11 @@ def test_atomic_service_rejects_junction_before_output_marking_or_engine(tmp_pat
 
 
 def test_atomic_service_creates_normal_marked_output(tmp_path, monkeypatch):
-    from attackmap.scan_service import RunSummary
+    from attackmap.orchestration.scan_service import RunSummary
     output = tmp_path / 'new' / 'reports'
     def engine(request, analyzers):
         assert output.is_dir()
         assert (output / '.attackmap-output').is_file()
         return RunSummary(exit_code=0)
-    monkeypatch.setattr('attackmap.scan_service._run_single_repo', engine)
+    monkeypatch.setattr('attackmap.orchestration.scan_service._run_single_repo', engine)
     assert execute_scan_request(ScanRequest(repo_paths=[tmp_path], output=output)).exit_code == 0

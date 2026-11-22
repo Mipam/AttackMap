@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.config_scanner import extract_deployment_aliases
-from attackmap.contracts import DeploymentAliases, destination_authority, link_contracts
+from attackmap.extraction.config_scanner import extract_deployment_aliases
+from attackmap.extraction.contracts import DeploymentAliases, destination_authority, link_contracts
 from attackmap.models import ExternalCall, Route, ScanResult
 
 

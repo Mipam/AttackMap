@@ -6,15 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.diagrams import (
+from attackmap.models import AttackPath
+from attackmap.output.diagrams import (
     render_attack_paths_dot,
     render_attack_paths_mermaid,
     render_topology_dot,
     render_topology_mermaid,
 )
-from attackmap.models import AttackPath
-from attackmap.topology import ServiceEdge, ServiceGraph, ServiceNode
-
+from attackmap.reasoning.topology import ServiceEdge, ServiceGraph, ServiceNode
 
 # ---------------------------------------------------------------------------
 # Attack paths — Mermaid
@@ -231,8 +230,8 @@ def test_topology_dot_empty_graph_yields_note() -> None:
 
 
 def test_write_reports_emits_diagram_files(tmp_path: Path) -> None:
-    from attackmap.report import write_reports
     from attackmap.models import ScanResult
+    from attackmap.output.report import write_reports
 
     scan = ScanResult(root=str(tmp_path))
     write_reports(

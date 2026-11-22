@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.ui.suppress_write import append_suppression
+from attackmap.surfaces.ui.suppress_write import append_suppression
 
 
 def test_appends_valid_entry_with_yaml_safe_dump(tmp_path: Path) -> None:

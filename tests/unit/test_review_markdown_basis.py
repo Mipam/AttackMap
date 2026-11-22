@@ -1,6 +1,11 @@
-from attackmap.defensive_review import _finding_priority, _finding_source_quality, _weaknesses, render_defensive_review
 from attackmap.models import AttackPath, AttackSurface, Finding, ScanResult
-from attackmap.review_json import build_defensive_review_json
+from attackmap.output.defensive_review import (
+    _finding_priority,
+    _finding_source_quality,
+    _weaknesses,
+    render_defensive_review,
+)
+from attackmap.output.review_json import build_defensive_review_json
 
 
 def test_unrelated_surface_and_path_cannot_change_finding_priority_or_basis():

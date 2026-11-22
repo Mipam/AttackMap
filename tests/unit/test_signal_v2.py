@@ -4,8 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.asset_model import detect_assets
-from attackmap.control_model import detect_controls
+from attackmap.extraction.scanner import _line_of, _line_snippet, scan_repo
 from attackmap.models import (
     AuthHint,
     DatabaseHint,
@@ -16,9 +15,9 @@ from attackmap.models import (
     SecretHint,
     Signal,
 )
-from attackmap.scanner import _line_of, _line_snippet, scan_repo
-from attackmap.security_overlay import build_security_overlay
-
+from attackmap.output.asset_model import detect_assets
+from attackmap.output.control_model import detect_controls
+from attackmap.output.security_overlay import build_security_overlay
 
 # ---------- Backward compatibility ----------
 
@@ -194,7 +193,7 @@ def test_control_evidence_cites_file_colon_line() -> None:
 
 
 def test_attack_surface_picks_up_route_line() -> None:
-    from attackmap.analyzer import identify_attack_surfaces
+    from attackmap.reasoning.analyzer import identify_attack_surfaces
 
     scan = ScanResult(
         root=".",

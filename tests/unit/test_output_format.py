@@ -12,9 +12,9 @@ import pytest
 from typer.testing import CliRunner
 
 import attackmap
-from attackmap.cli import app
 from attackmap.models import AttackPath, Finding, ScanResult
-from attackmap.report import write_reports
+from attackmap.output.report import write_reports
+from attackmap.surfaces.cli import app
 
 runner = CliRunner()
 
@@ -115,7 +115,7 @@ def _repo(root: Path, name: str) -> Path:
 
 
 def _flat_generation_exports(out: Path) -> set[str]:
-    from attackmap.artifact_publisher import current_generation
+    from attackmap.foundation.artifact_publisher import current_generation
     generation = current_generation(out)
     assert generation is not None
     assert {p.name for p in out.iterdir() if p.is_dir()} == {generation.name}
@@ -152,7 +152,7 @@ def test_fleet_format_json_skips_markdown_summaries(tmp_path: Path) -> None:
     assert (out / "fleet-summary.json").exists()
     assert not (out / "fleet-summary.md").exists()
     assert not (out / "fleet-graph.md").exists()
-    from attackmap.artifact_publisher import current_generation
+    from attackmap.foundation.artifact_publisher import current_generation
     parent = current_generation(out)
     assert parent is not None
     child = current_generation(parent / "svca")

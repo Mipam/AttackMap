@@ -1,5 +1,19 @@
-from attackmap.models import AttackSurface, AuthHint, DatabaseHint, ExternalCall, Route, ScanResult, ServiceHint, TaintChain
-from attackmap.recon_to_analysis import to_attack_paths, to_attack_surface, to_findings, translate_recon
+from attackmap.models import (
+    AttackSurface,
+    AuthHint,
+    DatabaseHint,
+    ExternalCall,
+    Route,
+    ScanResult,
+    ServiceHint,
+    TaintChain,
+)
+from attackmap.orchestration.recon_to_analysis import (
+    to_attack_paths,
+    to_attack_surface,
+    to_findings,
+    translate_recon,
+)
 
 
 def test_translate_recon_produces_surface_findings_and_paths() -> None:

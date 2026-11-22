@@ -18,12 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.analyzer_contracts import (
-    EXTRACTION_PROTOCOL_VERSION,
-    check_extraction_compatibility,
-    describe_extraction_protocol,
-)
-from attackmap.analyzer_host import (
+from attackmap.extraction.analyzer_host import (
     HOST_CRASH,
     HOST_INVALID_OUTPUT,
     HOST_MEMORY_LIMIT,
@@ -32,7 +27,16 @@ from attackmap.analyzer_host import (
     HostLimits,
     run_isolated_analyzer,
 )
-from attackmap.analyzers import BuiltinPythonWebAnalyzer, analyze_repository, get_registered_analyzers
+from attackmap.orchestration.analyzers import (
+    BuiltinPythonWebAnalyzer,
+    analyze_repository,
+    get_registered_analyzers,
+)
+from attackmap.reasoning.analyzer_contracts import (
+    EXTRACTION_PROTOCOL_VERSION,
+    check_extraction_compatibility,
+    describe_extraction_protocol,
+)
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "analyzer_host"
 APP = "from flask import Flask\napp = Flask(__name__)\n\n@app.route('/ok')\ndef ok():\n    return 'ok'\n"
@@ -248,7 +252,7 @@ def test_forged_namespace_cannot_corrupt_sibling_output(tmp_path: Path) -> None:
 
 
 def test_isolated_failure_with_strict_raises(tmp_path: Path) -> None:
-    from attackmap.analyzer_host import AnalyzerHostError
+    from attackmap.extraction.analyzer_host import AnalyzerHostError
 
     with pytest.raises(AnalyzerHostError, match=HOST_CRASH):
         analyze_repository(
