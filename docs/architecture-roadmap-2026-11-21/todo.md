@@ -184,6 +184,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR007 · Intra-stage cancellation checkpoints
 **Phase** 0 · **Priority** Medium · **Effort** 1 d · **Depends** AR001 · **Blocks** AR027
 **Lease** `budget` · **Acceptance** AC-010
+**Status** DONE — `errors.BudgetExpired` (cycle-free home) + `run_budget.TimeBudget` (moved from pipeline, re-export kept; ContextVar scope mirrors ai_budget); `tick()` checkpoints every 256 files in `scan_files`, between whole-repo passes, in `RepoIndex.build` (partial index, no raise) and between analyzers; partials survive: per-file partial → merged partial → published with limitation; `tests/test_time_budget.py` 6/6. Known bounds: CLI fixed startup ~6.5 s on this host and the mandatory translate/publish stages are not budget-bounded — the literal wall≤10 s pair is downstream-cost-dependent (whole-repo passes become budget-aware in Phase 2 per §2.2)
 
 **Files** `src/attackmap/pipeline.py`, `src/attackmap/scanner.py`,
 `src/attackmap/analyzers.py`, `src/attackmap/index.py`

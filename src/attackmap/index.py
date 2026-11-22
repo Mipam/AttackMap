@@ -8,15 +8,17 @@ import os
 from collections import deque
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
-from contextvars import ContextVar
 from contextlib import contextmanager
-from threading import Lock
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
+from threading import Lock
 
-from .safe_fs import contained_file, is_oversized, max_file_bytes, walk_repo
+from .errors import BudgetExpired
 from .models import ResourceLimitEvent, ScanSnapshotIdentity
+from .run_budget import active_budget
+from .safe_fs import contained_file, is_oversized, max_file_bytes, walk_repo
 from .srcpaths import is_skipped_dir, line_number
 
 _NOISY_SYMLINK_PARTS = {"node_modules", ".git", ".venv", "venv", "dist", "build", "__pycache__"}
@@ -98,12 +100,12 @@ _SNAPSHOT_SCHEMA = "attackmap-snapshot/1.0"
 # (SBOM, supply-chain, workflows, authz, anomalies, fingerprints) read the
 # captured revision even where their call sites thread no index explicitly.
 # Lookups are root-gated and per-thread; a newer build for the same root wins.
-_PINNED: "ContextVar[RepoIndex | None]" = ContextVar("attackmap_pinned_index", default=None)
-_PROCESS_SNAPSHOT: "RepoIndex | None" = None
+_PINNED: ContextVar[RepoIndex | None] = ContextVar("attackmap_pinned_index", default=None)
+_PROCESS_SNAPSHOT: RepoIndex | None = None
 _PROCESS_SNAPSHOT_LOCK = Lock()
 
 
-def install_process_snapshot(index: "RepoIndex") -> None:
+def install_process_snapshot(index: RepoIndex) -> None:
     """Dedicated isolated-worker bootstrap only; pin persists through thread shutdown."""
     global _PROCESS_SNAPSHOT
     with _PROCESS_SNAPSHOT_LOCK:
@@ -112,12 +114,12 @@ def install_process_snapshot(index: "RepoIndex") -> None:
         _PROCESS_SNAPSHOT = index
 
 
-def pinned_repo_index() -> "RepoIndex | None":
+def pinned_repo_index() -> RepoIndex | None:
     """The index pinned for this thread by the latest :meth:`RepoIndex.build`."""
     return _PROCESS_SNAPSHOT if _PROCESS_SNAPSHOT is not None else _PINNED.get()
 
 
-def active_index_for(root: str | Path) -> "RepoIndex | None":
+def active_index_for(root: str | Path) -> RepoIndex | None:
     """The pinned index for exactly ``root`` (another repo's pin never applies)."""
     index = pinned_repo_index()
     if index is None:
@@ -134,7 +136,7 @@ def clear_pinned_index() -> None:
 
 
 @contextmanager
-def pinned_index_scope(index: "RepoIndex"):
+def pinned_index_scope(index: RepoIndex):
     """Temporarily install an already verified capture, including during plugin import."""
     token = _PINNED.set(index)
     try:
@@ -163,10 +165,10 @@ def decode_source_bytes(raw: bytes) -> str | None:
 def _snapshot_text(raw: bytes, sdk: bool = False) -> str:
     try:
         text = raw.decode("utf-8")
-    except UnicodeDecodeError:
+    except UnicodeDecodeError as exc:
         text = decode_source_bytes(raw) if sdk else None
         if text is None:
-            raise UnicodeDecodeError("utf-8", raw, 0, min(1, len(raw)), "not captured text")
+            raise UnicodeDecodeError("utf-8", raw, 0, min(1, len(raw)), "not captured text") from exc
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
@@ -278,7 +280,7 @@ class ScanSnapshot:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     @classmethod
-    def from_indexed(cls, files: list[IndexedFile], index_config: dict[str, int], sources: list[CapturedSource] | None = None) -> "ScanSnapshot":
+    def from_indexed(cls, files: list[IndexedFile], index_config: dict[str, int], sources: list[CapturedSource] | None = None) -> ScanSnapshot:
         identities = {f.rel: f.sha256 for f in files}
         sizes = {f.rel: f.size for f in files}
         for source in sources or ():
@@ -291,7 +293,7 @@ class ScanSnapshot:
                    tuple(sorted(index_config.items())), raw_entries)
 
     @classmethod
-    def from_identity(cls, data: dict) -> "ScanSnapshot":
+    def from_identity(cls, data: dict) -> ScanSnapshot:
         """Rehydrate from a serialized :class:`models.ScanSnapshotIdentity`."""
         raw_files = data.get("files")
         entries = tuple(sorted((str(rel), str(sha))
@@ -602,13 +604,41 @@ class RepoIndex:
         budget_exceeded = False
         count_exceeded = False
         skipped_over_count = 0
+        # AR007: intra-stage deadline check for the capture walk. Expiry stops
+        # the walk and returns a partial index (limitation recorded below), so
+        # select_analyzers still completes and the run still publishes.
+        time_budget = active_budget()
+        files_since_checkpoint = 0
 
         def _can_prefetch(pending: int) -> bool:
             return ((file_count_limit <= 0 or file_count_limit - len(files) >= pending)
                     and (budget <= 0 or budget - used_bytes >= pending * (file_limit + 1)))
 
-        for path, stat, stat_error, read_future, notes in _ordered_capture_inputs(root_path, file_limit, _can_prefetch):
+        capture_inputs = _ordered_capture_inputs(root_path, file_limit, _can_prefetch)
+        if time_budget is not None:
+            try:
+                time_budget.tick("index_build")
+            except BudgetExpired:
+                time_budget = None  # deadline already gone: stop before the walk
+                capture_inputs = iter(())
+                limitations.append(
+                    "elapsed-time budget expired before indexing; no files were indexed - ANALYSIS IS PARTIAL."
+                )
+        for path, stat, stat_error, read_future, notes in capture_inputs:
             limitations.extend(notes)
+            if time_budget is not None:
+                files_since_checkpoint += 1
+                if files_since_checkpoint >= max(1, time_budget.checkpoint_interval):
+                    files_since_checkpoint = 0
+                    try:
+                        time_budget.tick("index_build")
+                    except BudgetExpired:
+                        time_budget = None
+                        limitations.append(
+                            f"elapsed-time budget expired while indexing after {len(files)} file(s); "
+                            "remaining files were not indexed - ANALYSIS IS PARTIAL."
+                        )
+                        break
             if path is None:
                 continue
             try:
@@ -764,10 +794,10 @@ class PassSources:
     """
 
     root: Path
-    index: "RepoIndex | None"
+    index: RepoIndex | None
 
     @classmethod
-    def for_root(cls, root: str | Path, index: "RepoIndex | None" = None) -> "PassSources":
+    def for_root(cls, root: str | Path, index: RepoIndex | None = None) -> PassSources:
         """Explicit index when it matches ``root``, else the ambient pin for it."""
         root_path = Path(root).resolve()
         resolved = index if index is not None and Path(index.root) == root_path else None

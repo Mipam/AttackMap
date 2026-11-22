@@ -11,20 +11,20 @@ if TYPE_CHECKING:
     from .index import IndexedFile, RepoIndex
     from .progress import ScanProgress
 
-from .srcpaths import JS_TS_SUFFIXES, in_skipped_dir, is_skipped_dir, line_number
-from .redact import mask_secret
-from .safe_fs import is_oversized, max_file_bytes, walk_repo
 from .anomalies import find_anomalies
 from .authz import analyze_authz
 from .crypto import find_crypto_weaknesses
+from .errors import BudgetExpired
+from .redact import mask_secret
+from .run_budget import active_budget
 from .sbom import analyze_sbom
+from .sdk.models import AuthHint, DatabaseHint, ExternalCall, Route, ScanResult, SecretHint
+from .srcpaths import JS_TS_SUFFIXES, in_skipped_dir, is_test_file, is_vendored_file, line_number
 from .supply_chain import scan_supply_chain
-from .workflow_scanner import scan_workflows
-from .srcpaths import is_test_file, is_vendored_file
+from .taint import DEFAULT_RECALL, analyze_taint, recall_config
 from .weaknesses import find_code_weaknesses
 from .webhardening import find_web_hardening_issues, has_csrf_protection
-from .sdk.models import AuthHint, DatabaseHint, ExternalCall, Route, ScanResult, SecretHint
-from .taint import DEFAULT_RECALL, analyze_taint, recall_config
+from .workflow_scanner import scan_workflows
 
 # Scanner responsibilities are intentionally generic-only:
 # - file walking and suffix filtering
@@ -132,7 +132,7 @@ EXTERNAL_CALL_PATTERNS = [
 ]
 
 
-def _external_call_fields(match: "re.Match[str]") -> tuple[str, str | None]:
+def _external_call_fields(match: re.Match[str]) -> tuple[str, str | None]:
     """Extract (url, upper-cased method) from an EXTERNAL_CALL match.
 
     `requests`/`axios` supply the verb directly. A `fetch` call resolves to its
@@ -739,7 +739,7 @@ def _append_unique_auth_hints(result: ScanResult, relative: str, content: str, l
 def scan_repo(
     root: str | Path,
     suffixes: set[str] | None = None,
-    progress: "ScanProgress | None" = None,
+    progress: ScanProgress | None = None,
     recall: bool = False,
 ) -> ScanResult:
     """Per-file signal extraction plus the whole-repo passes, for callers that
@@ -755,8 +755,8 @@ def scan_repo(
 def scan_files(
     root: str | Path,
     suffixes: set[str] | None = None,
-    progress: "ScanProgress | None" = None,
-    index: "RepoIndex | None" = None,
+    progress: ScanProgress | None = None,
+    index: RepoIndex | None = None,
     incremental: bool | None = None,
     cache_dir: str | Path | None = None,
 ) -> ScanResult:
@@ -802,6 +802,7 @@ def scan_files(
     )
 
     csrf_protected = False
+    files_since_checkpoint = 0
     for item in indexed:
         if progress is not None:
             progress.advance(item.rel)
@@ -822,6 +823,25 @@ def scan_files(
         result.web_hardening_issues.extend(signals["web_hardening_issues"])
         result.code_weaknesses.extend(signals["code_weaknesses"])
         csrf_protected = csrf_protected or file_csrf
+
+        # AR007: intra-stage cancellation. One cheap deadline read every
+        # ~checkpoint_interval files bounds the per-file pass so a small
+        # --time-budget-seconds actually stops the scan (AC-010).
+        budget = active_budget()
+        if budget is not None:
+            files_since_checkpoint += 1
+            if files_since_checkpoint >= max(1, budget.checkpoint_interval):
+                files_since_checkpoint = 0
+                try:
+                    budget.tick("scan_files")
+                except BudgetExpired as exc:
+                    result.limitations.append(
+                        f"elapsed-time budget of {budget.seconds}s expired during the per-file "
+                        f"scan after {result.files_scanned} file(s); remaining files were not "
+                        "scanned - ANALYSIS IS PARTIAL."
+                    )
+                    exc.partial = result
+                    raise
 
     if cache is not None:
         cache.save()
@@ -855,7 +875,7 @@ def _open_incremental_cache(root_path: Path, cache_dir: str | Path | None):
         return None  # optimization only: never fail the scan over the cache
 
 
-def _cached_file_signals(item: "IndexedFile", cache, suffixes: set[str] | None):
+def _cached_file_signals(item: IndexedFile, cache, suffixes: set[str] | None):
     """One file's per-file signals — from the cache when provably fresh,
     else freshly computed (and cached for the next run)."""
     from .incremental import FileCacheKey, dump_payload, load_payload
@@ -883,7 +903,7 @@ def _cached_file_signals(item: "IndexedFile", cache, suffixes: set[str] | None):
     return _analyze_indexed_file(item)
 
 
-def _analyze_indexed_file(item: "IndexedFile") -> tuple[dict[str, list], bool]:
+def _analyze_indexed_file(item: IndexedFile) -> tuple[dict[str, list], bool]:
     """Per-file extraction isolated from the accumulating result.
 
     Output depends only on ``(item.text, item.rel, item.suffix)`` and the
@@ -970,29 +990,61 @@ def _analyze_indexed_file(item: "IndexedFile") -> tuple[dict[str, list], bool]:
 def run_repo_passes(
     result: ScanResult,
     root_path: Path,
-    progress: "ScanProgress | None" = None,
+    progress: ScanProgress | None = None,
     recall: bool = False,
-    index: "RepoIndex | None" = None,
+    index: RepoIndex | None = None,
 ) -> ScanResult:
     """Whole-repo passes over an assembled result — run once per scan, after
     every analyzer's per-file output is merged, so taint/authz/anomalies see
-    the full route set (#219)."""
-    # Taint pass runs after regular signal extraction — it needs the
-    # route list to know where to seed source flows from (#45). This is the
-    # slow tail on big monorepos (import-graph walk), so it gets its own
-    # progress stage.
+    the full route set (#219).
+
+    AR007: a budget breach between passes stops the remaining passes; the
+    caller's stage boundary publishes the partial result (AC-010).
+    """
+    try:
+        _run_repo_passes(result, root_path, progress, recall, index)
+    except BudgetExpired as exc:
+        budget = active_budget()
+        if budget is not None:
+            result.limitations.append(
+                f"elapsed-time budget of {budget.seconds}s expired during whole-repo passes; "
+                "remaining passes were skipped - ANALYSIS IS PARTIAL."
+            )
+        exc.partial = result
+        raise
+    return result
+
+
+def _run_repo_passes(
+    result: ScanResult,
+    root_path: Path,
+    progress: ScanProgress | None,
+    recall: bool,
+    index: RepoIndex | None,
+) -> None:
+    """Taint pass runs after regular signal extraction — it needs the
+    route list to know where to seed source flows from (#45). This is the
+    slow tail on big monorepos (import-graph walk), so it gets its own
+    progress stage."""
     if progress is not None:
         progress.stage("Taint / data-flow analysis")
+    budget = active_budget()
+    if budget is not None:
+        budget.tick("run_repo_passes")
     result.taint_chains = result.taint_chains + analyze_taint(
         result, root_path, recall=recall_config() if recall else DEFAULT_RECALL, index=index
     )
     # SBOM inventory: direct-dep parse of manifest files (#48, slice 1).
     if progress is not None:
         progress.stage("Dependency inventory (SBOM)")
+    if budget is not None:
+        budget.tick("run_repo_passes")
     result.dependencies = result.dependencies + analyze_sbom(root_path)
     # Supply-chain risk beyond CVEs (#247): offline, over the same manifests.
     if progress is not None:
         progress.stage("Dependency supply-chain risk")
+    if budget is not None:
+        budget.tick("run_repo_passes")
     result.supply_chain_issues = result.supply_chain_issues + scan_supply_chain(
         root_path, result.dependencies
     )
@@ -1001,23 +1053,28 @@ def run_repo_passes(
     # over-broad permissions, and self-hosted runners on PR triggers.
     if progress is not None:
         progress.stage("CI workflow security")
+    if budget is not None:
+        budget.tick("run_repo_passes")
     result.workflow_issues = result.workflow_issues + scan_workflows(root_path)
     # BOLA/IDOR: routes with an id param reaching a datastore with no
     # ownership check nearby (#69). Runs after taint so it can reuse
     # sql_execute reachability.
     if progress is not None:
         progress.stage("Authorization (BOLA/IDOR)")
+    if budget is not None:
+        budget.tick("run_repo_passes")
     result.authz_candidates = result.authz_candidates + analyze_authz(result, root_path)
     # Anomaly / outlier pass (#78): the odd-one-out among sibling routes.
     # Runs last so the full route list is assembled into cohorts. It drives its
     # own determinate per-cohort progress (the slow tail on big route surfaces).
+    if budget is not None:
+        budget.tick("run_repo_passes")
     result.anomalies = result.anomalies + find_anomalies(result, root_path, progress=progress)
     # Pin the run to the content snapshot its per-file pass read (C33/AM047):
     # merged results are stamped here because per-analyzer stamps would not
     # survive merge_analyzer_results.
     if index is not None and index.snapshot is not None:
         result.scan_snapshot = index.snapshot.identity()
-    return result
 
 
 def _redact_secret(value: str) -> str:
@@ -1062,10 +1119,8 @@ def _looks_like_secret_candidate(value: str) -> bool:
         return False
     if value.startswith(("http://", "https://", "data:", "file:")):
         return False
-    if value.replace(".", "").replace("-", "").replace("_", "").isdigit():
-        # Version strings, phone numbers, etc.
-        return False
-    return True
+    # Version strings, phone numbers, etc. are not URL paths.
+    return not value.replace(".", "").replace("-", "").replace("_", "").isdigit()
 
 
 # --- #252: prefix-less credentials ----------------------------------------
@@ -1118,9 +1173,7 @@ def is_placeholder_secret(value: str) -> bool:
         return True
     if any(word in lowered for word in _PLACEHOLDER_WORDS):
         return True
-    if len(set(trimmed)) <= 2 or "***" in trimmed or "…" in trimmed:
-        return True
-    return False
+    return len(set(trimmed)) <= 2 or "***" in trimmed or "…" in trimmed
 
 
 def _credential_assignment_ok(key: str, value: str) -> bool:
@@ -1133,9 +1186,7 @@ def _credential_assignment_ok(key: str, value: str) -> bool:
         return False  # an identifier / env-var name / dotted reference
     if "/" in value or "://" in value or value.startswith(("http", ".")):
         return False
-    if value.replace(".", "").replace("-", "").replace("_", "").isdigit():
-        return False
-    return True
+    return not value.replace(".", "").replace("-", "").replace("_", "").isdigit()
 
 
 def iter_secret_matches(
@@ -1309,6 +1360,4 @@ def _is_jwt_shape(literal: str) -> bool:
         header_text = header_bytes.decode("utf-8")
     except UnicodeDecodeError:
         return False
-    if not header_text.startswith("{") or "alg" not in header_text.lower():
-        return False
-    return True
+    return header_text.startswith("{") and "alg" in header_text.lower()

@@ -48,6 +48,7 @@ from .progress import EventLog, create_progress
 from .recon_to_analysis import translate_recon
 from .report import render_console_summary, render_pr_comment, write_reports
 from .review_prompts import HUNT_LENSES
+from .run_budget import BudgetExpired, TimeBudget, time_budget_scope
 from .safe_fs import UnsafePathError, ensure_output_dir, safe_write_text
 from .security_overlay import SecurityOverlay, build_security_overlay
 from .suppress import SuppressedFinding, apply_suppressions, collect_suppressions
@@ -118,33 +119,6 @@ def resolve_time_budget_seconds(explicit: int | None = None) -> int:
             f"{TIME_BUDGET_ENV} / time budget must be >= 1 second; got {value}."
         )
     return value
-
-
-@dataclass
-class TimeBudget:
-    """Between-stage wall-clock ceiling for one deterministic run (C35).
-
-    A breach never aborts mid-stage: the in-flight stage runs to completion,
-    then later optional stages are skipped so the run always publishes. The
-    check is a single ``perf_counter`` read — no threads, no sleeps.
-    """
-
-    seconds: int
-    exceeded_stage: str | None = None
-    _deadline: float = field(init=False, repr=False)
-
-    def __post_init__(self) -> None:
-        self._deadline = time.perf_counter() + self.seconds
-
-    @property
-    def exceeded(self) -> bool:
-        return self.exceeded_stage is not None
-
-    def check(self, skipped_stage: str) -> bool:
-        """Record the first breach (naming the stage being skipped); idempotent."""
-        if self.exceeded_stage is None and time.perf_counter() >= self._deadline:
-            self.exceeded_stage = skipped_stage
-        return self.exceeded_stage is not None
 
 
 @dataclass
@@ -428,17 +402,18 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
 
     def _select() -> None:
         nonlocal captured_index
-        captured_index = RepoIndex.build(repo_path)
-        state.analyzer_run_plan = AnalyzerRunPlan(Path(repo_path).resolve(), captured_index, AnalyzerRunLedger(
-            selection_mode="automatic" if options.analyzers is None else "explicit",
-            inventory_scope="registered_candidates" if options.analyzers is None else "supplied_candidates",
-            profile_id=options.analyzer_profile_id))
-        state.analyzers = resolve_run_analyzers(
-            repo_path, analyzers=options.analyzers, opt_in_matches=opt_in_matches,
-            run_plan=state.analyzer_run_plan,
-            progress=scan_progress,
-            allow_untrusted=options.allow_untrusted_analyzers or None,
-        )
+        with time_budget_scope(budget):
+            captured_index = RepoIndex.build(repo_path)
+            state.analyzer_run_plan = AnalyzerRunPlan(Path(repo_path).resolve(), captured_index, AnalyzerRunLedger(
+                selection_mode="automatic" if options.analyzers is None else "explicit",
+                inventory_scope="registered_candidates" if options.analyzers is None else "supplied_candidates",
+                profile_id=options.analyzer_profile_id))
+            state.analyzers = resolve_run_analyzers(
+                repo_path, analyzers=options.analyzers, opt_in_matches=opt_in_matches,
+                run_plan=state.analyzer_run_plan,
+                progress=scan_progress,
+                allow_untrusted=options.allow_untrusted_analyzers or None,
+            )
 
     try:
         _timed(state, "select_analyzers", _select)
@@ -486,20 +461,57 @@ def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunS
 
     if not _deadline_hit("scan_and_merge"):
         def _scan() -> None:
-            state.scan = analyze_repository(
-                repo_path,
-                run_plan=state.analyzer_run_plan,
-                progress=scan_progress,
-                recall=options.recall,
-                strict=options.strict_analyzers,
-                isolated_analyzers=options.isolated_analyzers,
-                incremental=options.incremental,
-                index=captured_index,
-                events=state.events,
+            with time_budget_scope(budget):
+                state.scan = analyze_repository(
+                    repo_path,
+                    run_plan=state.analyzer_run_plan,
+                    progress=scan_progress,
+                    recall=options.recall,
+                    strict=options.strict_analyzers,
+                    isolated_analyzers=options.isolated_analyzers,
+                    incremental=options.incremental,
+                    index=captured_index,
+                    events=state.events,
+                )
+
+        def _recover_partial_scan(exc: BudgetExpired) -> None:
+            """Convert an intra-stage budget breach into a publishable partial
+            scan (AR007/AC-010): keep whatever the interrupted stage built,
+            record the limitation, and let later stages skip via the deadline
+            they will now observe on their own."""
+            partial = getattr(exc, "partial", None)
+            scan_now = partial if isinstance(partial, ScanResult) else ScanResult(root=str(repo_path))
+            state.scan = scan_now
+            if state.events is not None:
+                state.events.stage("scan_and_merge", "skip",
+                                   detail=f"time budget of {budget.seconds}s expired inside the stage")
+            note = (
+                f"elapsed-time budget of {budget.seconds}s expired inside the scan stage; "
+                "the scan stopped early - ANALYSIS IS PARTIAL, not complete. "
+                f"Raise the ceiling with --time-budget-seconds or {TIME_BUDGET_ENV}."
             )
+            if note not in scan_now.limitations:
+                scan_now.limitations.append(note)
+            record = AnalyzerError(
+                analyzer="pipeline",
+                error_type="time_budget_exceeded",
+                message=(
+                    f"deterministic run deadline ({budget.seconds}s) reached inside the "
+                    "scan stage; the scan stopped early with partial coverage"
+                ),
+            )
+            if record not in scan_now.analyzer_errors:
+                scan_now.analyzer_errors.append(record)
+            if state.analyzer_run_plan is not None and not state.analyzer_run_plan.ledger.execution_complete:
+                state.analyzer_run_plan.skip_for_deadline()
+                scan_now.analyzer_run_ledger = state.analyzer_run_plan.ledger.model_copy(deep=True)
+            echo(f"Warning: {note}", err=True)
 
         try:
             _timed(state, "scan_and_merge", _scan)
+        except BudgetExpired as exc:
+            scan_progress.done()
+            _recover_partial_scan(exc)
         except BaseException:
             scan_progress.done()
             raise

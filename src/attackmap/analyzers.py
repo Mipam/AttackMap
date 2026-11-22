@@ -879,12 +879,15 @@ def analyze_repository(
     results: list[AnalyzerResult] = []
     errors: list[AnalyzerError] = []
     host_limitations: list[str] = []
+    from .errors import BudgetExpired
+    from .run_budget import active_budget
     from .snapshot_transport import SnapshotBundle, SnapshotInputError
     input_error = None
     try:
         shared_input = SnapshotBundle(index) if isolated_analyzers and any(not _is_builtin_analyzer(a) for a in active_analyzers) else nullcontext(None)
     except (SnapshotInputError, OSError) as exc:
         shared_input, input_error = nullcontext(None), exc
+    budget_expired: BudgetExpired | None = None
     with shared_input as input_bundle:
         for analyzer, ledger_row in zip(active_analyzers, plan._selected_records, strict=True):
             analysis_started = None
@@ -957,6 +960,11 @@ def analyze_repository(
                 ledger_row.signal_counts = AnalyzerSignalCounts(**{
                     key: len(getattr(result, key)) for key in AnalyzerSignalCounts.model_fields})
             except Exception as exc:
+                if isinstance(exc, BudgetExpired):
+                    # AR007: a budget breach stops the whole scan stage, not
+                    # just one analyzer; the merged partial is raised below.
+                    budget_expired = exc
+                    break
                 if ledger_row.error is None:
                     ledger_row.failed("analysis", _log_exception_type(exc))
                     plan.observe(ledger_row, "analysis", "failed", error_type=_log_exception_type(exc))
@@ -989,8 +997,30 @@ def analyze_repository(
             plan.observe(ledger_row, "analysis", "succeeded")
             if progress is not None:
                 progress.stage(f"Analyzer {_log_identity(analyzer.name)} succeeded ({ledger_row.analysis_duration_ms:.1f} ms)")
+            # AR007: once the deadline is gone, the next analyzer must not
+            # start — a breach between analyzers stops the whole stage here
+            # instead of after another full per-file pass.
+            budget = active_budget()
+            if budget is not None:
+                try:
+                    budget.tick("analyze_repository")
+                except BudgetExpired as exc:
+                    budget_expired = exc
+                    break
     merged = merge_analyzer_results(results, root=repo_root) if results else AnalyzerResult(root=str(repo_root))
     merged.analyzer_errors = errors
+    if budget_expired is not None:
+        # AR007/AC-010: the budget expired inside the per-file stage. Keep as
+        # much coverage as already exists: completed analyzers merge; when the
+        # very first analyzer was interrupted, its own per-file partial (a
+        # ScanResult attached by scan_files) is the best available evidence.
+        if not results:
+            per_file_partial = getattr(budget_expired, "partial", None)
+            if isinstance(per_file_partial, ScanResult):
+                merged = per_file_partial
+        merged.analyzer_errors = errors
+        budget_expired.partial = merged
+        raise budget_expired
     plan.ledger.execution_complete = True
     merged.analyzer_run_ledger = plan.ledger.model_copy(deep=True)
 

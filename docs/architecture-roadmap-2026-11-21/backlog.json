@@ -327,7 +327,7 @@
       "phase": 0,
       "priority": "Medium",
       "effort_days": 1.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR001"
       ],
@@ -345,7 +345,9 @@
         "src/attackmap/index.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "tests/test_time_budget.py 6/6 incl. AC-010 integration (1s budget stops+publishes partial); formal check: scan stops at first 256-file checkpoint after expiry, partial published with 3 budget limitations, exit 0; host note: CLI fixed startup ~6.5s + mandatory translate/publish are not budget-bounded, so the literal wall<=10s pair depends on downstream cost"
+      ]
     },
     {
       "id": "AR008",
