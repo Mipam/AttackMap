@@ -17,6 +17,8 @@ import functools
 import os
 import re
 
+from .policy import SKIP_DIRS
+
 # Any path segment equal to one of these marks the file as test code.
 # Every JavaScript/TypeScript source suffix the core scans (#227). Shared by
 # the scanner, analyzers, taint, authz and fusion passes so none of them
@@ -127,7 +129,7 @@ def is_vendored_file(rel_path: str) -> bool:
     return _MINIFIED_FILE_RE.search(parts[-1]) is not None
 
 
-__all__ = ["is_test_file", "is_infra_route", "is_vendored_file"]
+__all__ = ["is_infra_route", "is_test_file", "is_vendored_file"]
 
 
 # --- Locations cited in evidence text (#213, #214) ---------------------------
@@ -196,7 +198,7 @@ def evidence_locations(evidence: list[str]) -> list[tuple[str, int | None]]:
         found = [(path, line) for _, path, line in sorted(positioned, key=lambda t: t[0])]
         for item in found:
             # Prefer the line-bearing form when the same file is cited both ways.
-            if item[1] is None and any(f == item[0] and l is not None for f, l in found):
+            if item[1] is None and any(f == item[0] and ln is not None for f, ln in found):
                 continue
             if item not in seen:
                 seen.add(item)
@@ -208,29 +210,12 @@ def evidence_locations(evidence: list[str]) -> list[tuple[str, int | None]]:
     return [(path, line) for path, line in out if line is not None or path not in with_line]
 
 
-# --- Directories never scanned (#215) ----------------------------------------
+# --- Directories never scanned (#215, AR004) ----------------------------------
 #
-# One set for every core walker. Matched against directory names *relative to
-# the scanned root* — never against the absolute path, so a checkout that
-# lives under e.g. /opt/atlassian/pipelines/agent/build is still scanned.
-SKIP_DIRS = frozenset(
-    {
-        "node_modules",
-        ".git",
-        ".attackmap",       # CLI cache / output dir
-        ".attackmap-gui",   # the macOS GUI's report output dir
-        ".venv",
-        "venv",
-        "__pycache__",
-        "dist",
-        "build",
-        ".next",
-        ".turbo",
-        "out",
-        "target",
-        ".tox",
-    }
-)
+# One set for every core walker, defined once in attackmap.policy and matched
+# against directory names *relative to the scanned root* — never against the
+# absolute path, so a checkout that lives under e.g.
+# /opt/atlassian/pipelines/agent/build is still scanned.
 
 
 def is_skipped_dir(name: str) -> bool:
@@ -238,7 +223,7 @@ def is_skipped_dir(name: str) -> bool:
     return name in SKIP_DIRS
 
 
-def in_skipped_dir(rel: "str | os.PathLike[str]") -> bool:
+def in_skipped_dir(rel: str | os.PathLike[str]) -> bool:
     """True when a *repo-relative* file path sits under a skipped directory."""
     from pathlib import PurePath
 

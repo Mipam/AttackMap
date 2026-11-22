@@ -27,13 +27,17 @@ from __future__ import annotations
 import bisect
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from .srcpaths import SKIP_DIRS, in_skipped_dir, is_skipped_dir
 from .config_datastores import extract_config_datastores, extract_config_messaging
+from .models import DatabaseHint, ExternalCall, ResourceLimitEvent, ScanResult, SecretHint
 from .redact import mask_secret
 from .safe_fs import max_file_bytes, walk_repo
-from .models import DatabaseHint, ExternalCall, ResourceLimitEvent, ScanResult, SecretHint
 from .scanner import _append_hardcoded_secret_hints, _line_snippet
+from .srcpaths import in_skipped_dir, is_skipped_dir
+
+if TYPE_CHECKING:
+    from .contracts import DeploymentAliases
 
 # Config files larger than this are skipped — at that size they're invariably
 # generated (lock files, minified bundles, or AttackMap's own JSON reports)
@@ -94,7 +98,6 @@ CONFIG_EXCLUDE_FILENAMES = frozenset({
     "package.json",  # noisy: `scripts:` values look like URLs and DB strings
 })
 
-_SKIP_DIRS = SKIP_DIRS  # shared set (#215)
 
 # Credential dotfiles (#252): registry / VCS / SSH credentials that neither
 # the source pass (skips dotfiles) nor the suffix match above would read.
@@ -191,9 +194,7 @@ def _is_placeholder(value: str) -> bool:
     if re.fullmatch(r"\$[A-Z_][A-Z0-9_]*", trimmed):
         return True
     # File path — probably a keyfile pointer, not the key itself.
-    if trimmed.startswith(("/", "./", "../")) or trimmed.endswith((".pem", ".key", ".crt")):
-        return True
-    return False
+    return trimmed.startswith(("/", "./", "../")) or trimmed.endswith((".pem", ".key", ".crt"))
 
 
 def _redact(value: str) -> str:
@@ -213,7 +214,7 @@ def should_scan_config_file(path: Path) -> bool:
     if path.suffix.lower() in CONFIG_SUFFIXES:
         return True
     # .env, .env.example, sample.env, etc.
-    return any(hint in name for hint in _CONFIG_FILENAME_HINTS) and name.startswith(".env") or name.endswith(".env") or ".env." in name
+    return (any(hint in name for hint in _CONFIG_FILENAME_HINTS) and name.startswith(".env")) or name.endswith(".env") or ".env." in name
 
 
 def scan_config_repo(root: str | Path, index: object | None = None) -> ScanResult:
@@ -305,8 +306,10 @@ def _extract_rails_datastores(content: str, relative: str, result: ScanResult) -
     if relative != "config/database.yml":
         return
     import hashlib
+
     import yaml
     from yaml.nodes import ScalarNode
+
     from .config_datastores import _literal, _mapping
     from .fleet_resource_identity import DatastoreDeclaration
     from .models import Signal, SignalOrigin
@@ -1067,7 +1070,7 @@ def _extract_nginx_proxies(
             _declare_proxy(host, backend, provenance, proxies, proxy_sources, dropped, notes)
 
 
-def extract_deployment_aliases(repo_roots: list[Path]) -> tuple["DeploymentAliases", list[str]]:
+def extract_deployment_aliases(repo_roots: list[Path]) -> tuple[DeploymentAliases, list[str]]:
     """Extract deployment-seam declarations from each repo's config files (C28).
 
     Returns ``(aliases, notes)``: the aliases carry ``source_files`` provenance
@@ -1080,8 +1083,9 @@ def extract_deployment_aliases(repo_roots: list[Path]) -> tuple["DeploymentAlias
     ``proxy_pass`` scheme, an Ingress ``backend-protocol`` annotation — never a
     port *name*). No host aliases are guessed.
     """
-    from .contracts import DeclarationSource, DeploymentAliases, ScopedServiceBinding
     import yaml  # type: ignore[import-untyped]  # core dependency (suppress.py et al.)
+
+    from .contracts import DeclarationSource, DeploymentAliases, ScopedServiceBinding
 
     declared: dict[str, tuple[int, str, int]] = {}
     dropped_ports: set[str] = set()
@@ -1104,7 +1108,7 @@ def extract_deployment_aliases(repo_roots: list[Path]) -> tuple["DeploymentAlias
     from .fleet import fleet_repo_ids
     root_ids = fleet_repo_ids([Path(root) for root in repo_roots])
 
-    for root, root_id in zip(repo_roots, root_ids):
+    for root, root_id in zip(repo_roots, root_ids, strict=True):
         repo = Path(root).resolve()
         from .index import PassSources
         sources = PassSources.for_root(repo)
@@ -1362,9 +1366,9 @@ def extract_deployment_aliases(repo_roots: list[Path]) -> tuple["DeploymentAlias
 
 
 __all__ = [
+    "CONFIG_EXCLUDE_FILENAMES",
+    "CONFIG_SUFFIXES",
+    "extract_deployment_aliases",
     "scan_config_repo",
     "should_scan_config_file",
-    "extract_deployment_aliases",
-    "CONFIG_SUFFIXES",
-    "CONFIG_EXCLUDE_FILENAMES",
 ]

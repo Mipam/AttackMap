@@ -39,12 +39,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from .models import AttackSurface, AttackTechnique, Finding, FindingLocation, Route, ScanResult
+from .policy import MUTATING_METHODS as _MUTATING
+from .policy import WEBHOOK_MUTATING_METHODS as _WEBHOOK_MUTATING
 from .safe_fs import read_repo_text, walk_repo
 from .srcpaths import JS_TS_SUFFIXES
-from .models import AttackSurface, AttackTechnique, Finding, FindingLocation, Route, ScanResult
 
-_MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
-_WEBHOOK_MUTATING = {"POST", "PUT", "PATCH", "DELETE", "ANY"}
 _JS_SUFFIXES = JS_TS_SUFFIXES
 _PY_SUFFIXES = {".py"}
 _JAVA_SUFFIXES = {".java", ".kt"}
@@ -379,11 +379,15 @@ def _repo_has_java_global_auth(
             continue
     for rel in candidates:
         content = _read(root, rel, cache)
-        if content and "anyRequest" in content and _JAVA_GLOBAL_AUTH.search(content):
-            # Require an explicit authenticated()/hasRole() to avoid matching a
-            # config that permits all.
-            if re.search(r"\.(?:authenticated|hasRole|hasAuthority|hasAnyRole|fullyAuthenticated)\s*\(", content):
-                return True
+        # Require an explicit authenticated()/hasRole() to avoid matching a
+        # config that permits all.
+        if (
+            content
+            and "anyRequest" in content
+            and _JAVA_GLOBAL_AUTH.search(content)
+            and re.search(r"\.(?:authenticated|hasRole|hasAuthority|hasAnyRole|fullyAuthenticated)\s*\(", content)
+        ):
+            return True
     return False
 
 

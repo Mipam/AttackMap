@@ -4,8 +4,7 @@ import re
 from dataclasses import dataclass
 
 from .models import Asset, AssetKind, ScanResult
-
-LOW_QUALITY_SEGMENTS = ("/tests/", "/__tests__/", "/fixtures/", "/mocks/", "/examples/", "/test_", "/_test.")
+from .policy import LOW_QUALITY_SEGMENTS
 
 
 def _is_low_quality(path: str) -> bool:

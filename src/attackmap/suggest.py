@@ -22,31 +22,17 @@ from __future__ import annotations
 
 import json
 import shlex
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
-from .safe_fs import is_unsafe_link
 from .analyzers import analyzer_install_url, get_available_modules
+from .policy import SKIP_DIRS
+from .safe_fs import is_unsafe_link
 
 # Depth cap for the recursive walk. Enough for a monorepo's top-level
 # packages/services/apps folders; not enough to explore node_modules.
 _MAX_DEPTH = 3
 
-_SKIP_DIRS = {
-    ".git",
-    "node_modules",
-    "__pycache__",
-    "dist",
-    "build",
-    ".venv",
-    "venv",
-    "target",
-    "vendor",
-    ".idea",
-    ".vscode",
-    ".mypy_cache",
-    ".pytest_cache",
-}
 
 
 @dataclass(frozen=True)
@@ -375,7 +361,7 @@ def _iter_paths(root: Path):
             return
         for entry in entries:
             name = entry.name
-            if name in _SKIP_DIRS or is_unsafe_link(root, entry):
+            if name in SKIP_DIRS or is_unsafe_link(root, entry):
                 continue
             if entry.is_dir():
                 yield entry

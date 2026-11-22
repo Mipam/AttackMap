@@ -75,7 +75,7 @@ from .sdk.models import (
 from .sdk.models import (
     ServiceHint as ServiceHint,
 )
-from .srcpaths import JS_TS_SUFFIXES, SKIP_DIRS, in_skipped_dir, is_skipped_dir
+from .srcpaths import JS_TS_SUFFIXES, in_skipped_dir, is_skipped_dir
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,6 @@ ANALYZER_ENTRYPOINT_GROUP = "attackmap.analyzers"
 # Mirrors the scanner's own scan-time filter — anything below these
 # paths is vendored / generated and shouldn't count toward "this repo
 # looks like JS/TS."
-_SKIP_DIRS = SKIP_DIRS  # shared set (#215)
 ANALYZER_ORG_PREFIX = "mlaify/"
 ANALYZER_ORG_BASE_URL = "https://github.com/mlaify"
 ANALYZER_ORG_API_URL = "https://api.github.com/orgs/mlaify/repos?per_page=100&type=public"

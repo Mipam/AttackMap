@@ -251,7 +251,7 @@
       "phase": 0,
       "priority": "High",
       "effort_days": 1.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR001"
       ],
@@ -266,7 +266,9 @@
         "src/attackmap/policy/constants.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "AC-007 greps: SEVERITY_RANK= =1, LOW_QUALITY_SEGMENTS= =1, _SKIP_DIRS= =0 (single SKIP_DIRS definition in policy/constants.py, srcpaths re-exports); 748 passed across affected domains; union divergences documented on each constant"
+      ]
     },
     {
       "id": "AR005",

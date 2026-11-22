@@ -11,11 +11,9 @@ from .models import (
     Control,
     ControlKind,
     Insight,
-    InsightKind,
     ScanResult,
 )
-
-LOW_QUALITY_SEGMENTS = ("/tests/", "/__tests__/", "/fixtures/", "/mocks/", "/examples/", "/test_", "/_test.")
+from .policy import LOW_QUALITY_SEGMENTS
 
 
 def _is_low_quality(path: str) -> bool:
@@ -253,7 +251,6 @@ def _detect_control_strength_mismatch(ctx: _DetectorContext) -> list[Insight]:
         gaps: list[str] = []
         for kind in expected:
             present = ctx.present_controls_by_kind.get(kind, [])
-            absent = ctx.absent_controls_by_kind.get(kind, [])
             if not present:
                 gaps.append(f"{kind} (absent)")
                 continue

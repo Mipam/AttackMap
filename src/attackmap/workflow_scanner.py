@@ -75,8 +75,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .index import PassSources
-from .safe_fs import is_contained, is_unsafe_link, walk_repo
 from .models import WorkflowIssue
+from .policy import SKIP_DIRS
+from .safe_fs import is_contained
 
 if TYPE_CHECKING:
     from .index import RepoIndex
@@ -158,7 +159,6 @@ _SHELLS = {"sh", "bash", "zsh", "dash", "ksh", "python", "python3", "perl", "rub
 
 
 _ACTION_FILENAMES = {"action.yml", "action.yaml"}
-_ACTION_SKIP_DIRS = {"node_modules", ".git", ".venv", "venv", "vendor", "dist", "build"}
 
 
 @dataclass
@@ -252,7 +252,7 @@ def _load_yaml(path: Path, yaml, sources: PassSources):  # type: ignore[no-untyp
     return (data, text) if isinstance(data, dict) else (None, None)
 
 
-def scan_workflows(root: str | Path, index: "RepoIndex | None" = None) -> list[WorkflowIssue]:
+def scan_workflows(root: str | Path, index: RepoIndex | None = None) -> list[WorkflowIssue]:
     """Scan `.github/workflows/*.yml` and composite-action `action.yml` files
     under `root` for CI security issues.
 
@@ -268,7 +268,7 @@ def scan_workflows(root: str | Path, index: "RepoIndex | None" = None) -> list[W
     root_path = Path(root).resolve()
     sources = PassSources.for_root(root_path, index)
     issues: list[WorkflowIssue] = []
-    for path in sources.iter_files(prune=lambda name: name in _ACTION_SKIP_DIRS):
+    for path in sources.iter_files(prune=lambda name: name in SKIP_DIRS):
         if path.name not in _ACTION_FILENAMES or sources.oversized(path):
             continue
         data, text = _load_yaml(path, yaml, sources)
@@ -822,7 +822,7 @@ def _check_uses(
     is_cache = name in _CACHE_ACTIONS or (name.startswith(_SETUP_ACTION_PREFIX) and with_.get("cache"))
     if ctx.pr_target and is_cache:
         key_text = f"{with_.get('key', '')} {with_.get('restore-keys', '')}"
-        pr_keyed = any(c in key_text for c in _PR_HEAD_REFS + ("github.event.pull_request",))
+        pr_keyed = any(c in key_text for c in (*_PR_HEAD_REFS, "github.event.pull_request"))
         if state.pr_code_checked_out or pr_keyed:
             reason = "after checking out PR code" if state.pr_code_checked_out else f"keyed on PR-controlled values ({key_text.strip()})"
             issues.append(

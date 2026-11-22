@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from .models import ScanResult
+from .policy import LOW_QUALITY_SEGMENTS
 
 SCHEMA_VERSION = "1.0.0"
-LOW_QUALITY_SEGMENTS = ["/tests/", "/__tests__/", "/fixtures/", "/mocks/", "/examples/"]
 
 
 def _infer_domain_hints(scan: ScanResult) -> dict:

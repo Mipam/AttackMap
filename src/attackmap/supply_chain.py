@@ -42,15 +42,14 @@ from typing import TYPE_CHECKING
 
 from .index import PassSources
 from .models import DependencyHint, SupplyChainIssue
+from .policy import SKIP_DIRS
 from .popular_packages import BY_ECOSYSTEM
-from .safe_fs import is_unsafe_link, walk_repo
 from .srcpaths import is_test_file
 
 if TYPE_CHECKING:
     from .index import RepoIndex
 
 _MAX_DEPTH = 4
-_SKIP_DIRS = {".git", "node_modules", "__pycache__", "dist", "build", ".venv", "venv", "target", "vendor"}
 _SHA40 = re.compile(r"^[0-9a-f]{40}$")
 _NPM_LOCKS = ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb", "bun.lock")
 _PY_LOCKS = ("poetry.lock", "uv.lock", "pdm.lock", "Pipfile.lock", "pylock.toml")
@@ -108,7 +107,7 @@ class _Collector:
 
 
 def _iter_files(root: Path, sources: PassSources):
-    for path in sources.iter_files(prune=lambda name: name in _SKIP_DIRS):
+    for path in sources.iter_files(prune=lambda name: name in SKIP_DIRS):
         rel = path.relative_to(root)
         # The size gate uses the captured size when the file is part of the
         # snapshot (C33/AM047); the walk itself still enumerates the live tree.
@@ -151,7 +150,7 @@ def _load_internal_prefixes(root: Path, sources: PassSources) -> list[str]:
         if text is None:
             return []
         data = yaml.safe_load(text)
-    except Exception:  # noqa: BLE001 — a bad config must not sink the scan
+    except Exception:
         return []
     prefixes = data.get("internal_prefixes") if isinstance(data, dict) else None
     if not isinstance(prefixes, list):
@@ -165,7 +164,7 @@ def _load_internal_prefixes(root: Path, sources: PassSources) -> list[str]:
 def scan_supply_chain(
     root: str | Path,
     dependencies: list[DependencyHint] | None = None,
-    index: "RepoIndex | None" = None,
+    index: RepoIndex | None = None,
 ) -> list[SupplyChainIssue]:
     """Offline supply-chain risk pass. ``dependencies`` are the SBOM hints
     (``analyze_sbom``); when omitted they are computed.
@@ -209,9 +208,10 @@ def scan_supply_chain(
             _scan_cargo_toml(root_path, path, rel, out, sources)
         elif name == "composer.json":
             _scan_unlocked_json(root_path, path, rel, out, ("require", "require-dev"), ("composer.lock",), "composer", sources)
-        elif name == "Pipfile":
-            if not sources.exists((path.parent / "Pipfile.lock").relative_to(root_path).as_posix()):
-                out.add("unlocked_manifest", rel, "low", "Pipfile without Pipfile.lock — installs resolve to whatever is newest", ecosystem="pypi")
+        elif name == "Pipfile" and not sources.exists(
+            (path.parent / "Pipfile.lock").relative_to(root_path).as_posix()
+        ):
+            out.add("unlocked_manifest", rel, "low", "Pipfile without Pipfile.lock — installs resolve to whatever is newest", ecosystem="pypi")
 
     production = [d for d in dependencies if not is_test_file(d.file)]
     _check_confusion(production, _load_internal_prefixes(root_path, sources), ctx, out)
@@ -324,11 +324,15 @@ def _check_py_url(name: str | None, url: str, line_text: str, rel: str, lineno: 
             out.add("mutable_vcs_dependency", rel, "low" if locked else "medium",
                     f"{pkg}: VCS dependency pinned to {what}, not a commit SHA — the remote can change what installs: {url}",
                     package=name, ecosystem="pypi", line=lineno)
-    elif lowered.startswith(("http://", "https://")) and lowered.split("#", 1)[0].endswith(_URL_ARCHIVE):
-        if "sha256=" not in lowered and "--hash=" not in line_text:
-            out.add("mutable_vcs_dependency", rel, "low" if locked else "medium",
-                    f"{pkg}: archive URL dependency without a hash (#sha256= / --hash=): {url}",
-                    package=name, ecosystem="pypi", line=lineno)
+    elif (
+        lowered.startswith(("http://", "https://"))
+        and lowered.split("#", 1)[0].endswith(_URL_ARCHIVE)
+        and "sha256=" not in lowered
+        and "--hash=" not in line_text
+    ):
+        out.add("mutable_vcs_dependency", rel, "low" if locked else "medium",
+                f"{pkg}: archive URL dependency without a hash (#sha256= / --hash=): {url}",
+                package=name, ecosystem="pypi", line=lineno)
 
 
 def _scan_requirements(path: Path, rel: str, out: _Collector, ctx: _RegistryContext, sources: PassSources) -> None:

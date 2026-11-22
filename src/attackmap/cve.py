@@ -45,11 +45,13 @@ import re
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable, Iterable
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable
 
 from .models import DependencyHint, Vulnerability
+from .policy import SEVERITY_RANK as _SEVERITY_RANK
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +208,7 @@ def query_vulnerabilities(
                 for key in chunk:
                     progress.advance(key[1])
             continue
-        for key, result in zip(chunk, results):
+        for key, result in zip(chunk, results, strict=True):
             osv_eco, name, concrete = unique[key]
             payload: dict | None
             if not isinstance(result, dict):
@@ -370,10 +372,8 @@ def resolve_concrete_version(raw: str) -> str | None:
     return f"{major}.{minor}.{patch}{pre}"
 
 
-# --- Severity mapping ------------------------------------------------------
+# --- Severity mapping (imported from .policy) ------------------------------
 
-
-_SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
 
 _CVSS_SCORE_RE = re.compile(r"CVSS:[\d.]+/.*")
 
@@ -525,7 +525,7 @@ def _ttl_seconds() -> int:
 
 
 def _cache_key(ecosystem: str, name: str, version: str) -> str:
-    return hashlib.sha256(f"{ecosystem}|{name}|{version}".encode("utf-8")).hexdigest()[:32]
+    return hashlib.sha256(f"{ecosystem}|{name}|{version}".encode()).hexdigest()[:32]
 
 
 def _read_cache(path: Path, now: float, ttl_seconds: int) -> dict | None:
@@ -545,14 +545,12 @@ def _read_cache(path: Path, now: float, ttl_seconds: int) -> dict | None:
 
 
 def _write_cache(path: Path, payload: dict, now: float) -> None:
-    try:
+    # Cache is a nice-to-have; a write failure shouldn't sink the run.
+    with suppress(OSError):
         path.write_text(
             json.dumps({"fetched_at": now, "response": payload}, separators=(",", ":")),
             encoding="utf-8",
         )
-    except OSError:
-        # Cache is a nice-to-have; a write failure shouldn't sink the run.
-        pass
 
 
 def _fetch_osv_batch(

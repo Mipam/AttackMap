@@ -27,28 +27,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .index import PassSources
-from .safe_fs import is_unsafe_link
 from .lockfiles import parse_lockfiles
 from .models import DependencyHint
+from .policy import SKIP_DIRS
 
 if TYPE_CHECKING:
     from .index import RepoIndex
 
 _MAX_DEPTH = 3
-_SKIP_DIRS = {
-    ".git",
-    "node_modules",
-    "__pycache__",
-    "dist",
-    "build",
-    ".venv",
-    "venv",
-    "target",
-    "vendor",
-}
 
 
-def analyze_sbom(root: str | Path, index: "RepoIndex | None" = None) -> list[DependencyHint]:
+def analyze_sbom(root: str | Path, index: RepoIndex | None = None) -> list[DependencyHint]:
     """Walk ``root`` and return a deduped list of DependencyHint records.
 
     Manifests contribute direct deps with verbatim version ranges. Lockfiles
@@ -117,7 +106,7 @@ def _iter_manifests(root: Path, sources: PassSources | None = None):
         except (OSError, PermissionError):
             return
         for entry in entries:
-            if entry.name in _SKIP_DIRS or sources.unsafe(entry):
+            if entry.name in SKIP_DIRS or sources.unsafe(entry):
                 continue
             if sources.is_dir(entry):
                 if depth < _MAX_DEPTH:

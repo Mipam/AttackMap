@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .models import AttackSurface
 
-LOW_QUALITY_SEGMENTS = ("/tests/", "/__tests__/", "/fixtures/", "/mocks/", "/examples/")
+from .policy import LOW_QUALITY_SEGMENTS
+
 SURFACE_EVIDENCE_CLASSES = ("static_observed", "inferred_protocol", "low_quality")
 
 

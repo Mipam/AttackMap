@@ -35,8 +35,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .index import PassSources
-from .safe_fs import is_unsafe_link
 from .models import BolaCandidate, Route, ScanResult
+from .policy import SKIP_DIRS
 from .route_auth_fusion import resolve_route_control
 from .srcpaths import JS_TS_SUFFIXES, is_test_file, is_vendored_file
 
@@ -139,7 +139,7 @@ _MAX_FILE_BYTES = 1_000_000  # skip absurdly large files
 
 
 def analyze_authz(
-    scan: ScanResult, root: str | Path | None = None, index: "RepoIndex | None" = None
+    scan: ScanResult, root: str | Path | None = None, index: RepoIndex | None = None
 ) -> list[BolaCandidate]:
     """Return BOLA/IDOR candidates for routes in ``scan``.
 
@@ -410,7 +410,6 @@ def _db_reachability(
 
 _GRAPHQL_EXTS = {".graphql", ".gql"}
 _GRAPHQL_CODE_EXTS = JS_TS_SUFFIXES | {".py", ".go", ".rb"}
-_GRAPHQL_SKIP_DIRS = {".git", "node_modules", "__pycache__", "dist", "build", ".venv", "venv", "vendor"}
 _GRAPHQL_MAX_DEPTH = 6
 _GRAPHQL_MAX_FILES = 2000
 
@@ -538,7 +537,7 @@ def _iter_graphql_files(root: Path, sources: PassSources):
         for entry in entries:
             if count >= _GRAPHQL_MAX_FILES:
                 return
-            if entry.name in _GRAPHQL_SKIP_DIRS or sources.unsafe(entry):
+            if entry.name in SKIP_DIRS or sources.unsafe(entry):
                 continue
             if sources.is_dir(entry):
                 if depth < _GRAPHQL_MAX_DEPTH:

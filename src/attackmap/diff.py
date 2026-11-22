@@ -32,12 +32,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .finding_identity import finding_id, identity_migration_note
 from .md import md_code, md_text
 from .models import Finding
-from .finding_identity import finding_id, identity_migration_note
+from .policy import SEVERITY_RANK as _SEVERITY_RANK
 from .taxonomy import taxonomy_label
 
-_SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
 COVERAGE_COMPARISON_NOTE = (
     "Source-covered disappearances are not verified fixes: analyzer/config version parity is unknown; "
     "runtime remediation is unverified."
@@ -68,7 +68,7 @@ class FindingSnapshot:
         return f" ({label})" if label else ""
 
     @classmethod
-    def from_finding(cls, f: Finding) -> "FindingSnapshot":
+    def from_finding(cls, f: Finding) -> FindingSnapshot:
         return cls(
             id=finding_id(f),
             title=f.title,
@@ -87,7 +87,7 @@ class FindingSnapshot:
         )
 
     @classmethod
-    def from_dump(cls, d: dict[str, Any]) -> "FindingSnapshot":
+    def from_dump(cls, d: dict[str, Any]) -> FindingSnapshot:
         title = str(d.get("title", ""))
         instances = []
         for loc in d.get("locations") or ():

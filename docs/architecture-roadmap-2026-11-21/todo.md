@@ -119,6 +119,7 @@ python -m tools.report_identity --corpus tests/fixtures/regression.yaml
 ### AR004 · Unify policy constants
 **Phase** 0 · **Priority** High · **Effort** 1 d · **Depends** AR001 · **Blocks** AR050
 **Lease** `core-policy` · **Acceptance** AC-007
+**Status** DONE — new `src/attackmap/policy/` (constants with per-constant divergence notes); SEVERITY_RANK (3 copies), SEVERITY_ORDER (threat_model inverse map kept explicit), SKIP_DIRS union (6 variants → 1, incl. suggest's private `.vscode`/`.mypy_cache`/`.pytest_cache`), LOW_QUALITY_SEGMENTS union (5 copies, 2 shapes → 7-segment), MUTATING/WEBHOOK_MUTATING; srcpaths.SKIP_DIRS now re-exports policy; alias rebinds removed — AC-007 greps: SEVERITY_RANK= 1, LOW_QUALITY= 1, _SKIP_DIRS= 0 (zero re-declarations; canonical `SKIP_DIRS` lives in policy). 748 tests green across affected domains; LANGUAGE_SUFFIXES already had a single home (scanner.CODE_EXTENSIONS)
 
 **Files** new `src/attackmap/policy/__init__.py`, `src/attackmap/policy/constants.py`;
 edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.py`,

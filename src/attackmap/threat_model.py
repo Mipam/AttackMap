@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from .finding_identity import dependency_entity_id
-
 from dataclasses import dataclass
 
 from .analyzer import identify_attack_surfaces
 from .exploitability import best_by_sink_kind, score_exploitability
+from .finding_identity import dependency_entity_id
 from .models import (
     AttackPath,
     AttackSurface,
     AttackTechnique,
+    DatabaseHint,
+    ExternalCall,
     Finding,
     FindingLocation,
     Route,
@@ -17,24 +18,43 @@ from .models import (
     TaintChain,
     TaintFlowStep,
 )
-from .srcpaths import evidence_locations
-from .taint_sinks import canonical_kind
+from .policy import LOW_QUALITY_SEGMENTS
+from .policy import SEVERITY_ORDER as _SEVERITY_ORDER
+from .policy import WEBHOOK_MUTATING_METHODS as _CSRF_MUTATING_METHODS
 from .route_auth_fusion import synthesize_unauthenticated_routes
-from .taxonomy import cwe_tag, taxonomy_for
 from .rules import (
     ANOMALY_FINDING_SPEC as _ANOMALY_FINDING_SPEC,
+)
+from .rules import (
     CODE_WEAKNESS_FINDING_SPEC as _CODE_WEAKNESS_FINDING_SPEC,
+)
+from .rules import (
     CRYPTO_FINDING_SPEC as _CRYPTO_FINDING_SPEC,
+)
+from .rules import (
     FLOW_FINDING_SPEC as _FLOW_FINDING_SPEC,
+)
+from .rules import (
     SUPPLY_CHAIN_FINDING_SPEC as _SUPPLY_CHAIN_FINDING_SPEC,
+)
+from .rules import (
     TAINT_FINDING_SPEC as _TAINT_FINDING_SPEC,
+)
+from .rules import (
     TAINT_SINK_LABEL as _TAINT_SINK_LABEL,
+)
+from .rules import (
     WEB_HARDENING_FINDING_SPEC as _WEB_HARDENING_FINDING_SPEC,
+)
+from .rules import (
     WORKFLOW_FINDING_SPEC as _WORKFLOW_FINDING_SPEC,
+)
+from .rules import (
     rule_catalog as _registry_catalog,
 )
-
-LOW_QUALITY_SEGMENTS = ("/tests/", "/__tests__/", "/fixtures/", "/mocks/", "/examples/")
+from .srcpaths import evidence_locations
+from .taint_sinks import canonical_kind
+from .taxonomy import cwe_tag, taxonomy_for
 
 # Cap on the number of basic-archetype attack paths emitted per scan.
 # Lifted from 1 in #24; capped here to keep reports focused — anything
@@ -59,7 +79,7 @@ def _severity_rank(value: str) -> int:
 
 
 # #4: prioritization scoring. Higher score = triage first within severity.
-# Formula: severity_weight × confidence_multiplier, rounded to int.
+# Formula: severity_weight x confidence_multiplier, rounded to int.
 _SEVERITY_WEIGHT = {"high": 100, "medium": 50, "low": 10}
 _CONFIDENCE_MULTIPLIER = {"high": 1.0, "medium": 0.75, "low": 0.5}
 
@@ -102,7 +122,7 @@ def _fill_missing_locations(findings: list[Finding]) -> None:
     """Findings without structured locations fall back to evidence parsing."""
     for finding in findings:
         if not finding.locations:
-            finding.locations = [FindingLocation(file=f, line=l) for f, l in evidence_locations(finding.evidence)]
+            finding.locations = [FindingLocation(file=f, line=ln) for f, ln in evidence_locations(finding.evidence)]
 
 
 def _finding_evidence(surface: AttackSurface) -> str:
@@ -679,16 +699,9 @@ def _code_flows(chains: list[TaintChain]) -> list[list[TaintFlowStep]]:
 
 
 
-# Methods a forged cross-site request can use to change state (#244). `ANY`
-# covers routers that don't record a method (Django URLconfs).
-_CSRF_MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE", "ANY"})
 
 
 
-
-
-# Rank for picking the most severe issue in an aggregated group.
-_SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2}
 
 
 def _cwe_tags(kind: str) -> list[str]:
@@ -1538,7 +1551,7 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
         evidence = [
             f"route {top.route_method} {top.route_path} in {top.route_file}",
             f"sink at {top.sink_file}:{top.sink_line} ({_TAINT_SINK_LABEL.get(kind, kind)})",
-            f"import path: {' → '.join(top.files)} ({top.hops} hop(s))",
+            f"import path: {' → '.join([*top.files])} ({top.hops} hop(s))",
         ]
         if len(kind_chains) > 1:
             evidence.append(
@@ -1578,7 +1591,8 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
             f"route {top.route_method} {top.route_path} in {top.route_file}",
             f"sink at {top.sink_file}:{top.sink_line} ({_TAINT_SINK_LABEL.get(kind, kind)})",
             f"import path: {' → '.join(top.files)} ({top.hops} hop(s))",
-        ] + _flow_evidence(kind_chains)
+            *_flow_evidence(kind_chains),
+        ]
         flow_finding = Finding(
             title=spec["title"],
             rule_id=spec["rule_id"],

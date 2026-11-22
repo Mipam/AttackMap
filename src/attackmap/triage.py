@@ -15,8 +15,7 @@ from __future__ import annotations
 
 from .diff import finding_id
 from .models import Finding, ScanResult
-
-_SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
+from .policy import SEVERITY_RANK as _SEVERITY_RANK
 
 # Root-cause clusters, in fixed priority order. Each maps to the finding tags
 # (substring match) that belong to it. The first matching cluster wins.
