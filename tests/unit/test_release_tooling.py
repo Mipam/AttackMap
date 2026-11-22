@@ -325,3 +325,139 @@ def test_attest_rejects_duplicate_paths(tmp_path: Path) -> None:
 
     with pytest.raises(attest_release.ToolError, match="Duplicate artifact entry"):
         attest_release.write_detached(path)
+
+
+# ---------------------------------------------------------------------------
+# AC-406 gate: --twice --compare (tools/build_release.py)
+# ---------------------------------------------------------------------------
+
+
+def _double_build_run(payloads: list[bytes]) -> FakeRun:
+    """Fake clean-tree pipeline; build call N materializes artifacts from payloads[N]."""
+    state = {"builds": 0}
+
+    def handler(call):
+        cmd = call["cmd"]
+        if cmd[:3] == ["git", "status", "--porcelain"]:
+            return 0, "", ""
+        if cmd[:2] == ["git", "rev-parse"]:
+            return 0, COMMIT + "\n", ""
+        if cmd[:2] == ["git", "log"]:
+            return 0, "1700000000\n", ""
+        if cmd[1:3] == ["-m", "build"]:
+            index = min(state["builds"], len(payloads) - 1)
+            state["builds"] += 1
+            out_dir = Path(cmd[cmd.index("--outdir") + 1])
+            out_dir.mkdir(parents=True, exist_ok=True)
+            (out_dir / SDIST_NAME).write_bytes(b"sdist-" + payloads[index])
+            (out_dir / WHEEL_NAME).write_bytes(b"wheel-" + payloads[index])
+            return 0, "", ""
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    return FakeRun(handler)
+
+
+def _patch_gate_main(monkeypatch: pytest.MonkeyPatch, payloads: list[bytes]) -> None:
+    """Patch clean-tree and builds so build_release.main() runs hermetically."""
+    monkeypatch.setattr(build_release, "check_clean_tree", lambda repo_root, run=None: (COMMIT, 1700000000))
+    counter = {"builds": 0}
+
+    def fake_build(repo_root, out_dir, epoch, run=None):
+        payload = payloads[min(counter["builds"], len(payloads) - 1)]
+        counter["builds"] += 1
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / SDIST_NAME).write_bytes(b"sdist-" + payload)
+        (out_dir / WHEEL_NAME).write_bytes(b"wheel-" + payload)
+
+    monkeypatch.setattr(build_release, "build_artifacts", fake_build)
+
+
+def test_build_twice_second_dir_is_fresh_sibling(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(build_release, "check_build_environment", lambda: None)
+    run = _double_build_run([b"same", b"same"])
+
+    first, second, second_dir = build_release.build_twice(REPO_ROOT, tmp_path / "dist", run=run)
+
+    assert second_dir == tmp_path / "dist-rebuild"
+    assert first[1] == tmp_path / "dist" / "release-manifest.json"
+    assert second[1] == second_dir / "release-manifest.json"
+    assert first[0]["git_commit"] == second[0]["git_commit"] == COMMIT
+    assert first[0]["source_date_epoch"] == second[0]["source_date_epoch"] == 1700000000
+    git_calls = [c for c in run.calls if c["cmd"][0] == "git"]
+    assert len(git_calls) == 3  # status, rev-parse, log: the clean tree is checked exactly once
+    build_calls = [c for c in run.calls if c["cmd"][1:3] == ["-m", "build"]]
+    assert len(build_calls) == 2
+    assert build_calls[0]["env"]["SOURCE_DATE_EPOCH"] == build_calls[1]["env"]["SOURCE_DATE_EPOCH"] == "1700000000"
+
+
+def test_compare_builds_equal_sets_pass(tmp_path: Path) -> None:
+    first_dir, second_dir = tmp_path / "one", tmp_path / "two"
+    for directory in (first_dir, second_dir):
+        directory.mkdir()
+        (directory / SDIST_NAME).write_bytes(b"identical-sdist")
+        (directory / WHEEL_NAME).write_bytes(b"identical-wheel")
+
+    ok, mismatches = build_release.compare_builds(first_dir, second_dir)
+
+    assert ok is True
+    assert mismatches == []
+
+
+def test_compare_builds_differing_sets_list_mismatches(tmp_path: Path) -> None:
+    first_dir, second_dir = tmp_path / "one", tmp_path / "two"
+    for directory, payload in ((first_dir, b"one"), (second_dir, b"two")):
+        directory.mkdir()
+        (directory / SDIST_NAME).write_bytes(b"identical-sdist")
+        (directory / WHEEL_NAME).write_bytes(b"wheel-" + payload)
+
+    ok, mismatches = build_release.compare_builds(first_dir, second_dir)
+
+    assert ok is False
+    assert len(mismatches) == 1  # only the wheel differs; the sdist must not be listed
+    assert mismatches[0].startswith(WHEEL_NAME)
+    assert "sha256" in mismatches[0]
+
+
+def test_compare_builds_reports_missing_artifact(tmp_path: Path) -> None:
+    first_dir, second_dir = tmp_path / "one", tmp_path / "two"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    for directory in (first_dir, second_dir):
+        (directory / WHEEL_NAME).write_bytes(b"wheel-same")
+    (first_dir / SDIST_NAME).write_bytes(b"only-in-first")
+
+    ok, mismatches = build_release.compare_builds(first_dir, second_dir)
+
+    assert ok is False
+    assert mismatches == [f"{SDIST_NAME}: present only in the first build"]
+
+
+def test_main_twice_compare_passes_when_reproducible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    _patch_gate_main(monkeypatch, [b"same", b"same"])
+
+    rc = build_release.main(["--out", str(tmp_path / "dist"), "--twice", "--compare"])
+
+    assert rc == 0
+    assert "BUILD REPRODUCIBLE" in capsys.readouterr().out
+
+
+def test_main_twice_compare_fails_with_mismatch_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    _patch_gate_main(monkeypatch, [b"one", b"two"])
+
+    rc = build_release.main(["--out", str(tmp_path / "dist"), "--twice", "--compare"])
+
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "BUILD NOT REPRODUCIBLE" in captured.err
+    assert WHEEL_NAME in captured.err and SDIST_NAME in captured.err
+
+
+def test_main_compare_without_twice_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        build_release.main(["--out", str(tmp_path / "dist"), "--compare"])
+
+    assert excinfo.value.code == 2

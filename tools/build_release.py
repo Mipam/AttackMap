@@ -1,4 +1,4 @@
-"""Reproducible release build driver (AR085 slice 1).
+"""Reproducible release build driver (AR085).
 
 Refuses to run unless the working tree is exactly clean (``git status
 --porcelain`` empty), pins ``SOURCE_DATE_EPOCH`` to the HEAD commit's
@@ -8,6 +8,12 @@ resolved one, produces the artifacts), and records the SHA-256 and size of
 every artifact into ``release-manifest.json`` next to them. Nothing here
 signs or publishes anything; docs/releases.md describes the intended flow
 and the attestation step (tools/attest_release.py).
+
+``--twice --compare`` is the AC-406 gate primitive: two independent builds
+of the same clean tree (the second into ``<out>-rebuild``) must produce
+identical artifact hash sets; the run exits 0 only when they do, and lists
+every mismatching artifact otherwise. A build-comparison failure exits 1;
+validation failures (dirty tree, bad environment, build errors) exit 2.
 """
 from __future__ import annotations
 
@@ -139,12 +145,60 @@ def write_release_manifest(out_dir: Path, git_commit: str, source_date_epoch: in
 
 
 def build_release(repo_root: Path, out_dir: Path, run=_run_command) -> tuple[dict, Path]:
-    """Full slice-1 driver: clean tree, pinned build, artifact manifest."""
+    """Single-build driver: clean tree, pinned build, artifact manifest."""
     repo_root = Path(repo_root).resolve()
     out_dir = Path(out_dir).resolve()
     commit, epoch = check_clean_tree(repo_root, run=run)
     build_artifacts(repo_root, out_dir, epoch, run=run)
     return write_release_manifest(out_dir, commit, epoch)
+
+
+def build_twice(repo_root: Path, out_dir: Path, run=_run_command):
+    """Two independent builds of one clean tree; the second goes to <out>-rebuild.
+
+    The clean tree is checked once and both builds share its commit and
+    SOURCE_DATE_EPOCH: the AC-406 gate compares two builds of the same commit,
+    never two states of the tree. Returns (first, second, second_dir) where
+    each build result is (manifest, manifest_path).
+    """
+    repo_root = Path(repo_root).resolve()
+    out_dir = Path(out_dir).resolve()
+    second_dir = out_dir.with_name(out_dir.name + "-rebuild")
+    commit, epoch = check_clean_tree(repo_root, run=run)
+    build_artifacts(repo_root, out_dir, epoch, run=run)
+    build_artifacts(repo_root, second_dir, epoch, run=run)
+    first = write_release_manifest(out_dir, commit, epoch)
+    second = write_release_manifest(second_dir, commit, epoch)
+    return first, second, second_dir
+
+
+def compare_builds(first_dir: Path, second_dir: Path) -> tuple[bool, list[str]]:
+    """Compare the two builds' artifact hash sets by name.
+
+    Returns (reproducible, mismatch lines); an empty mismatch list means the
+    builds are byte-identical as far as SHA-256 can attest.
+    """
+    def inventory(directory: Path) -> dict[str, str]:
+        return {path.name: sha256_file(path) for path in collect_artifacts(directory)}
+
+    first = inventory(Path(first_dir))
+    second = inventory(Path(second_dir))
+    mismatches = []
+    for name in sorted(set(first) | set(second)):
+        if name not in second:
+            mismatches.append(f"{name}: present only in the first build")
+        elif name not in first:
+            mismatches.append(f"{name}: present only in the second build")
+        elif first[name] != second[name]:
+            mismatches.append(f"{name}: sha256 {first[name]} != {second[name]}")
+    return not mismatches, mismatches
+
+
+def _print_manifest(label: str, manifest: dict, target: Path) -> None:
+    print(f"{label}: {target}")
+    print(f"Commit: {manifest['git_commit']} (SOURCE_DATE_EPOCH={manifest['source_date_epoch']})")
+    for entry in manifest["artifacts"]:
+        print(f"  {entry['sha256']}  {entry['path']} ({entry['size_bytes']} bytes)")
 
 
 def main(argv=None) -> int:
@@ -154,17 +208,37 @@ def main(argv=None) -> int:
         help="fresh (empty or nonexistent) directory for the sdist, wheel and release-manifest.json; "
         "keep it outside the repository",
     )
+    parser.add_argument(
+        "--twice", action="store_true",
+        help="build a second time into <out>-rebuild from the same clean tree (AC-406)",
+    )
+    parser.add_argument(
+        "--compare", action="store_true",
+        help="with --twice: fail the run when the two builds' artifacts differ",
+    )
     args = parser.parse_args(argv)
+    if args.compare and not args.twice:
+        parser.error("--compare requires --twice")
     repo_root = Path(__file__).resolve().parents[1]
     try:
+        if args.twice:
+            out_dir = Path(args.out).resolve()
+            first, second, second_dir = build_twice(repo_root, out_dir)
+            _print_manifest("First manifest", first[0], first[1])
+            _print_manifest("Second manifest", second[0], second[1])
+            reproducible, mismatches = compare_builds(out_dir, second_dir)
+            if reproducible:
+                print("BUILD REPRODUCIBLE")
+                return 0
+            print("BUILD NOT REPRODUCIBLE", file=sys.stderr)
+            for line in mismatches:
+                print(f"  {line}", file=sys.stderr)
+            return 1
         manifest, target = build_release(repo_root, Path(args.out))
     except ToolError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
-    print(f"Manifest: {target}")
-    print(f"Commit: {manifest['git_commit']} (SOURCE_DATE_EPOCH={manifest['source_date_epoch']})")
-    for entry in manifest["artifacts"]:
-        print(f"  {entry['sha256']}  {entry['path']} ({entry['size_bytes']} bytes)")
+    _print_manifest("Manifest", manifest, target)
     return 0
 
 
