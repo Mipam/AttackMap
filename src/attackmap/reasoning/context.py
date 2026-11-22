@@ -2,10 +2,11 @@
 
 `ReasoningContext` is a snapshot of exactly the scan slices rules are allowed
 to see — routes, external calls, datastores, auth/secret hints, taint chains,
-code/web-hardening weaknesses, and the file index metadata. It deliberately
-does NOT expose `ScanResult`: rules cannot reach signals, dependencies,
-anomalies, limitations, or the scan pipeline, and the container is frozen so
-no rule can rebind what it was handed.
+code/web-hardening weaknesses, the supply-chain slices (vulnerabilities,
+workflow issues, dependency supply-chain issues; widened for AR045), and the
+file index metadata. It deliberately does NOT expose `ScanResult`: rules
+cannot reach signals, anomalies, limitations, or the scan pipeline, and the
+container is frozen so no rule can rebind what it was handed.
 
 Observation records themselves are the stable `attackmap.model` models, shared
 by reference and treated as immutable after merge (the whole pipeline already
@@ -32,8 +33,11 @@ from ..model import (
     Route,
     ScanResult,
     SecretHint,
+    SupplyChainIssue,
     TaintChain,
+    Vulnerability,
     WebHardeningIssue,
+    WorkflowIssue,
 )
 
 __all__ = ["ReasoningContext"]
@@ -74,6 +78,13 @@ class ReasoningContext(BaseModel):
     taint_chains: tuple[TaintChain, ...] = ()
     code_weaknesses: tuple[CodeWeakness, ...] = ()
     web_hardening_issues: tuple[WebHardeningIssue, ...] = ()
+    # Supply-chain slices (AR045 widening): CVE advisories on the dependency
+    # path and the CI-workflow / dependency supply-chain issue records the
+    # supply-chain rule family consumes. Same read-only convention as every
+    # other slice: frozen tuples of the shared model records.
+    vulnerabilities: tuple[Vulnerability, ...] = ()
+    workflow_issues: tuple[WorkflowIssue, ...] = ()
+    supply_chain_issues: tuple[SupplyChainIssue, ...] = ()
     # File index metadata. None preserves ScanResult's "coverage not
     # enumerated" semantics; it is never substituted with a fabricated list.
     scanned_files: tuple[str, ...] | None = None
@@ -104,10 +115,12 @@ class ReasoningContext(BaseModel):
         """Copy only the narrow rule-visible slices out of a scan result.
 
         Deliberately excluded: signals, service/edge/entrypoint/protocol/
-        framework hints, dependencies, vulnerabilities, authz candidates,
-        crypto weaknesses, workflow/supply-chain issues, anomalies, limits,
-        analyzer errors and snapshot identity. Widen the slice explicitly when
-        a rule family (AR041+) needs it; never hand rules the whole scan.
+        framework hints, authz candidates, crypto weaknesses, anomalies,
+        limits, analyzer errors and snapshot identity. AR045 widened the
+        slice for the supply-chain rule family with the dependency-risk
+        records (`vulnerabilities`, `workflow_issues`,
+        `supply_chain_issues`). Widen the slice explicitly when a rule
+        family (AR041+) needs it; never hand rules the whole scan.
         """
         return cls(
             root=scan.root,
@@ -119,6 +132,9 @@ class ReasoningContext(BaseModel):
             taint_chains=tuple(scan.taint_chains),
             code_weaknesses=tuple(scan.code_weaknesses),
             web_hardening_issues=tuple(scan.web_hardening_issues),
+            vulnerabilities=tuple(scan.vulnerabilities),
+            workflow_issues=tuple(scan.workflow_issues),
+            supply_chain_issues=tuple(scan.supply_chain_issues),
             scanned_files=None if scan.scanned_files is None else tuple(scan.scanned_files),
             files_scanned=scan.files_scanned,
         )
