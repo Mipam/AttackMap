@@ -1504,7 +1504,7 @@
       "phase": 4,
       "priority": "Medium",
       "effort_days": 5.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR011"
       ],
@@ -1519,7 +1519,9 @@
         ".github/workflows/release.yml"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "agent-delivered in 3 slices: slice 1 commit 13ecf74 (reproducible-build driver with dirty-tree refusal + SDE pinning + release-manifest.json; attest_release.py detached sha256 manifest; 18 tests), slice 2 commit fff9ce4 (--twice --compare AC-406 gate BUILD REPRODUCIBLE/NOT REPRODUCIBLE; manual release.yml with attestation + plugin-lock SBOM jobs; 25 tests), slice 3 commit 6647178 (Ed25519 sign/verify over the detached manifest with artifact re-hashing; --publish flat layout with post-copy re-verification and partial-publish cleanup; optional CI sign job degrading honestly without keys; 41 tests total). Ops remainder documented in docs/releases.md: provisioning real signing keys in repo config + upload step"
+      ]
     },
     {
       "id": "AR086",

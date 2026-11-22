@@ -1060,7 +1060,7 @@ when no browser exists.
 ### AR085 · Release engineering
 **Phase** 4 · **Priority** Medium · **Effort** 5 d · **Depends** AR011 · **Blocks** AC-406
 **Lease** `release` · **Acceptance** AC-406
-**Status** IN_PROGRESS — slice 1 DONE (13ecf74): tools/build_release.py (dirty-tree refusal, SOURCE_DATE_EPOCH pinned, --no-isolation pinned build, release-manifest.json), tools/attest_release.py (dependency-free detached sha256 manifest, sha256sum --check compatible), 18 hermetic tests. Slice 2 DONE (fff9ce4): --twice --compare AC-406 gate (BUILD REPRODUCIBLE / NOT REPRODUCIBLE + per-artifact diff), release.yml workflow (manual dispatch: reproducible-build, attestation, plugin-lock SBOM; no secrets, no publish), 25 tests total. Slice 3 owed: real signing over release-manifest.sha256, publication incl. Windows ZIP
+**Status** DONE (agent-delivered, 3 slices: 13ecf74 + fff9ce4 + 6647178) — reproducible-build driver (dirty-tree refusal, SDE pinning, --no-isolation), --twice --compare AC-406 gate, detached sha256 manifest, Ed25519 sign/verify with artifact re-hashing, --publish flat layout with post-copy re-verification and partial-publish cleanup, release.yml (manual dispatch: reproducible-build/attestation/plugin-lock-SBOM/optional-sign, no secrets, no publish step), 41 release-tooling tests, docs/releases.md. Ops remainder: real signing-key provisioning + upload step (documented)
 
 **Files** `tools/generate_release_sbom.py`, `tools/repro_build.py`,
 `.github/workflows/release.yml`
