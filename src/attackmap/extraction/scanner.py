@@ -21,9 +21,9 @@ from attackmap.foundation.srcpaths import (
     is_vendored_file,
     line_number,
 )
-from attackmap.reasoning.crypto import find_crypto_weaknesses
-from attackmap.reasoning.weaknesses import find_code_weaknesses
-from attackmap.reasoning.webhardening import find_web_hardening_issues, has_csrf_protection
+from attackmap.extraction.crypto import find_crypto_weaknesses
+from attackmap.extraction.weaknesses import find_code_weaknesses
+from attackmap.extraction.webhardening import find_web_hardening_issues, has_csrf_protection
 from attackmap.sdk.models import AuthHint, DatabaseHint, ExternalCall, Route, ScanResult, SecretHint
 
 # Scanner responsibilities are intentionally generic-only:
