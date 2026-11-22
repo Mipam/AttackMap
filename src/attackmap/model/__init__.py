@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from ..analyzer_run_ledger import AnalyzerRunLedger
+from ..extraction.ledger import AnalyzerRunLedger
 from .evidence import (  # noqa: F401
     _EVIDENCE_LIST_FIELDS,
     _EVIDENCE_TEXT_FIELDS,

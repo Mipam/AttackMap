@@ -10,7 +10,7 @@ import pytest
 from attackmap import analyzers as registry
 from attackmap.analyzer_contracts import AnalyzerMetadata
 from attackmap.analyzer_host import HOST_INPUT_INVALID, HOST_TIMEOUT, IsolatedOutcome
-from attackmap.analyzer_run_ledger import (
+from attackmap.extraction.ledger import (
     AnalyzerLifecycleEvent,
     AnalyzerRunLedger,
     analyzer_run_identity,
@@ -276,7 +276,7 @@ def test_metadata_default_version_is_unknown_unless_explicitly_declared(tmp_path
 def test_monotonic_timing_order_counts_and_safe_live_progress(tmp_path, monkeypatch):
     from itertools import count
     ticks = count(0, 0.125)
-    monkeypatch.setattr("attackmap.analyzer_run_ledger.time.monotonic", lambda: next(ticks))
+    monkeypatch.setattr("attackmap.extraction.ledger.time.monotonic", lambda: next(ticks))
     class Progress:
         labels: ClassVar[list[str]] = []
         def stage(self, label):

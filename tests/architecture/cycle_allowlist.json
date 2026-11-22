@@ -15,7 +15,13 @@
     "models.py kept as a re-export shim; the pre-existing",
     "models -> analyzer_run_ledger cycle is not fixed here, it lengthens by the",
     "model node in all 35 entries that traversed it. Same tooling, still 43",
-    "entries; the gate cap stays 49."
+    "entries; the gate cap stays 49.",
+    "AR023 (2026-11-22): the analyzer run ledger moved to",
+    "attackmap.extraction.ledger; attackmap.analyzer_run_ledger remains only",
+    "as a re-export shim and appears in no cycle. The model ->",
+    "analyzer_run_ledger traversal became model -> extraction.ledger in all",
+    "36 entries that used it. Same tooling, still 43 entries; the gate cap",
+    "stays 49."
   ],
   "schema": 1,
   "cycles": [
@@ -24,7 +30,7 @@
       "attackmap.analyzer_contracts",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -39,7 +45,7 @@
       "attackmap.analyzer_contracts",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -49,7 +55,7 @@
       "attackmap.index",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -58,7 +64,7 @@
       "attackmap.analyzer_host",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -69,7 +75,7 @@
       "attackmap.evidence",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -79,7 +85,7 @@
       "attackmap.signal_provenance",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -89,13 +95,7 @@
       "attackmap.snapshot_transport",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
-      "attackmap.analyzer_catalog"
-    ],
-    [
-      "attackmap.analyzer_catalog",
-      "attackmap.analyzers",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -105,7 +105,7 @@
       "attackmap.config_datastores",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -115,7 +115,7 @@
       "attackmap.contracts",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -127,7 +127,7 @@
       "attackmap.anomalies",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -138,7 +138,7 @@
       "attackmap.crossrepo",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -149,7 +149,7 @@
       "attackmap.fleet_architecture",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -161,7 +161,7 @@
       "attackmap.topology",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -171,7 +171,7 @@
       "attackmap.fleet",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -180,7 +180,7 @@
       "attackmap.config_scanner",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -193,7 +193,7 @@
       "attackmap.ecosystem_node_atproto",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -205,7 +205,7 @@
       "attackmap.authz_js_handlers",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -216,7 +216,7 @@
       "attackmap.authz",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -228,7 +228,7 @@
       "attackmap.route_auth_fusion",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -239,7 +239,7 @@
       "attackmap.crypto",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -250,7 +250,7 @@
       "attackmap.incremental",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -262,7 +262,7 @@
       "attackmap.lockfiles",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -273,7 +273,7 @@
       "attackmap.sbom",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -284,7 +284,7 @@
       "attackmap.sdk.models",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -295,7 +295,7 @@
       "attackmap.supply_chain",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -306,7 +306,7 @@
       "attackmap.taint",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -317,7 +317,7 @@
       "attackmap.weaknesses",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -328,7 +328,7 @@
       "attackmap.webhardening",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -339,7 +339,7 @@
       "attackmap.workflow_scanner",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -349,7 +349,7 @@
       "attackmap.analyzer_contracts",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -358,7 +358,7 @@
       "attackmap.ecosystem_php",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -367,7 +367,13 @@
       "attackmap.ecosystem_python",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
+      "attackmap.analyzer_catalog"
+    ],
+    [
+      "attackmap.analyzer_catalog",
+      "attackmap.analyzers",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -375,7 +381,7 @@
       "attackmap.analyzers",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
@@ -385,14 +391,14 @@
       "attackmap.analyzer_contracts",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_catalog"
     ],
     [
       "attackmap.analyzer_contracts",
       "attackmap.models",
       "attackmap.model",
-      "attackmap.analyzer_run_ledger",
+      "attackmap.extraction.ledger",
       "attackmap.analyzer_contracts"
     ],
     [

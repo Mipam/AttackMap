@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from .analyzer_catalog import AnalyzerDiscoveryCollector
-    from .analyzer_run_ledger import AnalyzerRunPlan
+    from .extraction.ledger import AnalyzerRunPlan
     from .progress import EventLog, ScanProgress
 from urllib.error import URLError
 from urllib.request import urlopen
@@ -955,7 +955,7 @@ def analyze_repository(
                 _stamp_provenance(result, analyzer.name)
                 from .signal_provenance import stamp_scan_provenance
                 stamp_scan_provenance(result, analyzer.name, declared_version)
-                from .analyzer_run_ledger import AnalyzerSignalCounts
+                from .extraction.ledger import AnalyzerSignalCounts
                 ledger_row.signal_counts = AnalyzerSignalCounts(**{
                     key: len(getattr(result, key)) for key in AnalyzerSignalCounts.model_fields})
             except Exception as exc:
@@ -1153,7 +1153,7 @@ def resolve_run_analyzers(
     if run_plan is not None:
         if run_plan.repository_root != repo_root or run_plan.ledger.resolution_complete:
             raise ValueError("Analyzer run plan belongs to another repository or is already resolved")
-        from .analyzer_run_ledger import AnalyzerRunError, AnalyzerRunRecord, analyzer_run_identity
+        from .extraction.ledger import AnalyzerRunError, AnalyzerRunRecord, analyzer_run_identity
     for analyzer in registered:
         row = None
         if run_plan is not None:
@@ -1219,7 +1219,7 @@ def resolve_analyzer_run(
     allow_untrusted: bool | None = None,
 ) -> AnalyzerRunPlan:
     """Resolve once against one capture; the returned plan can execute once."""
-    from .analyzer_run_ledger import AnalyzerRunLedger, AnalyzerRunPlan
+    from .extraction.ledger import AnalyzerRunLedger, AnalyzerRunPlan
     from .index import RepoIndex
 
     repo_root = Path(root).resolve()
