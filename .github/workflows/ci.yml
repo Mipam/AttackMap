@@ -81,6 +81,19 @@ jobs:
           sys.exit(1 if bad else 0)
           PY
 
+      # AR011: report-only for one release, then flip continue-on-error off.
+      - name: pip-audit (dependency CVEs, report-only)
+        continue-on-error: true
+        run: |
+          python -m pip install --upgrade pip
+          pip install "pip-audit>=2.7"
+          python -m pip_audit -r constraints.txt --progress-spinner off
+
+      - name: Plugin-lock SBOM (15 pinned analyzers, AR011)
+        run: |
+          python tools/generate_release_sbom.py --check sbom.json
+          rm sbom.json
+
   types:
     name: mypy (strict island + report)
     runs-on: ubuntu-latest
@@ -116,7 +129,7 @@ jobs:
             src/attackmap/md.py \
             src/attackmap/progress.py
 
-      - name: mypy full package report (non-blocking until AR009)
+      - name: mypy full package report (non-blocking; ratchet tracks the count)
         continue-on-error: true
         run: mypy src/attackmap
 
@@ -143,13 +156,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[llm,dev]"
 
-      # AR010 narrows this leg to `-m "unit or contract"` once AR008 applies the
-      # markers. Until then it runs the whole suite in parallel with a hard
-      # per-test timeout, which is already stricter than the serial matrix.
-      - name: Run tests in parallel
+      # AR008 marked the suite (unit/integration/contract/live); the fast leg
+      # runs the pure tier plus the SDK/merge/artifact contracts. AC-003:
+      # < 5 minutes, no test over 120 s. The coverage floor comes from the
+      # AR009 baseline (AC-004) and may only be tightened.
+      - name: Run fast suite in parallel
         run: |
           node --version
-          python -m pytest -q -ra -n auto --timeout=120
+          python -m pytest -q -ra -m "unit or contract" -n auto --timeout=120 --cov=attackmap --cov-report=term --cov-fail-under=21
 
   test-full:
     name: pytest (full matrix)
@@ -183,7 +197,32 @@ jobs:
       - name: Run tests
         run: |
           node --version
-          python -m pytest -q -ra
+          python -m pytest -q -ra -m "not live"
+
+  test-live:
+    # AC-013 adjacent (AGENTS.md): real LM Studio integration runs against the
+    # local endpoint on the runner; manual or nightly only, never on PRs.
+    name: pytest live (LM Studio, opt-in)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[llm,dev]"
+
+      - name: Run live tests
+        run: python -m pytest -q -ra -m live --timeout=600
+        env:
+          ATTACKMAP_LLM_BASE_URL: ${{ vars.ATTACKMAP_LLM_BASE_URL || 'http://127.0.0.1:1234/v1' }}
 
   build:
     name: Build sdist + wheel
