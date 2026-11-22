@@ -1,0 +1,82 @@
+{
+  "corpus": "artifact-fixture",
+  "identity": "84c7b18a40588b3afb85664ae18ba035ef7004946271538b6771bc9c749d8e1b",
+  "normalized_manifest": {
+    "artifact_type": "attackmap_artifact_manifest",
+    "compatibility_exports": [
+      {
+        "format": "json",
+        "name": "legacy_report",
+        "path": "attackmap-report.json",
+        "role": "monolithic-legacy-report"
+      },
+      {
+        "format": "json",
+        "name": "run-manifest.json",
+        "path": "run-manifest.json",
+        "role": "compatibility-export"
+      }
+    ],
+    "engine_version": "1.0",
+    "exit_state": {
+      "exit_code": 0,
+      "status": "succeeded"
+    },
+    "run_identity": {
+      "analyzer_identity": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "analyzers": [],
+      "repo_name": "fixture",
+      "repo_root": "fixture-repository"
+    },
+    "schema_version": "1.0.0",
+    "sections": [
+      {
+        "format": "json",
+        "name": "scan",
+        "path": "scan.json",
+        "role": "structured-scan-result"
+      },
+      {
+        "format": "json",
+        "name": "findings",
+        "path": "findings.json",
+        "role": "findings-array"
+      },
+      {
+        "format": "json",
+        "name": "attack_paths",
+        "path": "attack_paths.json",
+        "role": "attack-paths-array"
+      },
+      {
+        "format": "json",
+        "name": "attack_surfaces",
+        "path": "attack_surfaces.json",
+        "role": "attack-surfaces-array"
+      },
+      {
+        "format": "json",
+        "name": "exploitability",
+        "path": "exploitability.json",
+        "role": "exploitability-array"
+      },
+      {
+        "format": "json",
+        "name": "suppressed_findings",
+        "path": "suppressed_findings.json",
+        "role": "suppressed-findings-array"
+      }
+    ]
+  },
+  "normalized_report": {
+    "attack_paths": [],
+    "attack_surfaces": [],
+    "exploitability": [],
+    "findings": [],
+    "scan": {
+      "root": "fixture-repository"
+    },
+    "suppressed_findings": []
+  },
+  "schema": 1
+}

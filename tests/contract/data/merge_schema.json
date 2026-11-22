@@ -1,0 +1,27 @@
+{
+  "attrs": [
+    "anomalies",
+    "auth_hints",
+    "authz_candidates",
+    "code_weaknesses",
+    "crypto_weaknesses",
+    "databases",
+    "dependencies",
+    "edge_hints",
+    "entrypoint_hints",
+    "external_calls",
+    "framework_hints",
+    "protocol_hints",
+    "routes",
+    "secret_hints",
+    "secret_history",
+    "service_hints",
+    "supply_chain_issues",
+    "taint_chains",
+    "vulnerabilities",
+    "web_hardening_issues",
+    "workflow_issues"
+  ],
+  "migration_note": "",
+  "version": 1
+}
