@@ -100,19 +100,41 @@ a major-version bump; deprecations get one release of overlap.
 
 from __future__ import annotations
 
+from ..extraction.adapters import (
+    merge_extraction_results,
+    to_extraction_result,
+    to_scan_result,
+)
+from ..model.observations import (
+    DependencyObservation,
+    EdgeObservation,
+    EntrypointObservation,
+    FrameworkObservation,
+    Observation,
+    ProtocolObservation,
+    RouteObservation,
+    SecretObservation,
+    ServiceObservation,
+    SupplyChainObservation,
+    VulnerabilityObservation,
+    WeaknessObservation,
+    WorkflowObservation,
+)
+from ..safe_fs import contained_file, is_contained, read_repo_text, walk_repo
+from ..taint_sinks import PLUGIN_GROUP as TAINT_SINK_PLUGIN_GROUP
+from ..taint_sinks import SINK_KINDS as TAINT_SINK_KINDS
+from ..taint_sinks import validate_sink_entry as validate_taint_sink
+from . import fs
 from .contracts import (
+    EXTRACTION_CONTRACT_VERSION,
     AnalyzerMetadata,
     AnalyzerProtocol,
     AnalyzerRepositoryModule,
     AnalyzerResult,
+    ExtractionResult,
     normalize_analyzer_metadata,
 )
-from ..safe_fs import contained_file, is_contained, read_repo_text, walk_repo
-from . import fs
 from .fs import DEFAULT_SKIP_DIRS, iter_repo_files, line_of, line_snippet, read_source, rel
-from ..taint_sinks import PLUGIN_GROUP as TAINT_SINK_PLUGIN_GROUP
-from ..taint_sinks import SINK_KINDS as TAINT_SINK_KINDS
-from ..taint_sinks import validate_sink_entry as validate_taint_sink
 from .models import (
     DEPENDENCY_ECOSYSTEMS,
     AuthHint,
@@ -131,44 +153,65 @@ from .models import (
 )
 
 __all__ = [
-    "AnalyzerResult",
+    "DEFAULT_SKIP_DIRS",
+    "DEPENDENCY_ECOSYSTEMS",
+    # Extraction contract v2 (AR060 / AC-301): additive exports. The v1
+    # ScanResult protocol stays valid; adapters convert in both directions
+    # (see attackmap.extraction.adapters) until AR082 migrates the core.
+    "EXTRACTION_CONTRACT_VERSION",
+    "TAINT_SINK_KINDS",
+    # Plugin-contributed taint sinks (#240).
+    "TAINT_SINK_PLUGIN_GROUP",
     "AnalyzerMetadata",
-    "AnalyzerRepositoryModule",
     "AnalyzerProtocol",
-    "normalize_analyzer_metadata",
-    "Route",
-    "ExternalCall",
-    "DatabaseHint",
+    "AnalyzerRepositoryModule",
+    "AnalyzerResult",
     "AuthHint",
-    "ServiceHint",
-    "EdgeHint",
-    "EntrypointHint",
-    "ProtocolHint",
-    "FrameworkHint",
-    "SecretHint",
-    "ScanResult",
-    "DependencyHint",
+    "DatabaseHint",
     # Package ecosystems a DependencyHint may carry (#255).
     "DependencyEcosystem",
-    "DEPENDENCY_ECOSYSTEMS",
+    "DependencyHint",
+    "DependencyObservation",
+    "EdgeHint",
+    "EdgeObservation",
+    "EntrypointHint",
+    "EntrypointObservation",
+    "ExternalCall",
+    "ExtractionResult",
+    "FrameworkHint",
+    "FrameworkObservation",
+    "Observation",
+    "ProtocolHint",
+    "ProtocolObservation",
+    "Route",
+    "RouteObservation",
+    "ScanResult",
+    "SecretHint",
+    "SecretObservation",
+    "ServiceHint",
+    "ServiceObservation",
+    "SupplyChainObservation",
+    "VulnerabilityObservation",
+    "WeaknessObservation",
+    "WorkflowObservation",
+    "contained_file",
+    # Shared plugin walker/reader (#253): prunes by repo-relative dir name,
+    # skips AttackMap output, caps size, never raises on unreadable files.
+    "fs",
+    "is_contained",
+    "iter_repo_files",
+    "line_of",
+    "line_snippet",
+    "merge_extraction_results",
+    "normalize_analyzer_metadata",
+    "read_repo_text",
+    "read_source",
+    "rel",
+    "to_extraction_result",
+    "to_scan_result",
+    "validate_taint_sink",
     # Repo-confined filesystem helpers (#234): walk and read the scanned repo
     # without following symlinks out of it. Plugins should use these instead
     # of Path.rglob / read_text.
     "walk_repo",
-    "is_contained",
-    "contained_file",
-    "read_repo_text",
-    # Shared plugin walker/reader (#253): prunes by repo-relative dir name,
-    # skips AttackMap output, caps size, never raises on unreadable files.
-    "fs",
-    "DEFAULT_SKIP_DIRS",
-    "iter_repo_files",
-    "read_source",
-    "rel",
-    "line_of",
-    "line_snippet",
-    # Plugin-contributed taint sinks (#240).
-    "TAINT_SINK_PLUGIN_GROUP",
-    "TAINT_SINK_KINDS",
-    "validate_taint_sink",
 ]

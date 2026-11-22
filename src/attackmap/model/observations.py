@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, get_args
+from typing import Annotated, Literal, get_args
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 
@@ -540,3 +540,136 @@ class AnalyzerError(BaseModel):
     analyzer: str
     error_type: str
     message: str = ""
+
+
+# --- Extraction contract v2 observation variants (AR060 / AC-301) ------------
+#
+# Each variant wraps the corresponding protocol-1.0 hint type *verbatim* and
+# tags it with a literal `kind` discriminator, so `ExtractionResult`
+# (attackmap.sdk.contracts) can carry a single discriminated
+# `observations: list[Observation]` list over the wire. The wrapped objects
+# are never rewritten: adapters (attackmap.extraction.adapters) lift them in
+# and out unchanged, so a v1 -> v2 -> v1 round trip is lossless.
+
+
+class RouteObservation(BaseModel):
+    """A v2 `route` observation wrapping a protocol-1.0 `Route`."""
+
+    kind: Literal["route"] = "route"
+    route: Route
+
+
+class ServiceObservation(BaseModel):
+    """A v2 `service` observation wrapping a protocol-1.0 `ServiceHint`."""
+
+    kind: Literal["service"] = "service"
+    service: ServiceHint
+
+
+class EdgeObservation(BaseModel):
+    """A v2 `edge` observation wrapping a protocol-1.0 `EdgeHint`."""
+
+    kind: Literal["edge"] = "edge"
+    edge: EdgeHint
+
+
+class EntrypointObservation(BaseModel):
+    """A v2 `entrypoint` observation wrapping a protocol-1.0 `EntrypointHint`."""
+
+    kind: Literal["entrypoint"] = "entrypoint"
+    entrypoint: EntrypointHint
+
+
+class ProtocolObservation(BaseModel):
+    """A v2 `protocol` observation wrapping a protocol-1.0 `ProtocolHint`."""
+
+    kind: Literal["protocol"] = "protocol"
+    protocol: ProtocolHint
+
+
+class FrameworkObservation(BaseModel):
+    """A v2 `framework` observation wrapping a protocol-1.0 `FrameworkHint`."""
+
+    kind: Literal["framework"] = "framework"
+    framework: FrameworkHint
+
+
+class SecretObservation(BaseModel):
+    """A v2 `secret` observation wrapping a protocol-1.0 `SecretHint`."""
+
+    kind: Literal["secret"] = "secret"
+    secret: SecretHint
+
+
+class DependencyObservation(BaseModel):
+    """A v2 `dependency` observation wrapping a protocol-1.0 `DependencyHint`."""
+
+    kind: Literal["dependency"] = "dependency"
+    dependency: DependencyHint
+
+
+class VulnerabilityObservation(BaseModel):
+    """A v2 `vulnerability` observation wrapping a protocol-1.0 `Vulnerability`."""
+
+    kind: Literal["vulnerability"] = "vulnerability"
+    vulnerability: Vulnerability
+
+
+class WeaknessObservation(BaseModel):
+    """A v2 `weakness` observation wrapping a protocol-1.0 `CodeWeakness`."""
+
+    kind: Literal["weakness"] = "weakness"
+    weakness: CodeWeakness
+
+
+class WorkflowObservation(BaseModel):
+    """A v2 `workflow` observation wrapping a protocol-1.0 `WorkflowIssue`."""
+
+    kind: Literal["workflow"] = "workflow"
+    workflow: WorkflowIssue
+
+
+class SupplyChainObservation(BaseModel):
+    """A v2 `supply_chain` observation wrapping a protocol-1.0 `SupplyChainIssue`."""
+
+    kind: Literal["supply_chain"] = "supply_chain"
+    supply_chain: SupplyChainIssue
+
+
+ObservationKind = Literal[
+    "route",
+    "service",
+    "edge",
+    "entrypoint",
+    "protocol",
+    "framework",
+    "secret",
+    "dependency",
+    "vulnerability",
+    "weakness",
+    "workflow",
+    "supply_chain",
+]
+
+
+Observation = Annotated[
+    RouteObservation
+    | ServiceObservation
+    | EdgeObservation
+    | EntrypointObservation
+    | ProtocolObservation
+    | FrameworkObservation
+    | SecretObservation
+    | DependencyObservation
+    | VulnerabilityObservation
+    | WeaknessObservation
+    | WorkflowObservation
+    | SupplyChainObservation,
+    Field(discriminator="kind"),
+]
+"""The v2 extraction observation union, discriminated on `kind`.
+
+Validation and (de)serialization route each element to its variant model by
+the literal `kind` tag, so plugins can emit a single heterogeneous list while
+consumers still receive fully typed objects.
+"""
