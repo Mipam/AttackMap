@@ -374,7 +374,7 @@ def normalize_pinned_python_plugin_routes(result, files: Mapping[str, str]) -> N
         for route in result.routes if id(route) in replacements
         and replacements[id(route)] != route.path
     }
-    from attackmap.reasoning.signal_provenance import (
+    from attackmap.model.signal_provenance import (
         CLASSIFICATION_FIELDS,
         merge_normalized_signals,
     )

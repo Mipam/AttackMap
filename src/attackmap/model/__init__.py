@@ -11,7 +11,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from ..extraction.ledger import AnalyzerRunLedger
 from .evidence import (  # noqa: F401
     _EVIDENCE_LIST_FIELDS,
     _EVIDENCE_TEXT_FIELDS,
@@ -77,7 +76,12 @@ from .paths import (  # noqa: F401
     TaintChain,
     TaintFlowStep,
 )
+# AR030: pydantic resolves this annotation at model-build time. The ledger
+# record module has no upward imports, so the edge stays cycle-free (package
+# __init__ aggregators remain exempt in AR031 slice 1).
+from ..extraction.ledger import AnalyzerRunLedger
 from .snapshot import ResourceLimitEvent, ResourceLimitScope, ScanSnapshotIdentity
+from .signal_provenance import normalized_view  # noqa: F401  (re-exported; used by ScanResult.all_signals)
 
 
 class ScanResult(BaseModel):
@@ -235,6 +239,5 @@ class ScanResult(BaseModel):
                     },
                 )
             )
-        from attackmap.reasoning.signal_provenance import normalized_view
         return normalized_view(self, signals)
 

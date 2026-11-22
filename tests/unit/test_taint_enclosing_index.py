@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.extraction.scanner import scan_repo
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.reasoning import taint_flow
 
 

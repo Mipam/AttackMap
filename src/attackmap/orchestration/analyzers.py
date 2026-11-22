@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib
 import inspect
 import json
@@ -16,9 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
-    from attackmap.extraction.ledger import AnalyzerRunPlan
     from attackmap.extraction.progress import EventLog, ScanProgress
-    from attackmap.orchestration.analyzer_catalog import AnalyzerDiscoveryCollector
 from urllib.error import URLError
 from urllib.request import urlopen
 
@@ -36,13 +35,23 @@ from attackmap.extraction.ecosystems.ecosystem_php import (
     PhpLaminasAnalyzer,
     PhpWebAnalyzer,
 )
-from attackmap.extraction.merge import MERGE_SCHEMA, initial_seen, merge_into
-from attackmap.extraction.scanner import (
-    CODE_EXTENSIONS,
-    run_repo_passes,
-    scan_files,
+from attackmap.extraction.merge import (
+    MERGE_SCHEMA,
+    _merge_resource_limits,
+    initial_seen,
+    merge_analyzer_results,
+    merge_into,
 )
 from attackmap.extraction.scanner import (
+    CODE_EXTENSIONS,
+    scan_files,
+)
+from attackmap.orchestration.analyzer_catalog import (
+    AnalyzerCatalogSnapshot,
+    AnalyzerDiscoveryCollector,
+)
+from attackmap.orchestration.repo_passes import run_repo_passes
+from attackmap.orchestration.repo_passes import (
     scan_repo as scan_repo,
 )
 from attackmap.foundation.errors import AttackMapError
@@ -1213,11 +1222,7 @@ def resolve_run_analyzers(
     if run_plan is not None:
         if run_plan.repository_root != repo_root or run_plan.ledger.resolution_complete:
             raise ValueError("Analyzer run plan belongs to another repository or is already resolved")
-        from attackmap.extraction.ledger import (
-            AnalyzerRunError,
-            AnalyzerRunRecord,
-            analyzer_run_identity,
-        )
+        from attackmap.extraction.ledger import AnalyzerRunError, AnalyzerRunRecord
     for analyzer in registered:
         row = None
         if run_plan is not None:
@@ -1284,7 +1289,8 @@ def resolve_analyzer_run(
 ) -> AnalyzerRunPlan:
     """Resolve once against one capture; the returned plan can execute once."""
     from attackmap.extraction.index import RepoIndex
-    from attackmap.extraction.ledger import AnalyzerRunLedger, AnalyzerRunPlan
+    from attackmap.extraction.ledger import AnalyzerRunLedger
+    from attackmap.orchestration.analyzer_run_plan import AnalyzerRunPlan
 
     repo_root = Path(root).resolve()
     captured_index = index if index is not None else RepoIndex.build(repo_root)
@@ -1316,52 +1322,59 @@ def _analyzer_applicability(analyzer: Analyzer, repo_root: Path) -> tuple[bool, 
         return False, _log_exception_type(exc)
 
 
-def _merge_resource_limits(target: AnalyzerResult, results: Iterable[AnalyzerResult]) -> None:
-    """Retain observed subsets; unknown legacy reporting never certifies zero."""
-    values = list(results)
-    events = {event.model_dump_json(): event for result in values for event in result.resource_limit_events}
-    target.resource_limit_events = [events[key] for key in sorted(events)]
-    target.resource_limit_scopes = sorted({scope for result in values for scope in result.resource_limit_scopes})
-    statuses = [result.resource_limit_reporting for result in values]
-    if statuses and all(status == "complete" for status in statuses) and target.resource_limit_scopes:
-        target.resource_limit_reporting = "complete"
-    elif target.resource_limit_scopes or target.resource_limit_events or any(status == "partial" for status in statuses):
-        target.resource_limit_reporting = "partial"
-    else:
-        target.resource_limit_reporting = "unknown"
+def get_analyzer_catalog() -> AnalyzerCatalogSnapshot:
+    """Discover once, preserving registry precedence and the effective run order.
 
-
-def merge_analyzer_results(
-    results: Iterable[AnalyzerResult],
-    root: str | Path | None = None,
-) -> AnalyzerResult:
-    """Combine multiple whole-repo analyzer results into one.
-
-    Field-by-field merge behavior is declared in :data:`merge.MERGE_SCHEMA`
-    and applied uniformly here. See `merge.py` for the rules.
+    AR030: moved here from orchestration.analyzer_catalog — the registry and
+    run-order selection live in this module, and keeping the discovery entry
+    point next to them removes the analyzer_catalog <-> analyzers import
+    cycle. Callers import it from orchestration.analyzers.
     """
-    result_list = list(results)
-    if not result_list:
-        resolved_root = Path(root).resolve() if root is not None else Path(".").resolve()
-        return AnalyzerResult(root=str(resolved_root))
+    collector = AnalyzerDiscoveryCollector(trusted_only=trusted_analyzers_only(),
+                                           allow_untrusted=allow_untrusted_analyzers())
+    analyzers = tuple(sorted(get_registered_analyzers(catalog=collector), key=_run_order_key))
+    metadata = tuple(get_analyzer_metadata(analyzer) for analyzer in analyzers)
+    return AnalyzerCatalogSnapshot(analyzers, metadata, collector)
 
-    resolved_root = Path(root).resolve() if root is not None else Path(result_list[0].root).resolve()
-    merged = AnalyzerResult(root=str(resolved_root))
-    seen_by_attr: dict[str, set] = {rule.attr: set() for rule in MERGE_SCHEMA}
+def analyzer_run_identity(analyzer: Analyzer) -> dict[str, object]:
+    """Observe this instance; never rediscover or infer package identity by name.
 
-    for result in result_list:
-        merged.files_scanned += result.files_scanned
-        for language in result.languages:
-            if language not in merged.languages:
-                merged.languages.append(language)
-        for limitation in result.limitations:
-            if limitation not in merged.limitations:
-                merged.limitations.append(limitation)
-        for rule in MERGE_SCHEMA:
-            merge_into(merged, getattr(result, rule.attr), rule, seen_by_attr[rule.attr])
+    Paths and URLs are deliberately omitted from the report/manifest identity.
+    A class-source digest is a bounded observation, not a dependency attestation.
 
-    from attackmap.reasoning.signal_provenance import merge_scan_provenance
-    merge_scan_provenance(merged, result_list)
-    _merge_resource_limits(merged, result_list)
-    merged.languages.sort()
-    return merged
+    AR030: lives here (moved out of extraction.ledger) because it reads this
+    module's registry helpers; extraction no longer imports orchestration.
+    """
+    from attackmap.orchestration.analyzer_catalog import AnalyzerDiscoveryCollector, _implementation
+
+    implementation = _implementation(analyzer)
+    implementation.pop("source_file", None)
+    entry_point = getattr(analyzer, "_attackmap_entry_point", None)
+    # A caller-defined subclass is its own implementation even when the legacy
+    # isolation policy treats it as a built-in through isinstance().
+    origin = "builtin" if type(analyzer) in _BUILTIN_ANALYZER_TYPES else "supplied"
+    package = None
+    entry_point_data = None
+    provenance: dict[str, object] = {"pin_status": "unverified", "content_verified": False}
+    if entry_point is not None:
+        collector = AnalyzerDiscoveryCollector(trusted_only=False)
+        row = collector.entry_point(entry_point, _entry_point_distribution(entry_point), "attackmap.analyzers")
+        origin = "plugin"
+        package = row["package"]
+        entry_point_data = row["entry_point"]
+        observed = row["provenance"]
+        source = observed["installed_source"]
+        provenance = {
+            "declared_pin": observed["declared_pin"],
+            "installed_source": {key: source[key] for key in ("kind", "evidence", "vcs", "commit_id") if key in source},
+            "pin_status": observed["pin_status"],
+            "content_verified": False,
+            "errors": observed["errors"],
+        }
+    elif origin == "builtin":
+        package = {"name": "attackmap", "version": None}
+        provenance = {"pin_status": "not_applicable", "content_verified": False}
+    identity = {"origin": origin, "implementation": implementation, "package": package,
+                "entry_point": entry_point_data, "provenance": provenance}
+    return {**identity, "implementation_sha256": hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")).hexdigest()}

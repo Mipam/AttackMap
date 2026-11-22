@@ -8,7 +8,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from attackmap.extraction.scanner import scan_repo
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.foundation.srcpaths import SKIP_DIRS, in_skipped_dir
 from attackmap.orchestration.analyzers import resolve_run_analyzers
 from attackmap.surfaces.cli import app

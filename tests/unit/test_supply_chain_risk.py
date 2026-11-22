@@ -16,7 +16,7 @@ import pytest
 
 from attackmap.ai import popular_packages, supply_chain
 from attackmap.ai.supply_chain import _within_one_edit, scan_supply_chain
-from attackmap.extraction.scanner import scan_repo
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.models import ScanResult, SupplyChainIssue
 from attackmap.orchestration.recon_to_analysis import translate_recon
 from attackmap.reasoning.threat_model import rule_catalog

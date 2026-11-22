@@ -8,7 +8,7 @@ import pytest
 
 from attackmap.foundation.plugins_lock import OFFICIAL_PLUGINS
 from attackmap.orchestration import analyzers as registry
-from attackmap.orchestration.analyzer_catalog import get_analyzer_catalog
+from attackmap.orchestration.analyzers import get_analyzer_catalog
 from attackmap.reasoning.analyzer_contracts import AnalyzerMetadata, AnalyzerResult
 
 

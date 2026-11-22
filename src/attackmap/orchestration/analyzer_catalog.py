@@ -229,20 +229,3 @@ class AnalyzerCatalogSnapshot:
             # Absence of an entry point does not prove a package is uninstalled.
             "undiscovered_official_packages": [item["package"] for item in OFFICIAL_PLUGINS if item["package"] not in discovered_packages],
         })
-
-
-def get_analyzer_catalog() -> AnalyzerCatalogSnapshot:
-    """Discover once, preserving registry precedence and the effective run order."""
-    from attackmap.orchestration.analyzers import (
-        _run_order_key,
-        allow_untrusted_analyzers,
-        get_analyzer_metadata,
-        get_registered_analyzers,
-        trusted_analyzers_only,
-    )
-
-    collector = AnalyzerDiscoveryCollector(trusted_only=trusted_analyzers_only(),
-                                           allow_untrusted=allow_untrusted_analyzers())
-    analyzers = tuple(sorted(get_registered_analyzers(catalog=collector), key=_run_order_key))
-    metadata = tuple(get_analyzer_metadata(analyzer) for analyzer in analyzers)
-    return AnalyzerCatalogSnapshot(analyzers, metadata, collector)

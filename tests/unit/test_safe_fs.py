@@ -9,7 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 from attackmap import sdk
-from attackmap.extraction.scanner import scan_repo
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.foundation.safe_fs import (
     UnsafePathError,
     contained_file,

@@ -53,7 +53,7 @@ def module_inventory(metadata: list[Any]) -> list[dict]:
 
 def build_analyzer_catalog_payload() -> dict:
     """Discover once in the selected engine; never infer execution from inventory."""
-    from attackmap.orchestration.analyzer_catalog import get_analyzer_catalog
+    from attackmap.orchestration.analyzers import get_analyzer_catalog
     from attackmap.orchestration.analyzer_profiles import analyzer_profile_inventory
     snapshot = get_analyzer_catalog()
     inventory = module_inventory(list(snapshot.metadata))

@@ -15,7 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from attackmap.reasoning.analyzer_contracts import (
+from attackmap.sdk.analyzer_contracts import (
     AnalyzerMetadata,
     AnalyzerProtocol,
     AnalyzerRepositoryModule,

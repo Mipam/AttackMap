@@ -4,7 +4,7 @@ import pytest
 
 from attackmap.extraction.evidence import classify_source_path
 from attackmap.models import Route, ScanResult, Signal, SignalConflict, SignalOrigin
-from attackmap.reasoning.signal_provenance import (
+from attackmap.model.signal_provenance import (
     _identity,
     _semantic_dump,
     merge_normalized_signals,

@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.extraction.scanner import _line_of, _line_snippet, scan_repo
+from attackmap.extraction.scanner import _line_of, _line_snippet
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.models import (
     AuthHint,
     DatabaseHint,

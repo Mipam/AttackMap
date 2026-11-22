@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attackmap.extraction.scanner import scan_repo
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.reasoning.taint import _find_sanitizer
 from attackmap.reasoning.threat_model import generate_findings
 

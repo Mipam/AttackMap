@@ -1,7 +1,7 @@
 import base64
 from pathlib import Path
 
-from attackmap.extraction.scanner import scan_repo
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.models import AuthHint, DatabaseHint, ExternalCall, Route, ScanResult, SecretHint
 from attackmap.orchestration.analyzers import AnalyzerSignals, merge_analyzer_signals
 

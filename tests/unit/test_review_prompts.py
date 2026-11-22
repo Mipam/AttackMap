@@ -135,7 +135,7 @@ def test_every_prompt_path_redacts_secrets_and_fences_repo_text(tmp_path):
     a hardcoded credential in the analyzed repository never reaches any
     rendered prompt, and injection-shaped lines are withheld outright in the
     paths that carry captured source excerpts."""
-    from attackmap.extraction.scanner import scan_repo
+    from attackmap.orchestration.repo_passes import scan_repo
     from attackmap.orchestration.recon_to_analysis import translate_recon
 
     repo = tmp_path / "secrets"

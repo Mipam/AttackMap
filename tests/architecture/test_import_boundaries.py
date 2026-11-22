@@ -68,13 +68,12 @@ def test_allowlist_never_grows() -> None:
     """The allowlist length is capped at the AR002 freeze, tightened at AR029.
 
     AR002 froze 49 canonical cycles. AR020+AR021 shrank the measured set to
-    43 and AR022/AR023 kept it there; AR029's subpackage restructure preserves
-    the import edges exactly but renames the nodes, which changes the DFS
-    canonicalisation the cycle finder reports — the same tooling re-measures
-    41 entries, so the cap tightens from 49 to 41.
+    43; AR029's restructure re-measured 41. AR030 wave 1 moved the
+    ledger/scanner/merge hub orchestration-side and the contracts/provenance
+    data model-side, breaking 37 of them; the cap tightens accordingly.
     """
     allowlist, _ = _load_allowlist()
-    frozen_max = 41
+    frozen_max = 4
     assert len(allowlist) <= frozen_max, (
         f"cycle allowlist grew to {len(allowlist)}; the freeze is {frozen_max}"
     )

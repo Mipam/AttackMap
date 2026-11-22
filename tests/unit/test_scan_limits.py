@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.extraction.scanner import scan_repo
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.foundation.safe_fs import DEFAULT_MAX_FILE_BYTES, max_file_bytes
 
 

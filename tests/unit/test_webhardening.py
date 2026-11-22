@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.extraction.scanner import scan_repo
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.models import ScanResult, WebHardeningIssue
 from attackmap.reasoning.threat_model import generate_findings
 from attackmap.reasoning.webhardening import find_web_hardening_issues

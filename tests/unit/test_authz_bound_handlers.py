@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 
 from attackmap.extraction.index import RepoIndex
-from attackmap.extraction.scanner import scan_files, scan_repo
+from attackmap.extraction.scanner import scan_files
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.models import Route
 from attackmap.orchestration.bench import Expected, _matches
 from attackmap.reasoning.authz import analyze_authz

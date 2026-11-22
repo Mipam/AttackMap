@@ -71,7 +71,7 @@ from attackmap.models import (
     ScanResult,
     SecretHint,
 )
-from attackmap.reasoning.analyzer_contracts import AnalyzerMetadata, AnalyzerResult
+from attackmap.sdk.analyzer_contracts import AnalyzerMetadata, AnalyzerResult
 
 __all__ = [
     "PhpWebAnalyzer",

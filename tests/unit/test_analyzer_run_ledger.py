@@ -8,11 +8,8 @@ from typing import ClassVar
 import pytest
 
 from attackmap.extraction.analyzer_host import HOST_INPUT_INVALID, HOST_TIMEOUT, IsolatedOutcome
-from attackmap.extraction.ledger import (
-    AnalyzerLifecycleEvent,
-    AnalyzerRunLedger,
-    analyzer_run_identity,
-)
+from attackmap.extraction.ledger import AnalyzerLifecycleEvent, AnalyzerRunLedger
+from attackmap.orchestration.analyzers import analyzer_run_identity
 from attackmap.models import Route, ScanResult
 from attackmap.orchestration import analyzers as registry
 from attackmap.reasoning.analyzer_contracts import AnalyzerMetadata
@@ -276,7 +273,7 @@ def test_metadata_default_version_is_unknown_unless_explicitly_declared(tmp_path
 def test_monotonic_timing_order_counts_and_safe_live_progress(tmp_path, monkeypatch):
     from itertools import count
     ticks = count(0, 0.125)
-    monkeypatch.setattr("attackmap.extraction.ledger.time.monotonic", lambda: next(ticks))
+    monkeypatch.setattr("attackmap.orchestration.analyzer_run_plan.time.monotonic", lambda: next(ticks))
     class Progress:
         labels: ClassVar[list[str]] = []
         def stage(self, label):

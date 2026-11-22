@@ -186,7 +186,7 @@ def test_two_verbs_same_target_survive_merge() -> None:
 
 
 def test_bare_fetch_defaults_to_get_and_parses_init_method(tmp_path) -> None:
-    from attackmap.extraction.scanner import scan_repo
+    from attackmap.orchestration.repo_passes import scan_repo
 
     (tmp_path / "client.js").write_text(
         'fetch("http://b/api/items/1");\n'

@@ -1,10 +1,13 @@
-"""Deprecated alias for :mod:`attackmap.extraction.ledger` (AR023).
+"""Deprecated alias for the analyzer run ledger surface (AR023, AR030).
 
-The analyzer run ledger now lives in ``attackmap.extraction.ledger``; this
-shim re-exports the full historical surface for one release so existing
+The persisted ledger records live in ``attackmap.extraction.ledger``; the
+run plan and identity observation live in
+``attackmap.orchestration.analyzer_run_plan`` (AR030: they need the
+analyzer registry, which is orchestration-owned). This shim re-exports the
+full historical surface for one release so existing
 ``from attackmap.analyzer_run_ledger import ...`` call sites keep working.
-Import from ``attackmap.extraction.ledger`` instead; this module is removed
-after that release.
+Import from the owning modules instead; this module is removed after that
+release.
 """
 from __future__ import annotations
 
@@ -12,9 +15,20 @@ from .extraction.ledger import (  # noqa: F401
     AnalyzerLifecycleEvent,
     AnalyzerRunError,
     AnalyzerRunLedger,
-    AnalyzerRunPlan,
     AnalyzerRunRecord,
     AnalyzerSignalCounts,
-    analyzer_run_identity,
     safe_error_type,
 )
+from .orchestration.analyzers import analyzer_run_identity  # noqa: F401
+from .orchestration.analyzer_run_plan import AnalyzerRunPlan  # noqa: F401
+
+__all__ = [
+    "AnalyzerLifecycleEvent",
+    "AnalyzerRunError",
+    "AnalyzerRunLedger",
+    "AnalyzerRunPlan",
+    "AnalyzerRunRecord",
+    "AnalyzerSignalCounts",
+    "analyzer_run_identity",
+    "safe_error_type",
+]

@@ -8,7 +8,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from attackmap.extraction.scanner import scan_repo
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.models import AttackPath, Finding, FindingLocation
 from attackmap.orchestration.recon_to_analysis import translate_recon
 from attackmap.output.fingerprint import assign_fingerprints

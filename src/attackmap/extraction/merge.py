@@ -5,9 +5,12 @@ signals are combined into a single ScanResult. It is loaded by
 `merge_analyzer_results` (whole-repo analyzers) and the test helper
 `merge_analyzer_signals`.
 
-A new structured signal type is added in one place: append a row to
-:data:`MERGE_SCHEMA` describing the field name and its dedup key. All
-merge / dedup behavior follows automatically.
+The declarative field schema (:data:`MERGE_SCHEMA` / :class:`MergeRule`)
+lives in :mod:`attackmap.model.merge_schema` (AR030: pure ``ScanResult``
+data belongs to the model layer); this module re-exports it and owns the
+merge behavior that applies it, plus ``merge_analyzer_results`` (AR030:
+moved here from orchestration so extraction-side analyzers such as the
+ecosystem analyzers can merge without an upward import).
 
 ## Merge rules
 
@@ -30,109 +33,11 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from copy import deepcopy
-from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
-
-@dataclass(frozen=True)
-class MergeRule:
-    """How one list field on `ScanResult` is merged across analyzer outputs.
-
-    - `attr`: the attribute name on `ScanResult` (e.g. `"routes"`).
-    - `key`: a callable that returns a hashable dedup key for one signal.
-    """
-
-    attr: str
-    key: Callable[[Any], tuple]
-    # Optional: called as `upgrade(existing, duplicate)` when a later signal
-    # hashes to an existing key, to fold in information the first one lacked.
-    upgrade: Callable[[Any, Any], None] | None = None
-
-    def __post_init__(self) -> None:
-        if not self.attr.isidentifier():
-            raise ValueError(f"MergeRule.attr must be a valid identifier, got {self.attr!r}")
-
-
-# The complete schema of list fields on `ScanResult` that get merged
-# across analyzer outputs. Order is preserved in the merged result;
-# duplicates (by key) are suppressed.
-
-def _upgrade_route_auth(existing: Any, duplicate: Any) -> None:
-    """Known route auth beats unknown (#256): first-seen still wins the route,
-    but a later analyzer that resolved the guard fills it in."""
-    if getattr(existing, "auth", "unknown") == "unknown" and getattr(duplicate, "auth", "unknown") != "unknown":
-        existing.auth = duplicate.auth
-        existing.guards = list(duplicate.guards)
-        existing.guard_evidence = duplicate.guard_evidence
-
-MERGE_SCHEMA: tuple[MergeRule, ...] = (
-    MergeRule("routes", lambda item: (item.path, item.method, item.file), upgrade=_upgrade_route_auth),
-    # Method is part of the identity (#146b): two verbs on the same target in one
-    # file (GET + POST /items) are distinct calls, not duplicates — collapsing
-    # them would drop a method before cross-repo contract linking runs.
-    MergeRule("external_calls", lambda item: (item.target, item.method, item.file)),
-    MergeRule("databases", lambda item: (item.kind, item.file)),
-    MergeRule("auth_hints", lambda item: (item.hint, item.file)),
-    MergeRule("service_hints", lambda item: (item.hint, item.file)),
-    MergeRule("edge_hints", lambda item: (item.hint, item.file)),
-    MergeRule("entrypoint_hints", lambda item: (item.hint, item.file)),
-    MergeRule("protocol_hints", lambda item: (item.hint, item.file)),
-    MergeRule("framework_hints", lambda item: (item.hint, item.file)),
-    # Line is part of the identity: redacted names only keep a 4-char prefix
-    # (#235), so two different `AKIA…` keys in one file must stay distinct.
-    MergeRule("secret_hints", lambda item: (item.name, item.file, item.line)),
-    MergeRule(
-        "taint_chains",
-        lambda item: (
-            item.route_method,
-            item.route_path,
-            item.route_file,
-            item.sink_kind,
-            item.sink_file,
-            item.sink_line,
-        ),
-    ),
-    MergeRule(
-        "dependencies",
-        lambda item: (item.ecosystem, item.name, item.version, item.file, item.dev),
-    ),
-    MergeRule(
-        "vulnerabilities",
-        lambda item: (item.ecosystem, item.package_name, item.package_version, item.id),
-    ),
-    MergeRule(
-        "authz_candidates",
-        lambda item: (item.route_method, item.route_path, item.route_file, item.id_param),
-    ),
-    MergeRule(
-        "crypto_weaknesses",
-        lambda item: (item.kind, item.file, item.line),
-    ),
-    MergeRule(
-        "web_hardening_issues",
-        lambda item: (item.kind, item.file, item.line),
-    ),
-    MergeRule(
-        "code_weaknesses",
-        lambda item: (item.kind, item.file, item.line),
-    ),
-    MergeRule(
-        "workflow_issues",
-        lambda item: (item.kind, item.file, item.line, item.context),
-    ),
-    MergeRule(
-        "supply_chain_issues",
-        lambda item: (item.kind, item.file, item.line, item.package),
-    ),
-    MergeRule(
-        "secret_history",
-        lambda item: (item.kind, item.file, item.name, item.introduced_in),
-    ),
-    MergeRule(
-        "anomalies",
-        lambda item: (item.kind, item.route_method, item.route_path, item.route_file),
-    ),
-)
+from attackmap.model.merge_schema import MERGE_SCHEMA, MergeRule
+from attackmap.sdk.analyzer_contracts import AnalyzerResult
 
 
 def merge_into(destination: Any, items: Iterable[Any], rule: MergeRule, seen: set) -> None:
@@ -171,4 +76,61 @@ def initial_seen(destination: Any, rule: MergeRule) -> set:
     return {rule.key(item) for item in getattr(destination, rule.attr)}
 
 
-__all__ = ["MergeRule", "MERGE_SCHEMA", "merge_into", "initial_seen"]
+def merge_analyzer_results(
+    results: Iterable[AnalyzerResult],
+    root: str | Path | None = None,
+) -> AnalyzerResult:
+    """Combine multiple whole-repo analyzer results into one.
+
+    Field-by-field merge behavior is declared in :data:`MERGE_SCHEMA`
+    and applied uniformly here. See the module docstring for the rules.
+    """
+    result_list = list(results)
+    if not result_list:
+        resolved_root = Path(root).resolve() if root is not None else Path(".").resolve()
+        return AnalyzerResult(root=str(resolved_root))
+
+    resolved_root = Path(root).resolve() if root is not None else Path(result_list[0].root).resolve()
+    merged = AnalyzerResult(root=str(resolved_root))
+    seen_by_attr: dict[str, set] = {rule.attr: set() for rule in MERGE_SCHEMA}
+
+    for result in result_list:
+        merged.files_scanned += result.files_scanned
+        for language in result.languages:
+            if language not in merged.languages:
+                merged.languages.append(language)
+        for limitation in result.limitations:
+            if limitation not in merged.limitations:
+                merged.limitations.append(limitation)
+        for rule in MERGE_SCHEMA:
+            merge_into(merged, getattr(result, rule.attr), rule, seen_by_attr[rule.attr])
+
+    from attackmap.model.signal_provenance import merge_scan_provenance
+    merge_scan_provenance(merged, result_list)
+    _merge_resource_limits(merged, result_list)
+    merged.languages.sort()
+    return merged
+
+
+def _merge_resource_limits(target: AnalyzerResult, results: Iterable[AnalyzerResult]) -> None:
+    """Retain observed subsets; unknown legacy reporting never certifies zero."""
+    values = list(results)
+    events = {event.model_dump_json(): event for result in values for event in result.resource_limit_events}
+    target.resource_limit_events = [events[key] for key in sorted(events)]
+    target.resource_limit_scopes = sorted({scope for result in values for scope in result.resource_limit_scopes})
+    statuses = [result.resource_limit_reporting for result in values]
+    if statuses and all(status == "complete" for status in statuses) and target.resource_limit_scopes:
+        target.resource_limit_reporting = "complete"
+    elif target.resource_limit_scopes or target.resource_limit_events or any(status == "partial" for status in statuses):
+        target.resource_limit_reporting = "partial"
+    else:
+        target.resource_limit_reporting = "unknown"
+
+
+__all__ = [
+    "MERGE_SCHEMA",
+    "MergeRule",
+    "initial_seen",
+    "merge_analyzer_results",
+    "merge_into",
+]

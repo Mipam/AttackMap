@@ -333,8 +333,8 @@ def run_isolated_analyzer(
             if claimed is not None and claimed != bundle.identity:
                 return with_policy(_partial(name, HOST_INVALID_OUTPUT, "result snapshot differs from captured input", "worker result snapshot/config mismatch", outcome.exit_code))
             outcome.result.scan_snapshot = bundle.identity
-            from attackmap.reasoning.analyzer_contracts import normalize_analyzer_metadata
-            from attackmap.reasoning.signal_provenance import admit_isolated_provenance
+            from attackmap.model.signal_provenance import admit_isolated_provenance
+            from attackmap.sdk.analyzer_contracts import normalize_analyzer_metadata
             version = None
             try:
                 metadata = normalize_analyzer_metadata(getattr(analyzer, "metadata", None))

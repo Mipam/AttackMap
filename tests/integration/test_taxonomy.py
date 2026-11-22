@@ -8,7 +8,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from attackmap.extraction.scanner import scan_repo
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.model.taxonomy import RULE_TAXONOMY, RuleTaxonomy, taxonomy_for, validate_entry
 from attackmap.models import Finding, Insight
 from attackmap.orchestration.recon_to_analysis import translate_recon

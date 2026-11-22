@@ -526,7 +526,7 @@ class AttackSurface(BaseModel):
     @computed_field
     @property
     def evidence_class(self) -> str:
-        from attackmap.extraction.evidence import surface_evidence_class
+        from attackmap.model.evidence_labels import surface_evidence_class
 
         return surface_evidence_class(self)
 

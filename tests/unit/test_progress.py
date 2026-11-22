@@ -14,7 +14,7 @@ from attackmap.extraction.progress import (
     _truncate,
     create_progress,
 )
-from attackmap.extraction.scanner import scan_repo
+from attackmap.orchestration.repo_passes import scan_repo
 
 
 def _events(stream: io.StringIO) -> list[dict]:

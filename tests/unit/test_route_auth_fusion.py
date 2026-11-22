@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attackmap.extraction.scanner import scan_repo
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.models import AttackSurface, Route, ScanResult
 from attackmap.reasoning.analyzer import identify_attack_surfaces
 from attackmap.reasoning.route_auth_fusion import synthesize_unauthenticated_routes
