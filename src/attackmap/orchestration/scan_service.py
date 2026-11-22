@@ -39,7 +39,6 @@ from attackmap.orchestration.fleet import (
     render_fleet_graph_mermaid,
     render_fleet_summary,
 )
-from attackmap.orchestration.fleet_architecture import fleet_summary_json
 from attackmap.orchestration.fleet_admission import (
     FleetAdmissionError,
     FleetMemoryLedger,
@@ -48,6 +47,7 @@ from attackmap.orchestration.fleet_admission import (
     reservation_scope,
     unverified_fleet_cleanup,
 )
+from attackmap.orchestration.fleet_architecture import fleet_summary_json
 from attackmap.orchestration.pipeline import run_scan
 from attackmap.orchestration.run_contract import RunRequest
 from attackmap.orchestration.run_spec import (

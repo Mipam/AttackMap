@@ -51,7 +51,7 @@ def load_configuration() -> ProviderOptions:
 def execute_provider_action(operation: str, payload: dict) -> dict:
     options = ProviderOptions.model_validate(payload["configuration"])
     credential = os.environ.pop("ATTACKMAP_ACTION_CREDENTIAL", "")
-    from attackmap.surfaces.ui.secrets import is_loopback_endpoint, load_llm_key, save_llm_key
+    from attackmap.foundation.secrets import is_loopback_endpoint, load_llm_key, save_llm_key
     if operation == "provider_save":
         if credential:
             save_llm_key(credential, options.provider)

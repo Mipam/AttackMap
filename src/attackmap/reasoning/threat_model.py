@@ -17,12 +17,12 @@ from attackmap.models import (
     TaintChain,
     TaintFlowStep,
 )
-from attackmap.output.finding_identity import dependency_entity_id
 from attackmap.policy import LOW_QUALITY_SEGMENTS
 from attackmap.policy import SEVERITY_ORDER as _SEVERITY_ORDER
 from attackmap.policy import WEBHOOK_MUTATING_METHODS as _CSRF_MUTATING_METHODS
 from attackmap.reasoning.analyzer import identify_attack_surfaces
 from attackmap.reasoning.exploitability import best_by_sink_kind, score_exploitability
+from attackmap.reasoning.finding_identity import dependency_entity_id
 from attackmap.reasoning.route_auth_fusion import synthesize_unauthenticated_routes
 from attackmap.reasoning.rule_specs import (
     ANOMALY_FINDING_SPEC as _ANOMALY_FINDING_SPEC,

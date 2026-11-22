@@ -17,50 +17,19 @@ foundation the seam-analysis phases build on.
 
 from __future__ import annotations
 
-import re
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from attackmap.extraction.contracts import ContractLink
+from attackmap.foundation.fleet_resource_identity import (
+    fleet_repo_ids,  # AR030 re-export (exported via __all__)
+)
 from attackmap.reasoning.crossrepo import CrossBoundaryFlow, CrossRepoAnomaly, TrustGap
 
 if TYPE_CHECKING:
     from attackmap.models import AttackPath, Finding, ScanResult
 
-_SLUG_RE = re.compile(r"[^a-z0-9]+")
-
 _SEVERITIES = ("high", "medium", "low")
-
-
-def _slug(name: str) -> str:
-    """A filesystem- and link-safe slug for a repo directory name."""
-    s = _SLUG_RE.sub("-", name.lower()).strip("-")
-    return s or "repo"
-
-
-def fleet_repo_ids(paths: list[Path]) -> list[str]:
-    """Stable, unique per-repo identifiers derived from the directory names.
-
-    Two repos with the same basename (``a/service`` and ``b/service``) would
-    collide into one report subdirectory, so collisions are disambiguated by
-    appending ``-2``, ``-3``, … in input order. Each candidate is checked against
-    **every id already emitted** — not just a per-base counter — so a suffix that
-    coincides with a later input's own name (``api``, ``api``, ``api-2`` →
-    ``api``, ``api-2``, ``api-2-2``) still stays globally unique. Deterministic.
-    """
-    ids: list[str] = []
-    used: set[str] = set()
-    for path in paths:
-        base = _slug(path.name)
-        candidate = base
-        n = 1
-        while candidate in used:
-            n += 1
-            candidate = f"{base}-{n}"
-        used.add(candidate)
-        ids.append(candidate)
-    return ids
 
 
 @dataclass

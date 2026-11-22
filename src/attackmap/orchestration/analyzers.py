@@ -46,6 +46,13 @@ from attackmap.extraction.scanner import (
     CODE_EXTENSIONS,
     scan_files,
 )
+from attackmap.foundation.errors import AttackMapError
+from attackmap.foundation.errors import UntrustedAnalyzerError as _errors_UntrustedAnalyzerError
+from attackmap.foundation.plugins_lock import OFFICIAL_PLUGINS
+from attackmap.foundation.redact import redact_text
+from attackmap.foundation.safe_fs import walk_repo as walk_repo
+from attackmap.foundation.srcpaths import JS_TS_SUFFIXES, in_skipped_dir, is_skipped_dir
+from attackmap.models import AnalyzerError
 from attackmap.orchestration.analyzer_catalog import (
     AnalyzerCatalogSnapshot,
     AnalyzerDiscoveryCollector,
@@ -54,13 +61,6 @@ from attackmap.orchestration.repo_passes import run_repo_passes
 from attackmap.orchestration.repo_passes import (
     scan_repo as scan_repo,
 )
-from attackmap.foundation.errors import AttackMapError
-from attackmap.foundation.errors import UntrustedAnalyzerError as _errors_UntrustedAnalyzerError
-from attackmap.foundation.plugins_lock import OFFICIAL_PLUGINS
-from attackmap.foundation.redact import redact_text
-from attackmap.foundation.safe_fs import walk_repo as walk_repo
-from attackmap.foundation.srcpaths import JS_TS_SUFFIXES, in_skipped_dir, is_skipped_dir
-from attackmap.models import AnalyzerError
 from attackmap.orchestration.scheduler import JobOutcome, partition, run_group
 from attackmap.sdk.contracts import (
     AnalyzerMetadata,

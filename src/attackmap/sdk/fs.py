@@ -62,7 +62,7 @@ def iter_repo_files(
     skip = frozenset(skip_dirs)
     cap = max_bytes if max_bytes is not None else max_file_bytes()
 
-    from attackmap.extraction.index import active_index_for
+    from attackmap.foundation.index_pin import active_index_for
     index = active_index_for(root_path)
     if index is not None:
         for source in index.sources:
@@ -115,7 +115,8 @@ def read_source(path: str | Path, *, root: str | Path | None = None) -> str | No
     in the first 8 KiB) and, when ``root`` is given, paths outside it.
     """
     file_path = Path(path)
-    from attackmap.extraction.index import active_index_for, decode_source_bytes, pinned_repo_index
+    from attackmap.foundation.index_pin import active_index_for, pinned_repo_index
+    from attackmap.foundation.snapshot import decode_source_bytes
     index = active_index_for(root) if root is not None else pinned_repo_index()
     if index is not None and root is None and file_path.is_absolute():
         try:

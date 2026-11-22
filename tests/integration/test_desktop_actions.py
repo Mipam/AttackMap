@@ -91,7 +91,7 @@ def test_provider_save_never_serializes_credential(tmp_path, monkeypatch):
     saved = []
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     monkeypatch.setenv("ATTACKMAP_ACTION_CREDENTIAL", "secret-sentinel")
-    monkeypatch.setattr("attackmap.surfaces.ui.secrets.save_llm_key", lambda key, provider: saved.append((key, provider)))
+    monkeypatch.setattr("attackmap.foundation.secrets.save_llm_key", lambda key, provider: saved.append((key, provider)))
     result = execute_provider_action("provider_save", {"configuration": ProviderOptions().model_dump()})
     assert saved == [("secret-sentinel", "openai")]
     assert "secret-sentinel" not in configuration_path().read_text() + json.dumps(result)

@@ -1120,3 +1120,14 @@ def desktop_action_command(
     """Internal typed desktop action broker."""
     from attackmap.orchestration.desktop_actions import run_action_file
     raise typer.Exit(run_action_file(request, engine=engine, expected_sha256=expected_sha256))
+
+
+# AR030: the engine's desktop action broker never imports this surfaces
+# module; instead, the CLI host registers how to reach the typer app so
+# capability discovery works in-process (capability discovery executed via
+# the bare engine subprocess is intentionally unsupported).
+from attackmap.orchestration.desktop_actions import (  # noqa: E402  (registration follows the app definition)
+    register_cli_app_resolver as _register_cli_app_resolver,
+)
+
+_register_cli_app_resolver(lambda: app)

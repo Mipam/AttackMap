@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.surfaces.ui import secrets
+import attackmap.foundation.secrets as secrets  # AR030: the storage moved to foundation; patch the real module
 from attackmap.surfaces.ui.config import ScanConfig
 from attackmap.surfaces.ui.runner import ScanRunner, child_python_env
 

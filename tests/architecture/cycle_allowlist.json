@@ -6,22 +6,15 @@
     "in the same change. tests/architecture/test_import_boundaries.py fails on",
     "any cycle not listed here and on stale entries.",
     "AR020+AR021: 49 -> 43. AR029: 43 -> 41 (node renames).",
-    "AR030 wave 1: 41 -> 4 (hub moves).",
-    "AR030 wave 2: 4 -> 1. parse_run_message moved into desktop_fleet (the",
-    "1.4 envelope models are fleet-owned; run_contract importing them closed",
-    "desktop_fleet <-> run_contract). fleet_summary_json moved into",
-    "fleet_architecture (it renders that module's output; fleet importing",
-    "architecture closed fleet <-> fleet_architecture). ecosystem_php now",
-    "merges via extraction.merge (merge_analyzer_results moved down in",
-    "wave 1), closing ecosystem_php <-> analyzers.",
-    "Remaining: desktop_actions <-> surfaces.cli."
+    "AR030 (2026-11-22): 41 -> 0 in three waves. Wave 1 moved the",
+    "ledger/scanner/merge hub orchestration-side and the contracts/provenance",
+    "data model/sdk-side (41 -> 4); wave 2 moved parse_run_message into",
+    "desktop_fleet and fleet_summary_json into fleet_architecture (4 -> 1);",
+    "wave 3 inverted the last edge \u2014 desktop_actions discovers CLI",
+    "capabilities through a resolver registered by surfaces.cli instead of",
+    "importing the surface (1 -> 0). The file stays as an explicit empty",
+    "ratchet: the gate re-measures the graph on every run."
   ],
   "schema": 1,
-  "cycles": [
-    [
-      "attackmap.orchestration.desktop_actions",
-      "attackmap.surfaces.cli",
-      "attackmap.orchestration.desktop_actions"
-    ]
-  ]
+  "cycles": []
 }

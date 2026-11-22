@@ -7,14 +7,28 @@ import json
 import os
 import sys
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from attackmap.foundation.safe_fs import ensure_output_dir, safe_write_text
 
 MAX_RESULT_BYTES = 64 * 1024 * 1024
+
+# AR030 dependency inversion: the engine never imports the CLI shell (the
+# layer stack forbids orchestration -> surfaces). The surfaces layer owns the
+# typer application and registers how to reach it at import time
+# (surfaces.cli does exactly that). Production paths — the CLI broker and
+# the UI capability discovery — always run inside that host.
+_CLI_APP_RESOLVER: Callable[[], Any] | None = None
+
+
+def register_cli_app_resolver(resolver: Callable[[], Any]) -> None:
+    """Surfaces-layer injection point for capability discovery (AR030)."""
+    global _CLI_APP_RESOLVER
+    _CLI_APP_RESOLVER = resolver
 
 
 class ActionRequest(BaseModel):
@@ -38,10 +52,14 @@ def execute_action(request: ActionRequest) -> dict:
             build_capabilities,
             preflight_capabilities,
         )
-        from attackmap.surfaces.cli import app
+        if _CLI_APP_RESOLVER is None:
+            raise ValueError(
+                "CLI capability discovery requires the attackmap CLI host "
+                "(surfaces.cli registers the app resolver at import time)"
+            )
         if set(payload) - ({"request", "expected_identity"} if request.operation == "preflight" else set()):
             raise ValueError("Unsupported capability action payload")
-        capabilities = build_capabilities(app)
+        capabilities = build_capabilities(_CLI_APP_RESOLVER())
         if request.operation == "capabilities":
             return capabilities
         return preflight_capabilities(capabilities, request=payload.get("request"),

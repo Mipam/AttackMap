@@ -159,8 +159,8 @@ def admit_isolated_provenance(scan, analyzer: str, version: str | None) -> None:
     locations, semantic truth, installed code or use of the cooperating SDK.
     In-process/trusted legacy stamping keeps its existing compatibility policy.
     """
-    from attackmap.model.merge_schema import MERGE_SCHEMA
     from attackmap.foundation.redact import redact_text
+    from attackmap.model.merge_schema import MERGE_SCHEMA
 
     known_version = version.strip() if isinstance(version, str) and version.strip() else None
     observations = scan.all_signals()  # capture old aliases before canonicalizing typed hints

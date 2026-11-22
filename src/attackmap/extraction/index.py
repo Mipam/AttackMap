@@ -8,18 +8,38 @@ import os
 from collections import deque
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
-from contextvars import ContextVar
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
-from threading import Lock
 
 from attackmap.extraction.run_budget import active_budget
 from attackmap.foundation.errors import BudgetExpired
+
+# AR030 re-exports: the pin and snapshot primitives live in foundation; these
+# names stay importable from extraction.index for one release.
+from attackmap.foundation.index_pin import (  # noqa: F401
+    PinnedIndex,
+    active_index_for,
+    clear_pinned_index,
+    install_process_snapshot,
+    pinned_index_scope,
+    pinned_repo_index,
+    set_pinned_index,
+)
 from attackmap.foundation.safe_fs import contained_file, is_oversized, max_file_bytes, walk_repo
+from attackmap.foundation.snapshot import (  # noqa: F401
+    CapturedSource,
+    ScanSnapshot,
+    ScanSnapshotIdentity,
+    SnapshotVerification,
+    _replay_added_files,
+    _snapshot_hash,
+    _snapshot_text,
+    content_sha256,
+    decode_source_bytes,
+)
 from attackmap.foundation.srcpaths import is_skipped_dir, line_number
-from attackmap.models import ResourceLimitEvent, ScanSnapshotIdentity
+from attackmap.models import ResourceLimitEvent
 
 _NOISY_SYMLINK_PARTS = {"node_modules", ".git", ".venv", "venv", "dist", "build", "__pycache__"}
 
@@ -93,113 +113,12 @@ def _ordered_capture_inputs(root: Path, limit: int, can_prefetch: Callable[[int]
 # Content basis for snapshot identity: the indexed text, i.e. the utf-8-decoded
 # file as the passes saw it (C33/AM047). Verification re-reads with the same
 # basis, so a drift verdict never depends on newline or encoding normalization.
-_SNAPSHOT_SCHEMA = "attackmap-snapshot/1.0"
 
 # C33/AM047: the index this thread's whole-repo passes resolve content through.
 # ``RepoIndex.build`` pins itself so passes invoked later for the same root
 # (SBOM, supply-chain, workflows, authz, anomalies, fingerprints) read the
 # captured revision even where their call sites thread no index explicitly.
 # Lookups are root-gated and per-thread; a newer build for the same root wins.
-# AR026/AC-106: this ContextVar is deliberate and documented. The pipeline
-# threads its own captured index explicitly (``analyze_repository(index=...)``
-# and translation), but analyzer passes, plugin pass registries and the SDK
-# surface (``PassSources.for_root``, ``sdk/fs.py``) resolve content through
-# the ambient pin because their contracts accept no index parameter — a
-# library boundary that makes removing the ContextVar unavoidable without
-# redesigning the analyzer pass contract.
-_PINNED: ContextVar[RepoIndex | None] = ContextVar("attackmap_pinned_index", default=None)
-_PROCESS_SNAPSHOT: RepoIndex | None = None
-_PROCESS_SNAPSHOT_LOCK = Lock()
-
-
-def install_process_snapshot(index: RepoIndex) -> None:
-    """Dedicated isolated-worker bootstrap only; pin persists through thread shutdown."""
-    global _PROCESS_SNAPSHOT
-    with _PROCESS_SNAPSHOT_LOCK:
-        if _PROCESS_SNAPSHOT is not None and _PROCESS_SNAPSHOT is not index:
-            raise ValueError("An isolated worker cannot replace its installed snapshot")
-        _PROCESS_SNAPSHOT = index
-
-
-def pinned_repo_index() -> RepoIndex | None:
-    """The index pinned for this thread by the latest :meth:`RepoIndex.build`."""
-    return _PROCESS_SNAPSHOT if _PROCESS_SNAPSHOT is not None else _PINNED.get()
-
-
-def active_index_for(root: str | Path) -> RepoIndex | None:
-    """The pinned index for exactly ``root`` (another repo's pin never applies)."""
-    index = pinned_repo_index()
-    if index is None:
-        return None
-    try:
-        return index if index.root == Path(root).resolve() else None
-    except OSError:
-        return None
-
-
-def clear_pinned_index() -> None:
-    """Drop this thread's pin (the pipeline resets it once a run completes)."""
-    _PINNED.set(None)
-
-
-@contextmanager
-def pinned_index_scope(index: RepoIndex):
-    """Temporarily install an already verified capture, including during plugin import."""
-    token = _PINNED.set(index)
-    try:
-        yield index
-    finally:
-        _PINNED.reset(token)
-
-
-def content_sha256(text: str) -> str:
-    """sha256 of a file's content on the index basis (decoded utf-8 text)."""
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def decode_source_bytes(raw: bytes) -> str | None:
-    """SDK-compatible decoding, including legacy text and original newlines."""
-    if b"\0" in raw[:8192]:
-        return None
-    for encoding in ("utf-8-sig", "cp1252"):
-        try:
-            return raw.decode(encoding)
-        except UnicodeDecodeError:
-            continue
-    return raw.decode("latin-1")
-
-
-def _snapshot_text(raw: bytes, sdk: bool = False) -> str:
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        text = decode_source_bytes(raw) if sdk else None
-        if text is None:
-            raise UnicodeDecodeError("utf-8", raw, 0, min(1, len(raw)), "not captured text") from exc
-    return text.replace("\r\n", "\n").replace("\r", "\n")
-
-
-def _snapshot_hash(raw: bytes, sdk: bool = False) -> str:
-    try:
-        return content_sha256(_snapshot_text(raw, sdk=sdk))
-    except UnicodeDecodeError:
-        if not sdk:
-            raise
-        # SDK enumeration can observe binary names even though read_source returns None.
-        return hashlib.sha256(raw).hexdigest()
-
-
-@dataclass(frozen=True)
-class CapturedSource:
-    rel: str
-    raw: bytes
-    mtime_ns: int
-
-    @property
-    def size(self) -> int:
-        return len(self.raw)
-
-
 @dataclass(frozen=True)
 class IndexedFile:
     rel: str
@@ -213,258 +132,6 @@ class IndexedFile:
 
     def line_of(self, offset: int) -> int:
         return line_number(self.text, offset)
-
-
-@dataclass(frozen=True)
-class SnapshotVerification:
-    """Publication-time re-check of the working tree against one snapshot.
-
-    ``state`` is ``"verified"`` (no drift), ``"drifted"`` (the run analyzed a
-    mixture of revisions) or ``"unverified"`` (the check itself could not run).
-    """
-
-    state: str
-    checked_files: int = 0
-    changed: tuple[str, ...] = ()
-    deleted: tuple[str, ...] = ()
-    added: tuple[str, ...] = ()
-    note: str | None = None
-
-    @property
-    def drifted(self) -> bool:
-        return self.state == "drifted"
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "state": self.state,
-            "checked_files": self.checked_files,
-            "changed": list(self.changed),
-            "deleted": list(self.deleted),
-            "added": list(self.added),
-            **({"note": self.note} if self.note else {}),
-        }
-
-    def limitation(self) -> str | None:
-        """Limitations-mechanism string for a drifted snapshot, else None."""
-        if not self.drifted:
-            return None
-        parts = []
-        if self.changed:
-            parts.append("changed since index: " + ", ".join(self.changed))
-        if self.deleted:
-            parts.append("deleted since index: " + ", ".join(self.deleted))
-        if self.added:
-            parts.append("new since index: " + ", ".join(self.added))
-        return (
-            "incomplete snapshot: repository mutated during scan ("
-            + "; ".join(parts)
-            + "). Evidence may mix file revisions; re-run for a consistent report."
-        )
-
-
-@dataclass(frozen=True)
-class ScanSnapshot:
-    """Content identity of every accepted file at index time (C33/AM047).
-
-    One run's deterministic passes read the indexed text, so its evidence is
-    tied to this snapshot. ``snapshot_id`` hashes the sorted ``(rel, sha256)``
-    set: any accepted-file content change, addition or deletion changes it.
-    """
-
-    snapshot_id: str
-    files: tuple[tuple[str, str], ...]
-    total_size: int
-    index_config: tuple[tuple[str, int], ...]
-    raw_files: tuple[tuple[str, str], ...] = ()
-
-    @staticmethod
-    def _id_for(files: tuple[tuple[str, str], ...], raw_files: tuple[tuple[str, str], ...] = ()) -> str:
-        basis: list = [_SNAPSHOT_SCHEMA, list(files)]
-        if raw_files:
-            basis.append(["raw-bytes/1.0", list(raw_files)])
-        payload = json.dumps(basis,
-                             ensure_ascii=True, separators=(",", ":"))
-        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-    @classmethod
-    def from_indexed(cls, files: list[IndexedFile], index_config: dict[str, int], sources: list[CapturedSource] | None = None) -> ScanSnapshot:
-        identities = {f.rel: f.sha256 for f in files}
-        sizes = {f.rel: f.size for f in files}
-        for source in sources or ():
-            if source.rel not in identities:
-                identities[source.rel] = _snapshot_hash(source.raw, sdk=True)
-                sizes[source.rel] = source.size
-        entries = tuple(sorted(identities.items()))
-        raw_entries = tuple(sorted((source.rel, hashlib.sha256(source.raw).hexdigest()) for source in sources or ()))
-        return cls(cls._id_for(entries, raw_entries), entries, sum(sizes.values()),
-                   tuple(sorted(index_config.items())), raw_entries)
-
-    @classmethod
-    def from_identity(cls, data: dict) -> ScanSnapshot:
-        """Rehydrate from a serialized :class:`models.ScanSnapshotIdentity`."""
-        raw_files = data.get("files")
-        entries = tuple(sorted((str(rel), str(sha))
-                               for rel, sha in (raw_files or {}).items()))
-        raw_config = data.get("index_config")
-        config = tuple(sorted((str(name), int(value))
-                              for name, value in (raw_config or {}).items()))
-        raw_entries = tuple(sorted((str(rel), str(sha)) for rel, sha in (data.get("raw_files") or {}).items()))
-        return cls(cls._id_for(entries, raw_entries), entries, int(data.get("total_size") or 0), config, raw_entries)
-
-    @property
-    def config_identity(self) -> str:
-        payload = json.dumps([_SNAPSHOT_SCHEMA, "config", list(self.index_config)],
-                             ensure_ascii=True, separators=(",", ":"))
-        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-    def identity(self) -> ScanSnapshotIdentity:
-        """The additive model form carried on ``ScanResult.scan_snapshot``."""
-        return ScanSnapshotIdentity(
-            snapshot_id=self.snapshot_id,
-            files=dict(self.files),
-            raw_files=dict(self.raw_files),
-            total_size=self.total_size,
-            index_config=dict(self.index_config),
-            config_identity=self.config_identity,
-        )
-
-    def verify(self, root: str | Path, *, exclude: tuple[str | Path, ...] = ()) -> SnapshotVerification:
-        """Re-read the working tree and compare it against this snapshot.
-
-        Every snapshot file is re-hashed on the index basis (full content, no
-        mtime shortcut — stat timestamps only gate the cheaper mid-scan
-        ``RepoIndex.mutation_warnings``), and the tree is re-walked to find
-        files that appeared after the index was built. New-file detection
-        replays the acceptance limits recorded in ``index_config`` (per-file
-        cap, aggregate byte budget, file-count cap) in the build's walk order,
-        so a new file the policy would have skipped is not drift: the analyzed
-        snapshot is complete without it. Paths under *exclude* (the run's own
-        output directory) are not drift.
-        """
-        root_path = Path(root)
-        excluded: list[Path] = []
-        for item in exclude:
-            try:
-                excluded.append(Path(item).resolve())
-            except OSError:
-                continue
-        known = dict(self.files)
-        raw_known = dict(self.raw_files)
-        changed: list[str] = []
-        deleted: list[str] = []
-        added: list[str] = []
-        checked = 0
-        visible: set[str] = set()
-        for rel, expected in self.files:
-            path = root_path / rel
-            try:
-                raw = path.read_bytes()
-                actual_hash = _snapshot_hash(raw, sdk=bool(dict(self.index_config).get("capture_sdk_sources")))
-            except UnicodeDecodeError:
-                changed.append(rel)
-                continue
-            except OSError:
-                # A snapshot file that vanished is deleted; one that stat-fails
-                # or denies reading is drift of the changed kind either way.
-                (deleted if not path.exists() else changed).append(rel)
-                continue
-            checked += 1
-            if actual_hash != expected or (rel in raw_known and hashlib.sha256(raw).hexdigest() != raw_known[rel]):
-                changed.append(rel)
-        # Charge each snapshot file its (live) size — the build's charge is not
-        # recoverable from the hashes; a file whose size also changed is
-        # already reported under ``changed``.
-        known_sizes: dict[str, int] = {}
-        for rel in known:
-            try:
-                known_sizes[rel] = (root_path / rel).stat().st_size
-            except OSError:
-                continue  # gone: reported above, occupies no budget now
-        added = list(
-            _replay_added_files(root_path, known_sizes, dict(self.index_config), exclude=excluded, visible=visible)
-        )
-        for rel in known:
-            path = root_path / rel
-            if (rel not in visible and rel not in deleted and rel not in changed
-                    and not any(_is_under(path, base) for base in excluded)):
-                changed.append(rel)  # e.g. a newly added output marker changed source scope
-        state = "drifted" if (changed or deleted or added) else "verified"
-        return SnapshotVerification(state, checked, tuple(sorted(changed)),
-                                    tuple(sorted(deleted)), tuple(sorted(added)))
-
-
-def _is_under(path: Path, base: Path) -> bool:
-    try:
-        return path.resolve().is_relative_to(base)
-    except (OSError, RuntimeError):
-        return False
-
-
-def _replay_added_files(
-    root: Path,
-    known_sizes: dict[str, int],
-    config: dict[str, int],
-    *,
-    exclude: tuple[Path, ...] = (),
-    visible: set[str] | None = None,
-) -> tuple[str, ...]:
-    """New files the index acceptance policy would have captured (C33/AM047).
-
-    Replays :meth:`RepoIndex.build`'s gates — per-file byte cap, aggregate byte
-    budget, accepted-file count cap, utf-8 decode — in the build's walk order.
-    Snapshot files (``known_sizes``) are charged their size and count first,
-    exactly as the build accepted them, so a candidate the budget or count cap
-    would have skipped is not reported: that file was never part of any
-    analyzable snapshot under these limits.
-    """
-    file_limit = int(config.get("max_file_bytes") or 0) or max_file_bytes()
-    budget = int(config.get("index_byte_budget") or 0)
-    count_limit = int(config.get("index_file_limit") or 0)
-    used = 0
-    accepted = 0
-    sdk_accepted = 0
-    sdk_capture = bool(config.get("capture_sdk_sources"))
-    added: list[str] = []
-    for path in walk_repo(root, prune=is_skipped_dir):
-        try:
-            rel = path.relative_to(root).as_posix()
-            size = path.stat().st_size
-        except (ValueError, OSError):
-            continue
-        if any(_is_under(path, base) for base in exclude):
-            continue
-        if visible is not None:
-            visible.add(rel)
-        if rel in known_sizes and not sdk_capture:
-            used += known_sizes[rel]
-            accepted += 1
-            continue
-        # The build's gate order: per-file cap, budget charge, count cap, decode.
-        if size > file_limit:
-            continue
-        if budget > 0:
-            if used + size > budget:
-                continue
-            used += size
-        if count_limit > 0 and accepted >= count_limit:
-            continue
-        try:
-            raw = path.read_bytes()
-        except OSError:
-            continue
-        core_accepted = False
-        try:
-            raw.decode("utf-8")
-            core_accepted = True
-        except UnicodeDecodeError:
-            if not sdk_capture:
-                continue
-        sdk_accepted_here = sdk_capture and (count_limit <= 0 or sdk_accepted < count_limit)
-        if rel not in known_sizes and (core_accepted or sdk_accepted_here):
-            added.append(rel)
-        accepted += int(core_accepted)
-        sdk_accepted += int(sdk_accepted_here)
-    return tuple(sorted(added))
 
 
 @dataclass(frozen=True)
@@ -783,7 +450,7 @@ class RepoIndex:
                          snapshot=snapshot, sources=tuple(sources))
         # C33/AM047: this thread's whole-repo passes resolve content for this
         # root through the freshest captured snapshot (lookups are root-gated).
-        _PINNED.set(repo_index)
+        set_pinned_index(repo_index)
         return repo_index
 
 

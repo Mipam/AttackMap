@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.extraction import scanner
 from attackmap.extraction.progress import JsonScanProgress
+from attackmap.orchestration import repo_passes
 from attackmap.orchestration.analyzers import analyze_repository
 
 
@@ -34,13 +34,13 @@ def _repo(tmp_path: Path) -> Path:
 def counted(monkeypatch: pytest.MonkeyPatch) -> dict[str, list]:
     calls: dict[str, list] = {}
     for name in ("analyze_taint", "analyze_sbom", "scan_workflows", "analyze_authz", "find_anomalies"):
-        real = getattr(scanner, name)
+        real = getattr(repo_passes, name)
 
         def wrapper(*args, _real=real, _name=name, **kwargs):
             calls.setdefault(_name, []).append(args)
             return _real(*args, **kwargs)
 
-        monkeypatch.setattr(scanner, name, wrapper)
+        monkeypatch.setattr(repo_passes, name, wrapper)
     return calls
 
 

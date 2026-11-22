@@ -140,7 +140,7 @@ def serve(request: RunRequest, *, control: TextIO, events: TextIO) -> int:
         env.pop(name, None)
     provider = request.options.provider
     if provider.enable_ai:
-        from attackmap.surfaces.ui.secrets import child_llm_env
+        from attackmap.foundation.secrets import child_llm_env
         env.update(child_llm_env(provider.provider, provider.endpoint, allow_environment=False))
         if provider.provider == "claude" and provider.endpoint:
             env["ANTHROPIC_BASE_URL"] = provider.endpoint

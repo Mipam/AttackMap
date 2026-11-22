@@ -157,7 +157,7 @@ def _snapshot_publication_block(
     raw = scan_section.get("scan_snapshot") if isinstance(scan_section, dict) else None
     if not isinstance(raw, dict) or not isinstance(raw.get("files"), dict):
         return None
-    from attackmap.extraction.index import ScanSnapshot
+    from attackmap.foundation.snapshot import ScanSnapshot
 
     snapshot = ScanSnapshot.from_identity(raw)
     verification = snapshot.verify(repo_root, exclude=(out,))

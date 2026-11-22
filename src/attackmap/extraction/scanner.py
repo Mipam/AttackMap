@@ -11,7 +11,10 @@ if TYPE_CHECKING:
     from attackmap.extraction.index import IndexedFile, RepoIndex
     from attackmap.extraction.progress import ScanProgress
 
+from attackmap.extraction.crypto import find_crypto_weaknesses
 from attackmap.extraction.run_budget import active_budget
+from attackmap.extraction.weaknesses import find_code_weaknesses
+from attackmap.extraction.webhardening import find_web_hardening_issues, has_csrf_protection
 from attackmap.foundation.errors import BudgetExpired
 from attackmap.foundation.redact import mask_secret
 from attackmap.foundation.srcpaths import (
@@ -21,9 +24,6 @@ from attackmap.foundation.srcpaths import (
     is_vendored_file,
     line_number,
 )
-from attackmap.extraction.crypto import find_crypto_weaknesses
-from attackmap.extraction.weaknesses import find_code_weaknesses
-from attackmap.extraction.webhardening import find_web_hardening_issues, has_csrf_protection
 from attackmap.sdk.models import AuthHint, DatabaseHint, ExternalCall, Route, ScanResult, SecretHint
 
 # Scanner responsibilities are intentionally generic-only:

@@ -88,7 +88,7 @@ def test_merge_matches_legacy_copy_all_json_options_and_field_sets(case, reverse
         inputs.reverse()
     before = _signature(inputs)
     # The only changed operation is representative cloning; retain the old copy as oracle.
-    with patch("attackmap.reasoning.signal_provenance._copy_merge_representative", lambda s: s.model_copy(deep=True)):
+    with patch("attackmap.model.signal_provenance._copy_merge_representative", lambda s: s.model_copy(deep=True)):
         expected = merge_normalized_signals(inputs)
     actual = merge_normalized_signals(inputs)
     assert _signature(actual) == _signature(expected)

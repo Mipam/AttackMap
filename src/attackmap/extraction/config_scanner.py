@@ -1112,7 +1112,7 @@ def extract_deployment_aliases(repo_roots: list[Path]) -> tuple[DeploymentAliase
         if source not in destination.setdefault(key, []):
             destination[key].append(source)
     k8s_documents: list[tuple[dict, str, Path, str, str]] = []
-    from attackmap.orchestration.fleet import fleet_repo_ids
+    from attackmap.foundation.fleet_resource_identity import fleet_repo_ids
     root_ids = fleet_repo_ids([Path(root) for root in repo_roots])
 
     for root, root_id in zip(repo_roots, root_ids, strict=True):

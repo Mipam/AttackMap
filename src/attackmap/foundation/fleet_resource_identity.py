@@ -474,3 +474,42 @@ __all__ = ["DATASTORE_DECLARATION_SCHEMA_VERSION", "MAX_DATASTORE_DECLARATIONS",
            "project_framework_datastore_candidates", "MAX_MESSAGING_DECLARATIONS",
            "MAX_MESSAGING_REPOSITORIES", "QualifiedMessagingIdentity", "MessagingDeclaration",
            "extract_messaging_declarations", "project_producer_consumer"]
+
+
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+
+def repo_slug(name: str) -> str:
+    """A filesystem- and link-safe slug for a repo directory name (AR030)."""
+    s = _SLUG_RE.sub("-", name.lower()).strip("-")
+    return s or "repo"
+
+
+def fleet_repo_ids(paths: list) -> list[str]:
+    """Stable, unique per-repo identifiers derived from the directory names.
+
+    Two repos with the same basename (``a/service`` and ``b/service``) would
+    collide into one report subdirectory, so collisions are disambiguated by
+    appending ``-2``, ``-3``, … in input order. Each candidate is checked against
+    **every id already emitted** — not just a per-base counter — so a suffix that
+    coincides with a later input's own name (``api``, ``api``, ``api-2`` →
+    ``api``, ``api-2``, ``api-2-2``) still stays globally unique. Deterministic.
+
+    AR030: moved here from orchestration.fleet — a pure path-name projection,
+    needed by extraction (config_scanner) without an upward import.
+    """
+    ids: list[str] = []
+    used: set[str] = set()
+    for path in paths:
+        base = repo_slug(path.name)
+        candidate = base
+        n = 1
+        while candidate in used:
+            n += 1
+            candidate = f"{base}-{n}"
+        used.add(candidate)
+        ids.append(candidate)
+    return ids
+
+
+__all__ = ["fleet_repo_ids", "repo_slug"]

@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from attackmap.foundation.redact import redact_text
-from attackmap.models import ResourceLimitEvent
+from attackmap.foundation.resource_limits import ResourceLimitEvent
 
 Status = Literal["not_started", "unknown", "partial", "complete"]
 Outcome = Literal["completed", "failed", "cancelled", "unknown"]

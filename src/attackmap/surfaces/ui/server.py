@@ -13,6 +13,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from attackmap.foundation.secrets import (
+    child_llm_env,
+    has_llm_key,
+    is_loopback_endpoint,
+    save_llm_key,
+)
 from attackmap.orchestration.analyzers import TRUSTED_ONLY_ENV
 from attackmap.surfaces.ui.config import ScanConfig
 from attackmap.surfaces.ui.contract_adapter import LegacyRunContractAdapter
@@ -38,12 +44,6 @@ from attackmap.surfaces.ui.report import (
 )
 from attackmap.surfaces.ui.run_state import GuiRunState
 from attackmap.surfaces.ui.runner import ScanRunner, child_python_env
-from attackmap.surfaces.ui.secrets import (
-    child_llm_env,
-    has_llm_key,
-    is_loopback_endpoint,
-    save_llm_key,
-)
 from attackmap.surfaces.ui.spawn import discovery_argv, frozen_aware_argv, is_frozen_build
 from attackmap.surfaces.ui.suppress_write import append_suppression
 from attackmap.surfaces.ui.watch import Watcher
