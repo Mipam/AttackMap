@@ -30,6 +30,7 @@ from .crossrepo import (
     find_cross_repo_anomalies,
     find_trust_gaps,
 )
+from .errors import AttackMapError
 from .fleet import (
     FleetRepoResult,
     FleetScan,
@@ -52,8 +53,10 @@ from .run_contract import RunRequest
 from .safe_fs import UnsafePathError, ensure_output_dir, safe_write_text
 
 
-class ScanRequestError(Exception):
+class ScanRequestError(AttackMapError):
     """Validation or configuration error raised before any repository is scanned."""
+
+    code = "scan_request"
 
 
 @dataclass

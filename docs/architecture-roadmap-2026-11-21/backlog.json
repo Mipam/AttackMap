@@ -454,7 +454,7 @@
       "phase": 0,
       "priority": "High",
       "effort_days": 1.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR001"
       ],
@@ -474,7 +474,9 @@
         "src/attackmap/ui/server.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "tests/test_error_taxonomy.py 8/8; broad except grep=51 / AST=61 (<= 62 baseline); taxonomy adopted in analyzers (Untrusted/Missing), scan_service (ScanRequestError); analyzer_host deliberately stays stdlib-only; ui/server broad handlers already surface to HTTP, surveyed"
+      ]
     },
     {
       "id": "AR020",

@@ -54,6 +54,7 @@ import shutil
 import sys
 import tempfile
 import threading
+from contextlib import suppress
 from dataclasses import dataclass, field
 from importlib.metadata import entry_points
 from pathlib import Path
@@ -136,7 +137,11 @@ class IsolatedOutcome:
 
 
 class AnalyzerHostError(RuntimeError):
-    """Raised under ``strict=True`` when an isolated analyzer breached a limit."""
+    """Raised under ``strict=True`` when an isolated analyzer breached a limit.
+
+    Deliberately NOT part of the attackmap.errors taxonomy: this module stays
+    stdlib-only so the subprocess host can import it without the package.
+    """
 
 
 def _partial(name: str, error_type: str, reason: str, message: str, exit_code: int | None) -> IsolatedOutcome:
@@ -439,7 +444,7 @@ _JOB_OBJECT_LIMIT_JOB_MEMORY = 0x200
 _JOB_EXTENDED_LIMIT_INFORMATION = 9
 
 
-def _job_extended_limits_structs() -> "tuple[type, type]":
+def _job_extended_limits_structs() -> tuple[type, type]:
     import ctypes
     from ctypes import wintypes
 
@@ -527,7 +532,7 @@ def _resolve_attr(owner: object, qualname: str | None) -> object:
     return target
 
 
-def _load_analyzer(args: "argparse.Namespace") -> object:
+def _load_analyzer(args: argparse.Namespace) -> object:
     attempts: list[str] = []
 
     if args.entry_point:
@@ -539,9 +544,10 @@ def _load_analyzer(args: "argparse.Namespace") -> object:
             if target is not None:
                 matches = [ep for ep in matches if ep.value == target]
             if distribution is not None:
-                canonical = lambda name: re.sub(r"[-_.]+", "-", name).lower()
+                def _canonical(name: str) -> str:
+                    return re.sub(r"[-_.]+", "-", name).lower()
                 matches = [ep for ep in matches if isinstance(getattr(ep.dist, "name", None), str)
-                    and canonical(ep.dist.name) == canonical(distribution)]
+                    and _canonical(ep.dist.name) == _canonical(distribution)]
             if version is not None:
                 matches = [ep for ep in matches if getattr(ep.dist, "version", None) == version]
             if len(matches) != 1:
@@ -576,13 +582,13 @@ def _load_analyzer(args: "argparse.Namespace") -> object:
     raise RuntimeError("could not load analyzer in worker (" + "; ".join(attempts[-3:]) + ")")
 
 
-def _worker_main(args: "argparse.Namespace") -> int:
+def _worker_main(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir)
     repo = str(args.repo)
     _install_stream_cap(int(args.stream_bytes), workdir / _STREAM_BREACH_FILE)
     try:
-        from .index import pinned_index_scope, install_process_snapshot
-        from .snapshot_transport import SealedSnapshot, read_snapshot, SnapshotInputError
+        from .index import install_process_snapshot, pinned_index_scope
+        from .snapshot_transport import SealedSnapshot, SnapshotInputError, read_snapshot
         descriptor = SealedSnapshot.loads(args.snapshot_descriptor)
         if descriptor.root != str(Path(repo).resolve()):
             raise SnapshotInputError("Worker root differs from sealed input")
@@ -601,15 +607,14 @@ def _worker_main(args: "argparse.Namespace") -> int:
                 p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()) else {}
             result = analyzer.analyze(repo, **extra)  # type: ignore[attr-defined]
     except BaseException as exc:  # analyzer crashed; record and exit non-zero
-        try:
+        # Status persistence is best-effort; the exit code already reports the failure.
+        with suppress(OSError):
             _write_json(workdir / _STATUS_FILE, {
                 "status": "error",
                 "error_type": type(exc).__name__,
                 "message": str(exc)[:_MESSAGE_MAX_CHARS],
                 "result_bytes": int(args.result_bytes),
             })
-        except OSError:
-            pass
         return 1
 
     if hasattr(result, "model_dump_json"):

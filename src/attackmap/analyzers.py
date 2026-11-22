@@ -32,6 +32,8 @@ from .analyzer_host import (
     run_isolated_analyzer,
 )
 from .ecosystem_php import OmekaSAnalyzer, PhpLaminasAnalyzer, PhpWebAnalyzer
+from .errors import AttackMapError
+from .errors import UntrustedAnalyzerError as _errors_UntrustedAnalyzerError
 from .merge import MERGE_SCHEMA, initial_seen, merge_into
 from .models import AnalyzerError
 from .plugins_lock import OFFICIAL_PLUGINS
@@ -438,29 +440,27 @@ ALLOW_SYSTEM_INSTALL_ENV = "ATTACKMAP_ALLOW_SYSTEM_INSTALL"
 ALLOW_UNTRUSTED_ENV = "ATTACKMAP_ALLOW_UNTRUSTED_ANALYZERS"
 
 
-class MissingAnalyzersError(ValueError):
+class MissingAnalyzersError(AttackMapError, ValueError):
     """Requested official analyzers aren't installed (and weren't auto-installed)."""
+
+    code = "missing_analyzers"
+    remediation = (
+        "Install the missing official plugin with the pinned command the "
+        "error names, or drop it from --module."
+    )
 
     def __init__(self, missing: list[str]) -> None:
         self.missing = missing
-        super().__init__(f"Requested analyzer module(s) not available: {', '.join(missing)}")
-
-
-class UntrustedAnalyzerError(PermissionError):
-    """A non-official analyzer entry point was refused (AR006, AC-009).
-
-    Secure by default: only official, lock-pinned plugins load. The message
-    names the analyzer and the exact opt-in, so the remedy is on screen.
-    """
-
-    def __init__(self, analyzer: str, reason: str) -> None:
-        self.analyzer = analyzer
-        self.reason = reason
         super().__init__(
-            f"Analyzer '{analyzer}' refused: {reason}. "
-            f"Pass --allow-untrusted-analyzers (or set {ALLOW_UNTRUSTED_ENV}=1) "
-            "to load non-official analyzers."
+            f"Requested analyzer module(s) not available: {', '.join(missing)}",
+            code=self.code, remediation=self.remediation,
         )
+
+
+# AR012: the typed taxonomy lives in attackmap.errors; re-exported here so
+# `from attackmap.analyzers import UntrustedAnalyzerError` keeps working for
+# plugins and tests written before the move.
+UntrustedAnalyzerError = _errors_UntrustedAnalyzerError
 
 
 def official_plugin(name: str) -> dict | None:
