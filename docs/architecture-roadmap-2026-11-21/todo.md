@@ -369,6 +369,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR024 · Introduce `RunSpec` and adapters
 **Phase** 1 · **Priority** High · **Effort** 4 d · **Depends** AR022 · **Blocks** AR025, AR026, AR027, AR062
 **Lease** `orchestration` · **Acceptance** AC-105
+**Status** DONE (commit 916ac65, agent-delivered) — orchestration/run_spec.py: frozen RunSpec/AnalyzerSelection/FeatureFlags/BudgetSpec/AiSpec/FleetSpec, stdlib-only (cycles 43/43); adapters from_scan_request/from_cli/from_gui; RunSpec threads through execute_scan_request → pipeline as a data carrier (RunState.run_spec), nothing behavioural reads it yet; 15 focused tests + 354 regression green. AR025 deliberately stopped: its gate requires editing ~14 test files + ~100 options reads in pipeline.py — outside the orchestration lease; needs a lease extension or parent execution
 
 **Files** new `src/attackmap/orchestration/run_spec.py`; edits in `cli.py`,
 `scan_service.py`, `pipeline.py`, `ui/config.py`, `run_contract.py`
@@ -1056,8 +1057,7 @@ when no browser exists.
 ### AR085 · Release engineering
 **Phase** 4 · **Priority** Medium · **Effort** 5 d · **Depends** AR011 · **Blocks** AC-406
 **Lease** `release` · **Acceptance** AC-406
-**Status** IN_PROGRESS — slice 1 DONE (commit 13ecf74, agent-delivered): tools/build_release.py (dirty-tree refusal, SOURCE_DATE_EPOCH pinned, --no-isolation pinned build, release-manifest.json), tools/attest_release.py (dependency-free detached sha256 manifest, sha256sum --check compatible), 18 hermetic tests, docs/releases.md flow. Remaining slices: E2E two-build comparison (--twice --compare), CI wiring, real signing
-**Lease** `release` · **Acceptance** AC-406
+**Status** IN_PROGRESS — slice 1 DONE (13ecf74): tools/build_release.py (dirty-tree refusal, SOURCE_DATE_EPOCH pinned, --no-isolation pinned build, release-manifest.json), tools/attest_release.py (dependency-free detached sha256 manifest, sha256sum --check compatible), 18 hermetic tests. Slice 2 DONE (fff9ce4): --twice --compare AC-406 gate (BUILD REPRODUCIBLE / NOT REPRODUCIBLE + per-artifact diff), release.yml workflow (manual dispatch: reproducible-build, attestation, plugin-lock SBOM; no secrets, no publish), 25 tests total. Slice 3 owed: real signing over release-manifest.sha256, publication incl. Windows ZIP
 
 **Files** `tools/generate_release_sbom.py`, `tools/repro_build.py`,
 `.github/workflows/release.yml`

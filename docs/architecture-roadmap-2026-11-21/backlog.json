@@ -601,7 +601,7 @@
       "phase": 1,
       "priority": "High",
       "effort_days": 4.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR022"
       ],
@@ -623,7 +623,9 @@
         "src/attackmap/ui/config.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit 916ac65 (agent-delivered): orchestration/run_spec.py with frozen RunSpec/AnalyzerSelection/FeatureFlags/BudgetSpec/AiSpec/FleetSpec - stdlib-only, zero attackmap imports (cycles 43/43 unchanged); adapters from_scan_request/from_cli/from_gui; RunSpec threads through execute_scan_request -> pipeline as a data carrier (RunState.run_spec), nothing behavioural reads it yet (AR025/26 retire the old path); 15 focused tests (frozen-ness, round-trips, unknown-flag rejection, carrier threading) + 354 regression tests green"
+      ]
     },
     {
       "id": "AR025",
