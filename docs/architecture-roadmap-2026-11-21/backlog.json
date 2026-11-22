@@ -385,7 +385,7 @@
       "phase": 0,
       "priority": "High",
       "effort_days": 0.5,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR001",
         "AR002"
@@ -401,7 +401,9 @@
         "pyproject.toml"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "baseline.json + ratchet PASS (arch subset); coverage floor 21% measured + wired"
+      ]
     },
     {
       "id": "AR010",
@@ -409,7 +411,7 @@
       "phase": 0,
       "priority": "High",
       "effort_days": 0.5,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR001",
         "AR008"
@@ -423,7 +425,9 @@
         ".github/workflows/ci.yml"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "ci.yml: fast leg = unit+contract with cov-fail-under 21; full matrix = not live; live leg scheduled/manual only; pip-audit report-only + SBOM check in lint job"
+      ]
     },
     {
       "id": "AR011",
@@ -431,7 +435,7 @@
       "phase": 0,
       "priority": "Medium",
       "effort_days": 1.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR001"
       ],
@@ -448,7 +452,9 @@
         "pyproject.toml"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "plugin-lock SBOM --check (15 pinned, all OK); constraints.txt generated; pip-audit clean after opentelemetry-api 1.45.2 bump (CVE-2026-126360 fixed)"
+      ]
     },
     {
       "id": "AR012",

@@ -230,6 +230,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR009 · Baseline and ratchet configuration
 **Phase** 0 · **Priority** High · **Effort** 0.5 d · **Depends** AR001, AR002 · **Blocks** AC-004, AC-012
 **Lease** `ci-config` · **Acceptance** AC-004, AC-012
+**Status** DONE — baseline.json (ruff 383, mypy 494/62 files, cycles 49, broad 61, longest 788, >80-line 74, fan-in 63, modules 135, coverage floor 21%) + `tools/ratchet_check.py` (ratchet PASS on arch subset; directions encoded, tighten-only documented); coverage floor measured on fast selection in a clean worktree and wired as --cov-fail-under in CI
 
 **Files** `docs/architecture-roadmap-2026-11-21/baseline.json`, `pyproject.toml`
 
@@ -250,6 +251,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR010 · CI pipeline split
 **Phase** 0 · **Priority** High · **Effort** 0.5 d · **Depends** AR001, AR008 · **Blocks** —
 **Lease** `ci-config` · **Acceptance** AC-003
+**Status** DONE — test-fast = `-m "unit or contract" -n auto --timeout=120 --cov --cov-fail-under=21`; test-full = 3×3 matrix `-m "not live"`; test-live = scheduled/manual only; lint job carries the pip-audit (report-only) + plugin-lock SBOM steps. Note: "required checks" is a GitHub repo-settings action (not expressible in the YAML) — flip lint/types/test-fast to required when this lands on the upstream remote
 
 **Files** `.github/workflows/ci.yml`
 
@@ -268,6 +270,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR011 · Self supply chain
 **Phase** 0 · **Priority** Medium · **Effort** 1 d · **Depends** AR001 · **Blocks** AR085
 **Lease** `release` · **Acceptance** AC-013
+**Status** DONE — `generate_release_sbom.py --check` plugin-lock mode (15 analyzers, all pinned, content_verified); `constraints.txt` generated from the resolved venv; `pip-audit -r constraints.txt` clean after bumping opentelemetry-api to 1.45.2 (CVE-2026-126360); CI lint job runs the audit report-only for one release
 
 **Files** `.github/workflows/ci.yml`, `tools/generate_release_sbom.py` (extend), `pyproject.toml`
 

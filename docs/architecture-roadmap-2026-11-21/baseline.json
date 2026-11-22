@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "recorded": "2026-11-22",
-  "head": "post-AR012 (b550ae1 + AR008 layout move, pre-AR009)",
+  "head": "post-AR008 (a3daf0e)",
   "notes": [
     "The baseline may only be TIGHTENED: a metric may move in the improving",
     "direction freely; ratchet_check.py fails when any metric regresses past",
@@ -12,7 +12,10 @@
     "configuration (docs/ excluded); mypy_errors counts `mypy src/attackmap`",
     "errors under the pyproject configuration.",
     "The ruff count fell from the plan's 1092 to 383 because AR003/AR006/",
-    "AR007/AR012 cleared lint debt in every file they touched."
+    "AR007/AR012 cleared lint debt in every file they touched.",
+    "21% is the first-ever measured coverage for the fast selection: the floor",
+    "is deliberately conservative (it was captured on a run with the known",
+    "timing-noise failures) and is expected to ratchet upward."
   ],
   "metrics": {
     "ruff_total": 383,
@@ -24,6 +27,6 @@
     "functions_over_80_lines": 74,
     "models_fan_in": 63,
     "modules": 135,
-    "coverage_floor_pct": null
+    "coverage_floor_pct": 21
   }
 }
