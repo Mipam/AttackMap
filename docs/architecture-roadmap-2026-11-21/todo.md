@@ -495,6 +495,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR030 · Drive the cycle allowlist to zero
 **Phase** 1 · **Priority** High · **Effort** 4 d · **Depends** AR029 · **Blocks** AR031
 **Lease** `structure` · **Acceptance** AC-109
+**Status** DONE (commits f7cac75/c2a2f98/e9f9690/36e24a1/ba82f12, agent-delivered, wave 9) — cycles 41→**0** (allowlist `[]`, cap tightened 41→4→1→0), layer violations 27→**0** (baseline `[]`). Mechanisms: ledger split (record models stay in extraction; AnalyzerRunPlan→`orchestration/analyzer_run_plan.py`, repo passes→`orchestration/repo_passes.py`, merge→`extraction/merge.py`, MERGE_SCHEMA→`model/merge_schema.py`), contracts→`sdk/analyzer_contracts.py`, provenance/evidence-labels→model, desktop_actions resolver inversion (engine never imports the CLI shell), secrets→`foundation/secrets.py`, index pin→`foundation/index_pin.py`, snapshot→`foundation/snapshot.py`, resource limits→`foundation/resource_limits.py`, finding_identity→`reasoning/finding_identity.py`, fleet identity→`foundation/fleet_resource_identity.py`. One-release shims at every old home. Follow-ups: bare `-m attackmap.orchestration.desktop_actions` no longer serves capabilities/preflight (CLI/UI paths unaffected, registered at import); ratchet ruff scope now repo-wide (see baseline.json notes).
 
 **Files** `tests/architecture/cycle_allowlist.json`, whichever modules own each cycle
 
@@ -514,7 +515,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR031 · Per-layer import enforcement
 **Phase** 1 · **Priority** High · **Effort** 2 d · **Depends** AR030 · **Blocks** AR088
 **Lease** `tests-arch` · **Acceptance** AC-110
-**Status** IN_PROGRESS — slice 1 DONE (commit e4fd43d, agent-delivered, parallel with AR029): layer_map.py (strict stack surfaces>orchestration>reasoning>extraction>model>foundation + sdk island + output/ai lateral band + ~120-name flat transition map), test_layer_boundaries.py (6 tests incl. AC-110 negative path), tools/layer_report.py; transition-tolerant (enforces only modules already in target subpackages — violation_total 0, tightens automatically as AR029 lands). Slice 2 owed: full enforcement once AR029 + AR030 complete
+**Status** IN_PROGRESS — slice 1 DONE (commit e4fd43d, agent-delivered, parallel with AR029): layer_map.py (strict stack surfaces>orchestration>reasoning>extraction>model>foundation + sdk island + output/ai lateral band + ~120-name flat transition map), test_layer_boundaries.py (6 tests incl. AC-110 negative path), tools/layer_report.py; transition-tolerant (enforces only modules already in target subpackages — violation_total 0, tightens automatically as AR029 lands). Slice 2 owed: full enforcement once AR029 + AR030 complete — **unblocked NOW** (wave 9, ba82f12: cycles 0 + layer violations 0; the flat transition map in layer_map.py is now dead weight and slice 2 turns on full enforcement incl. `__init__` aggregators)
 
 **Files** `tests/architecture/test_import_boundaries.py`, `tools/arch_report.py`
 
@@ -576,6 +577,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR041 · Port route/auth rules
 **Phase** 2 · **Priority** High · **Effort** 5 d · **Depends** AR040 · **Blocks** AR046
 **Lease** `rules-routes` · **Acceptance** AC-201, AC-202
+**Status** DONE (commit b46c814, agent-delivered, wave 9) — 4 rules: `route_public_webhook`, `route_exposed_admin` (card says AM-ROUTE-002), `route_upload_import`, `route_weak_auth_controls`; equivalence sweep over 300 randomized mixed scans vs live cascade = 0 divergences (all fields incl. score via compute_finding_score). Unported (need context widening or stay pipeline-side): `unauth-state-change` + AM038 webhook exposure variant (AttackSurface exposure/category from excluded hint families + disk I/O), `unauth-outbound-integration`/`public-data-route` (exposure downgrade), `bola-modify`/`bola-read` (authz_candidates excluded). Wiring notes for AR046: RULE_TAXONOMY is keyed by legacy dashed ids — register snake_case ids or keep the explicit carry-over; module reuses 3 private threat_model helpers + 1 analyzer helper (inline when the cascade retires).
 
 **Files** `src/attackmap/reasoning/rules/route_auth.py`, `tests/rules/test_route_auth.py`
 
@@ -595,6 +597,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR042 · Port datastore/edge rules
 **Phase** 2 · **Priority** High · **Effort** 4 d · **Depends** AR040 · **Blocks** AR046
 **Lease** `rules-edges` · **Acceptance** AC-201, AC-202
+**Status** DONE (commit f00892b, agent-delivered, wave 9) — 4 rules: `same_file_datastore_edge`, `same_file_external_edge`, `same_module_datastore_edge`, `same_module_external_edge` (ports `_same_file_datastore`/`_same_file_external` + `_build_probable_chains` db/module branches, datastore-first priority verbatim); declared-vs-observed in tags (`declared-only`/`observed` + `ownership-unknown`); equivalence on identical ScanResult both sides. Unported (hint families excluded from the context): service/atproto/framework trust chains, exposure-dependent surface rules, AM038 observed-activity webhook (needs source_texts + disk I/O); "elsewhere in repo" tier deliberately not ported (cascade itself marks it un-chainable).
 
 **Files** `src/attackmap/reasoning/rules/datastore_edges.py`, `tests/rules/test_datastore_edges.py`
 
@@ -612,6 +615,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR043 · Port secrets/config rules
 **Phase** 2 · **Priority** High · **Effort** 4 d · **Depends** AR040 · **Blocks** AR046
 **Lease** `rules-secrets` · **Acceptance** AC-201, AC-202
+**Status** DONE (commit fe382d2, agent-delivered, wave 9) — 3 rules: `hardcoded_secret_literals` (legacy `hardcoded-secret`), `secret_env_references` (legacy `secret-env-reference`), `debug_mode_exposure` (web-hardening `debug_enabled` config-exposure family); taxonomy/CWE/ATT&CK derived live from the legacy-id registry so snake_case ids emit byte-identical enrichment; redaction-leak test proves no raw literal reaches any finding field end-to-end (placeholders/`CHANGE_ME`/`${VAR}`/SRI+sha digests fire nothing). Unported: `secret-in-git-history` (needs a `secret_history` context slice — not widened, context.py was leased); deployment-alias findings have NO cascade branch to port (aliases feed topology seam resolution, not findings) — card premise corrected.
 
 **Files** `src/attackmap/reasoning/rules/secrets.py`, `tests/rules/test_secrets.py`
 
@@ -629,6 +633,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR044 · Port taint/flow rules
 **Phase** 2 · **Priority** High · **Effort** 5 d · **Depends** AR040 · **Blocks** AR046
 **Lease** `rules-taint` · **Acceptance** AC-201, AC-202
+**Status** DONE (commit 2f64314, agent-delivered, wave 9) — 34 rules in 3 families: `taint_sink_<kind>` ×16, `taint_flow_<kind>` ×2 (`_confidence_for_hops` copied verbatim 0→0.65/1→0.60/≥2→0.50, asserted in-test), `taint_speculative_<kind>` ×16; equivalence field-for-field incl. ATT&CK/SARIF codeFlows/top-chain selection/overflow caps. Convention note: emitted `Finding.rule_id` stays the LEGACY dashed id (taxonomy registry + suppression keys keyed by legacy ids keep working; RuleMeta.id is the new stable identity) — the wiring pass (AR046) owns the cutover and must reconcile with AR041/42/43/45's emit-snake_case convention. Unported: exploitability fusion (needs crypto/databases/dependencies/surfaces slices — pipeline-side per docstring); findings leave `exploitability is None` until wiring applies the fusion. Filename deviation (parent, integration): test file renamed to `tests/rules/test_taint_flow_rules.py` — card's `test_taint_flow.py` collides with `tests/integration/test_taint_flow.py` under pytest import mode (same pattern as AR045).
 
 **Files** `src/attackmap/reasoning/rules/taint_flow.py`, `tests/rules/test_taint_flow.py`
 
@@ -646,6 +651,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR045 · Port supply-chain/workflow rules
 **Phase** 2 · **Priority** High · **Effort** 4 d · **Depends** AR040 · **Blocks** AR046
 **Lease** `rules-supply` · **Acceptance** AC-201, AC-202
+**Status** DONE (commit 984aa65, agent-delivered, wave 9) — 3 rules covering 24 legacy ids: `vulnerable_dependency` (CVE-on-path), `workflow_security` (17 workflow ids: unpinned action, curl-pipe, write-all token, OIDC misuse, script/env injection, artifact/cache poisoning…), `supply_chain_risk` (6 ids: dependency confusion, typosquat, mutable VCS, install scripts, unlocked manifest, insecure registry); ReasoningContext widened (the only licensed widening, wave 9): `vulnerabilities`/`workflow_issues`/`supply_chain_issues` slices, kernel tests stay green, ScanResult still never exposed. Filename deviation: test file is `tests/rules/test_supply_chain_rules.py` (card's `test_supply_chain.py` collides with `tests/integration/test_supply_chain.py` under pytest import mode — bare collection breaks; keep test basenames unique suite-wide). Unported: `scan.dependencies` (DependencyHint) has no finding branch (feeds the ai-layer SBOM/CVE lookup upstream).
 
 **Files** `src/attackmap/reasoning/rules/supply_chain.py`, `tests/rules/test_supply_chain.py`
 
@@ -663,6 +669,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR046 · Rule catalog and generated docs
 **Phase** 2 · **Priority** Medium · **Effort** 2 d · **Depends** AR041–AR045 · **Blocks** AR087
 **Lease** `rules-docs` · **Acceptance** AC-204, AC-205
+**Status** NOT_STARTED (unblocked by wave 9) — registry holds **49 rules** (≥40 AC-201 met). Wiring notes from the ports: (1) decide the emitted `Finding.rule_id` convention — AR044 emits legacy dashed ids (taxonomy/suppression keep working), AR041/42/43/45 emit snake_case ids; unify, and register the chosen ids in RULE_TAXONOMY so auto-attached taxonomy/ATT&CK never depends on explicit carry-over; (2) apply `compute_finding_score` over REGISTRY.evaluate_all output (ports leave score None); (3) re-apply exploitability fusion (taint rules leave it None — needs surfaces/crypto/db/dependency context or a pipeline-side pass); (4) `rules list --json` / `rules show <id>` back onto the registry; (5) `tests/rules/` basenames must stay unique suite-wide (no `__init__.py` there by design).
 
 **Files** `tools/gen_rule_docs.py`, `docs/reference/rules/`, `.github/workflows/ci.yml`
 

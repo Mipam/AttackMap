@@ -1,9 +1,9 @@
 """Reasoning rule package: the contract (`base`), the registry (`registry`),
-and the seed reference rule.
+the seed reference rule, and the ported cascade rule modules (AR041-AR045).
 
-Real rule modules (AR041-AR045: route/auth, taint, secrets, hardening,
-protocol overlays) register here in later tasks; each new module is data
-plus one evaluate method — no kernel changes.
+Each rule module self-registers its rules into ``REGISTRY`` on import; the
+registry is not yet wired into the pipeline (AR046 owns the wiring pass),
+so the legacy cascade in ``threat_model`` remains the active producer.
 """
 
 from __future__ import annotations
@@ -79,3 +79,6 @@ class WeakDefaultCredentialsRule:
 
 
 REGISTRY.register(WeakDefaultCredentialsRule())
+
+# Ported cascade rules (AR041-AR045): import-for-registration only.
+from . import datastore_edges, route_auth, secrets, supply_chain, taint_flow  # noqa: E402,F401

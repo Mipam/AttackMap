@@ -194,13 +194,16 @@ def test_actual_background_sdk_read_after_analyze_scope_and_during_shutdown(tmp_
 
 def test_process_pin_is_immutable_without_installing_into_parent(tmp_path, monkeypatch):
     import attackmap.extraction.index as module
+    from attackmap.foundation import index_pin
+
     root, index = capture(tmp_path)
     other = tmp_path / "other"
     other.mkdir()
     conflicting = RepoIndex.build(other)
-    # Inject the child-only starting state; restoration prevents parent/default
-    # SDK behavior from changing in this test process.
-    monkeypatch.setattr(module, "_PROCESS_SNAPSHOT", None)
+    # Inject the child-only starting state (AR030: the pin state lives in
+    # foundation.index_pin; extraction.index re-exports the functions);
+    # restoration prevents parent/default SDK behavior from changing here.
+    monkeypatch.setattr(index_pin, "_PROCESS_SNAPSHOT", None)
     module.install_process_snapshot(index)
     module.install_process_snapshot(index)
     with pytest.raises(ValueError, match="cannot replace"):

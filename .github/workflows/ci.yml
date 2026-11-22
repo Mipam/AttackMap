@@ -120,12 +120,13 @@ jobs:
           mypy --follow-imports=silent \
             src/attackmap/foundation/safe_fs.py \
             src/attackmap/foundation/redact.py \
+            src/attackmap/foundation/index_pin.py \
             src/attackmap/extraction/merge.py \
-            src/attackmap/extraction/evidence.py \
-            src/attackmap/output/finding_identity.py \
+            src/attackmap/model/evidence_labels.py \
+            src/attackmap/model/signal_provenance.py \
+            src/attackmap/reasoning/finding_identity.py \
             src/attackmap/foundation/srcpaths.py \
             src/attackmap/model/taxonomy.py \
-            src/attackmap/reasoning/signal_provenance.py \
             src/attackmap/output/md.py \
             src/attackmap/extraction/progress.py
 

@@ -772,7 +772,7 @@
       "phase": 1,
       "priority": "High",
       "effort_days": 4.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR029"
       ],
@@ -787,7 +787,9 @@
         "tests/architecture/cycle_allowlist.json"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commits f7cac75/c2a2f98/e9f9690/36e24a1/ba82f12 (agent-delivered, wave 9): cycles 41->0 (allowlist [], cap tightened 41->4->1->0) and layer violations 27->0 (baseline []). Mechanisms: ledger split (records stay in extraction; AnalyzerRunPlan -> orchestration/analyzer_run_plan.py, repo passes -> orchestration/repo_passes.py, merge -> extraction/merge.py, MERGE_SCHEMA -> model/merge_schema.py), contracts -> sdk/analyzer_contracts.py, provenance/evidence labels -> model/, desktop_actions resolver inversion (engine never imports the CLI shell), secrets -> foundation/secrets.py, index pin -> foundation/index_pin.py, snapshot -> foundation/snapshot.py, resource limits -> foundation/resource_limits.py, finding_identity -> reasoning/finding_identity.py, fleet identity -> foundation/fleet_resource_identity.py; one-release shims at every old home. Architecture 11 passed; ratchet PASS. Follow-ups: bare -m attackmap.orchestration.desktop_actions no longer serves capabilities/preflight (CLI/UI paths register the resolver at import and are unaffected); ratchet ruff scope corrected to repo-wide (baseline.json notes)."
+      ]
     },
     {
       "id": "AR031",
@@ -883,7 +885,7 @@
       "phase": 2,
       "priority": "High",
       "effort_days": 5.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR040"
       ],
@@ -900,7 +902,9 @@
         "tests/rules/test_route_auth.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit b46c814 (agent-delivered, wave 9): 4 rules route_public_webhook/route_exposed_admin/route_upload_import/route_weak_auth_controls; equivalence sweep 300 randomized mixed scans vs live cascade = 0 divergences (all fields incl. score). Unported: unauth-state-change + AM038 webhook variant + unauth-outbound-integration/public-data-route (AttackSurface exposure/category derived from excluded hint families), bola-modify/bola-read (authz_candidates excluded). AR046 wiring: RULE_TAXONOMY keyed by legacy ids - register snake_case ids or keep explicit carry-over."
+      ]
     },
     {
       "id": "AR042",
@@ -908,7 +912,7 @@
       "phase": 2,
       "priority": "High",
       "effort_days": 4.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR040"
       ],
@@ -925,7 +929,9 @@
         "tests/rules/test_datastore_edges.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit f00892b (agent-delivered, wave 9): 4 rules same_file_datastore_edge/same_file_external_edge/same_module_datastore_edge/same_module_external_edge (ports of _same_file_datastore/_same_file_external + _build_probable_chains module branches, datastore-first priority verbatim); declared-vs-observed in tags; equivalence on identical ScanResult both sides. Unported: service/atproto/framework trust chains + exposure-dependent surface rules (hint families excluded from ReasoningContext); elsewhere-in-repo tier deliberately not ported (cascade marks it un-chainable)."
+      ]
     },
     {
       "id": "AR043",
@@ -933,7 +939,7 @@
       "phase": 2,
       "priority": "High",
       "effort_days": 4.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR040"
       ],
@@ -950,7 +956,9 @@
         "tests/rules/test_secrets.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit fe382d2 (agent-delivered, wave 9): 3 rules hardcoded_secret_literals/secret_env_references/debug_mode_exposure; taxonomy derived live from legacy-id registry (byte-identical enrichment); redaction-leak test proves no raw literal reaches any finding field (placeholders/CHANGE_ME/${VAR}/SRI+sha digests fire nothing); equivalence field-by-field incl. confidence tiering >=0.6, evidence cap 10, +N more overflow. Unported: secret-in-git-history (needs a secret_history context slice); deployment-alias findings have NO cascade branch (aliases feed topology seam resolution) - card premise corrected."
+      ]
     },
     {
       "id": "AR044",
@@ -958,7 +966,7 @@
       "phase": 2,
       "priority": "High",
       "effort_days": 5.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR040"
       ],
@@ -972,10 +980,12 @@
       ],
       "files": [
         "src/attackmap/reasoning/rules/taint_flow.py",
-        "tests/rules/test_taint_flow.py"
+        "tests/rules/test_taint_flow_rules.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit 2f64314 (agent-delivered, wave 9; test file renamed by parent in integration commit - card name collides with tests/integration/test_taint_flow.py under pytest import mode): 34 rules in 3 families taint_sink_<kind> x16 / taint_flow_<kind> x2 / taint_speculative_<kind> x16; _confidence_for_hops verbatim (0->0.65/1->0.60/>=2->0.50 asserted); equivalence field-for-field incl. ATT&CK/SARIF codeFlows. Emitted Finding.rule_id stays LEGACY dashed id (taxonomy/suppression keys keep working) - AR046 owns the convention cutover. Unported: exploitability fusion (pipeline-side; findings leave exploitability None until wiring)."
+      ]
     },
     {
       "id": "AR045",
@@ -983,7 +993,7 @@
       "phase": 2,
       "priority": "High",
       "effort_days": 4.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR040"
       ],
@@ -997,10 +1007,13 @@
       ],
       "files": [
         "src/attackmap/reasoning/rules/supply_chain.py",
-        "tests/rules/test_supply_chain.py"
+        "src/attackmap/reasoning/context.py",
+        "tests/rules/test_supply_chain_rules.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit 984aa65 (agent-delivered, wave 9; test file renamed from card name - collides with tests/integration/test_supply_chain.py under pytest import mode): 3 rules covering 24 legacy ids (vulnerable_dependency CVE-on-path, workflow_security x17 ids incl. unpinned-action/curl-pipe/write-all-token/OIDC, supply_chain_risk x6 ids); ReasoningContext widened with vulnerabilities/workflow_issues/supply_chain_issues slices (only licensed widening; kernel tests green, ScanResult still never exposed); workflow evidence structure byte-for-byte incl. 10-item cap and location dedupe. Unported: scan.dependencies (DependencyHint) has no finding branch (feeds ai-layer SBOM/CVE lookup upstream)."
+      ]
     },
     {
       "id": "AR046",

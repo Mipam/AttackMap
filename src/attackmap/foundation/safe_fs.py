@@ -271,7 +271,7 @@ def _artifact_json(path: Path, limit: int) -> dict[str, Any] | None:
 
 def _is_legacy_artifact(name: str, data: dict[str, Any]) -> bool:
     """Recognize old report structures without reserving their basenames."""
-    shapes = {
+    shapes: dict[str, dict[str, type[Any]]] = {
         "attackmap-report.json": {"scan": dict, "findings": list, "attack_paths": list, "attack_surfaces": list},
         "run-manifest.json": {"engine_version": str, "analyzers": list, "stages": list, "files_scanned": int, "findings_by_severity": dict},
         "defensive-review.json": {"schema_version": str, "target_metadata": dict, "raw_structured_signals": dict, "limitations_meta": dict},
@@ -288,7 +288,9 @@ def _is_legacy_artifact(name: str, data: dict[str, Any]) -> bool:
             for value in overall.values()
         )
     required = shapes.get(name)
-    return bool(required) and all(isinstance(data.get(key), kind) for key, kind in required.items())
+    if not required:
+        return False
+    return all(isinstance(data.get(key), kind) for key, kind in required.items())
 
 
 def _is_pins_payload(data: dict[str, Any]) -> bool:
