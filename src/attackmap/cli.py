@@ -583,29 +583,13 @@ def analyze(
     ),
 ) -> None:
     validation_started = time.perf_counter()
-    # The pipeline resolves ATTACKMAP_TIME_BUDGET_SECONDS as its documented
-    # override (C35); publishing an explicit flag here also propagates the
-    # ceiling to any fleet worker subprocesses, which inherit this environment.
-    # An unset flag leaves the environment untouched (env var → 600s default).
-    if time_budget_seconds is not None:
-        os.environ["ATTACKMAP_TIME_BUDGET_SECONDS"] = str(time_budget_seconds)
-    # C34/AM048: --incremental (default off) activates the per-file cache via
-    # the documented env knob — the same propagation contract as the budget
-    # above, so in-process runs and fleet worker subprocesses both see it.
-    # The flag is restored on context close so repeated in-process invocations
-    # (tests, GUI front-ends) don't leak activation into later scans; an
-    # operator-set ATTACKMAP_INCREMENTAL=1 without the flag stays honored.
-    if incremental and os.environ.get(INCREMENTAL_ENV) != "1":
-        previous_incremental = os.environ.get(INCREMENTAL_ENV)
-
-        def _restore_incremental_env() -> None:
-            if previous_incremental is None:
-                os.environ.pop(INCREMENTAL_ENV, None)
-            else:
-                os.environ[INCREMENTAL_ENV] = previous_incremental
-
-        os.environ[INCREMENTAL_ENV] = "1"
-        ctx.call_on_close(_restore_incremental_env)
+    # AR026/AC-106: no feature flags are written to the environment. The
+    # elapsed-time ceiling travels on RunSpec.budget (in-process) and reaches
+    # fleet worker subprocesses via --time-budget-seconds argv; the
+    # incremental flag travels on RunSpec.features and reaches workers via
+    # --incremental argv. Operator-set ATTACKMAP_TIME_BUDGET_SECONDS /
+    # ATTACKMAP_INCREMENTAL=1 remain honored as documented env escape hatches
+    # (read-only) by the pipeline and the spec build below.
     fleet_incompatible = {
         "--baseline": baseline is not None,
         "--diff-output": diff_output is not None,
@@ -627,17 +611,10 @@ def analyze(
 
         # Validate progress format before either branch, so the fleet path enforces
         # the same option semantics as a single-repo run (#146a).
-        if trusted_analyzers_only and os.environ.get(TRUSTED_ONLY_ENV) != "1":
-            previous = os.environ.get(TRUSTED_ONLY_ENV)
-            os.environ[TRUSTED_ONLY_ENV] = "1"
-
-            def _restore_trust_env() -> None:
-                if previous is None:
-                    os.environ.pop(TRUSTED_ONLY_ENV, None)
-                else:
-                    os.environ[TRUSTED_ONLY_ENV] = previous
-
-            ctx.call_on_close(_restore_trust_env)
+        # AR026/AC-106: --trusted-analyzers-only stays an accepted no-op; it no
+        # longer publishes ATTACKMAP_TRUSTED_ANALYZERS_ONLY into the process
+        # environment. Non-official analyzers are refused by default, and the
+        # operator escape hatch (setting the env var) is still honored read-only.
         _validate_analyze_options(
             ctx,
             progress_format=progress_format,

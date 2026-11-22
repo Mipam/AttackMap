@@ -1,4 +1,14 @@
-"""Opt-in logical fleet memory reservations; these do not enforce OS limits."""
+"""Opt-in logical fleet memory reservations; these do not enforce OS limits.
+
+AR026/AC-106: the current reservation is deliberately carried in a
+``ContextVar`` (``reservation_scope`` / ``current_reservation``). Admission
+ownership spans threads and callbacks that the process supervisor invokes —
+launch, progress, verified-cleanup settlement — and threading an explicit
+reservation through every supervisor callback would change the execution/
+supervisor contract. That library boundary makes the ContextVar unavoidable,
+so it is kept and documented here instead of being replaced by an explicit
+argument.
+"""
 from __future__ import annotations
 
 from contextlib import contextmanager

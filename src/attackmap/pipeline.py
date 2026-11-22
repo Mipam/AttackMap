@@ -40,7 +40,7 @@ from .diff import (
 from .finding_identity import legacy_id_aliases
 from .gitref import GitRefError
 from .hunt_harness import run_majority_verify
-from .index import RepoIndex, active_index_for, clear_pinned_index
+from .index import RepoIndex, clear_pinned_index
 from .llm_review import LlmReviewError, generate_llm_review
 from .md import sanitize_llm_markdown
 from .models import AnalyzerError, AttackPath, AttackSurface, Finding, ScanResult
@@ -460,10 +460,12 @@ def _run_scan(
     scan = state.scan
     assert scan is not None
 
-    # The index analyze_repository captured for this run (C33/AM047): threaded
-    # into translation so fingerprints hash the analyzed revision, not the live
-    # tree. None when no index was pinned in this thread (stubbed scans).
-    run_index = active_index_for(repo_path)
+    # The index this run's _select stage captured (C33/AM047), threaded
+    # explicitly (AR026: no ambient pin reads in the pipeline) into translation
+    # so fingerprints hash the analyzed revision, not the live tree. Analyzer
+    # passes without an index parameter still resolve through the documented
+    # index.py ContextVar boundary.
+    run_index = captured_index
 
     if spec.features.recall:
         speculative = sum(1 for c in scan.taint_chains if c.speculative)

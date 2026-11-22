@@ -344,9 +344,10 @@ def _run_fleet_repo_argv(
         argv.append("--strict-analyzers")
     if spec.analyzer.isolated:
         argv.append("--isolated-analyzers")
-    # Fleet supervision is request transport (desktop callers set it until
-    # dispatch); the budget ceiling itself lives on the spec.
-    if request.fleet_supervised and spec.budget.time_budget_seconds is not None:
+    # AR026/AC-106: no environment feature-flag inheritance. The explicit
+    # elapsed-time ceiling travels on the spec and reaches every fleet worker
+    # via argv; the old ATTACKMAP_TIME_BUDGET_SECONDS write is gone.
+    if spec.budget.time_budget_seconds is not None:
         argv.extend(["--time-budget-seconds", str(spec.budget.time_budget_seconds)])
     if spec.features.incremental:
         # The worker re-parses the flag, so the subprocess scan activates the

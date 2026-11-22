@@ -259,6 +259,35 @@ def test_runspec_carrier_field_on_run_state():
     assert RunState(spec=RunSpec()).spec == RunSpec()
 
 
+def test_runspec_no_feature_flag_env_writes():
+    """AC-106/AR026: no ``os.environ[...] = ...`` writes anywhere in the engine.
+
+    Feature configuration travels on RunSpec (and fleet worker argv), never
+    through ambient environment mutation; documented env *reads* stay.
+    """
+    import ast
+
+    root = Path(__file__).resolve().parents[2] / "src" / "attackmap"
+    offenders: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                targets = node.targets
+            elif isinstance(node, (ast.AugAssign, ast.AnnAssign)):
+                targets = [node.target]
+            else:
+                continue
+            for target in targets:
+                if (isinstance(target, ast.Subscript)
+                        and isinstance(target.value, ast.Attribute)
+                        and target.value.attr == "environ"
+                        and isinstance(target.value.value, ast.Name)
+                        and target.value.value.id == "os"):
+                    offenders.append(f"{path.relative_to(root.parent.parent)}:{node.lineno}")
+    assert offenders == []
+
+
 def test_runspec_threads_through_execute_scan_request(monkeypatch):
     from attackmap import scan_service
 

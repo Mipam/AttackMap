@@ -2,6 +2,15 @@
 
 Output allowances do not bound input tokens, reasoning hidden by a provider,
 or billing. Missing usage retains the reservation rather than claiming zero.
+
+AR026/AC-106: the active ledger is deliberately carried in a ``ContextVar``
+(``budget_scope`` / ``current_budget``). Every LLM call site — narrative
+review, hunt/jury rounds, remediation, triage, desktop AI modes and plugin
+providers — must observe one shared allowance, and threading an explicit
+budget parameter through ``generate_llm_review`` and every plugin provider
+boundary would change the analyzer-facing contract. That library boundary
+makes the ContextVar unavoidable, so it is kept and documented here instead
+of being replaced by an explicit argument.
 """
 from __future__ import annotations
 

@@ -100,6 +100,13 @@ _SNAPSHOT_SCHEMA = "attackmap-snapshot/1.0"
 # (SBOM, supply-chain, workflows, authz, anomalies, fingerprints) read the
 # captured revision even where their call sites thread no index explicitly.
 # Lookups are root-gated and per-thread; a newer build for the same root wins.
+# AR026/AC-106: this ContextVar is deliberate and documented. The pipeline
+# threads its own captured index explicitly (``analyze_repository(index=...)``
+# and translation), but analyzer passes, plugin pass registries and the SDK
+# surface (``PassSources.for_root``, ``sdk/fs.py``) resolve content through
+# the ambient pin because their contracts accept no index parameter — a
+# library boundary that makes removing the ContextVar unavoidable without
+# redesigning the analyzer pass contract.
 _PINNED: ContextVar[RepoIndex | None] = ContextVar("attackmap_pinned_index", default=None)
 _PROCESS_SNAPSHOT: RepoIndex | None = None
 _PROCESS_SNAPSHOT_LOCK = Lock()
