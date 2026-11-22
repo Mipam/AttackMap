@@ -227,14 +227,61 @@ def generate(package_dir: Path, output_dir: Path, engine_venv: Path = DEFAULT_EN
     return sbom, target
 
 
+def plugin_lock_sbom() -> dict:
+    """Plugin-lock SBOM (AR011, AC-013): the pinned official analyzers.
+
+    ``pin_status`` is ``pinned`` only when the lock carries a full 40-hex git
+    commit — an immutable ref whose content git's object model guarantees.
+    ``content_verified`` is true exactly when pinned: the install URL embeds
+    the commit, so what installs is byte-identical to what the lock recorded.
+    """
+    from attackmap.plugins_lock import OFFICIAL_PLUGINS
+
+    analyzers = []
+    for entry in OFFICIAL_PLUGINS:
+        sha = str(entry.get("git_sha", ""))
+        pinned = bool(re.fullmatch(r"[0-9a-f]{40}", sha))
+        analyzers.append({
+            "package": entry["package"],
+            "repo": entry.get("repo"),
+            "sha": sha if pinned else "",
+            "pin_status": "pinned" if pinned else "unpinned",
+            "content_verified": pinned,
+        })
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "sbom_kind": "attackmap-analyzer-plugin-lock",
+        "analyzer_count": len(analyzers),
+        "analyzers": analyzers,
+    }
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--package", required=True, help="immutable package directory containing package-manifest.json")
-    parser.add_argument("--output", required=True, help="target directory for release-sbom.json (must be outside the package)")
+    parser.add_argument("--package", help="immutable package directory containing package-manifest.json")
+    parser.add_argument("--output", help="target directory for release-sbom.json (must be outside the package)")
     parser.add_argument("--engine-venv", default=str(DEFAULT_ENGINE_VENV),
                         help="freeze venv used for the packaged engine's pip freeze inventory (default: %(default)s)")
+    parser.add_argument("--check", nargs="?", const="sbom.json", default=None, metavar="SBOM_PATH",
+                        help="plugin-lock mode (AR011, AC-013): write the pinned-analyzer SBOM "
+                        "and fail if any official plugin is not pinned to an immutable commit")
     args = parser.parse_args(argv)
     try:
+        if args.check is not None:
+            sbom = plugin_lock_sbom()
+            target = Path(args.check)
+            target.write_text(json.dumps(sbom, indent=2) + "\n", encoding="utf-8")
+            print(f"SBOM: {target}")
+            print(f"Analyzers: {len(sbom['analyzers'])} official plugins")
+            for entry in sbom["analyzers"]:
+                status = "OK" if entry["pin_status"] == "pinned" else "UNPINNED"
+                print(f"  [{status}] {entry['package']} @ {entry['sha'][:12]}")
+            if any(a["pin_status"] != "pinned" for a in sbom["analyzers"]):
+                print("error: an official plugin is not pinned to an immutable commit", file=sys.stderr)
+                return 2
+            return 0
+        if not args.package or not args.output:
+            parser.error("--package and --output are required unless --check is used")
         sbom, target = generate(Path(args.package), Path(args.output), Path(args.engine_venv))
     except ToolError as error:
         print(f"error: {error}", file=sys.stderr)
