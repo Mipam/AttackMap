@@ -744,7 +744,7 @@
       "phase": 1,
       "priority": "High",
       "effort_days": 5.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR022",
         "AR025"
@@ -762,7 +762,9 @@
         "pyproject.toml"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit 5cfc88a (agent-delivered): 108 flat root modules + ui/ package (14 submodules) git-mv into foundation/extraction(+ecosystems)/reasoning/orchestration/output/ai/surfaces per roadmap 2.3; sdk/, policy/, execution/, model/, extraction/{__init__,ledger,adapters} and root shims untouched; every import rewritten; pyproject entry point attackmap.surfaces.cli:app + package-data + B008 ignore path relocated; installer/entry.py + attackmap.spec updated (frozen-build tests exercise them); 5 one-release root shims keep python -m attackmap.cli, native launcher strings and retained WP030 evidence working; cycles 43 -> 41 (allowlist regenerated exact-set, cap tightened); architecture gate 5/5; full suite 6412 passed / 12 failed = 11 known host failures + AR031 layer test now legitimately flagging 27 pre-existing flat-tree edges (the AR030 worklist, ratchet-style baseline added by parent); ruff repo-wide 876 -> 659; 160 modules import cleanly; all entry points verified"
+      ]
     },
     {
       "id": "AR030",

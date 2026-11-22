@@ -474,6 +474,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR029 · Subpackage restructure
 **Phase** 1 · **Priority** High · **Effort** 5 d · **Depends** AR022, AR025 · **Blocks** AR031
 **Lease** `structure` · **Acceptance** AC-103, AC-109
+**Status** DONE (commit 5cfc88a, agent-delivered) — 108 flat modules + ui/ package moved into foundation/extraction(+ecosystems)/reasoning/orchestration/output/ai/surfaces; model/, sdk/, policy/, execution/ and root deprecation shims untouched; pyproject entry point relocated to attackmap.surfaces.cli:app; installer + native launcher strings kept working via 5 one-release root shims (drop after retarget); cycles 43→41 (cap tightened); architecture 5/5; full suite 6412 passed / 12 = 11 known + AR031 layer test now flagging 27 pre-existing flat edges (ratchet-style baseline added by parent — the AR030 worklist); ruff repo-wide 876→659; all entry points verified. CI ci.yml mypy-island paths updated by parent in the follow-up commit
 
 **Files** `src/attackmap/**` (moves), `pyproject.toml` (package discovery)
 

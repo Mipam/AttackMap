@@ -118,16 +118,16 @@ jobs:
       - name: mypy strict island (blocking)
         run: |
           mypy --follow-imports=silent \
-            src/attackmap/safe_fs.py \
-            src/attackmap/redact.py \
-            src/attackmap/merge.py \
-            src/attackmap/evidence.py \
-            src/attackmap/finding_identity.py \
-            src/attackmap/srcpaths.py \
-            src/attackmap/taxonomy.py \
-            src/attackmap/signal_provenance.py \
-            src/attackmap/md.py \
-            src/attackmap/progress.py
+            src/attackmap/foundation/safe_fs.py \
+            src/attackmap/foundation/redact.py \
+            src/attackmap/extraction/merge.py \
+            src/attackmap/extraction/evidence.py \
+            src/attackmap/output/finding_identity.py \
+            src/attackmap/foundation/srcpaths.py \
+            src/attackmap/model/taxonomy.py \
+            src/attackmap/reasoning/signal_provenance.py \
+            src/attackmap/output/md.py \
+            src/attackmap/extraction/progress.py
 
       - name: mypy full package report (non-blocking; ratchet tracks the count)
         continue-on-error: true

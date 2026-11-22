@@ -1,0 +1,169 @@
+{
+  "schema": 1,
+  "note": "AR030 worklist baseline: pre-existing flat-tree layer edges inherited at the AR029 restructure. Shrink toward zero; the test fails only on NEW layer pairs.",
+  "violation_total": 27,
+  "violations": [
+    {
+      "source_layer": "extraction",
+      "target_layer": "ai",
+      "module": "attackmap.extraction.scanner",
+      "detail": "extraction/scanner.py:14: attackmap.extraction.scanner imports attackmap.ai.sbom (extraction -> ai); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "ai",
+      "module": "attackmap.extraction.scanner",
+      "detail": "extraction/scanner.py:15: attackmap.extraction.scanner imports attackmap.ai.supply_chain (extraction -> ai); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "orchestration",
+      "module": "attackmap.extraction.config_scanner",
+      "detail": "extraction/config_scanner.py:1115: attackmap.extraction.config_scanner imports attackmap.orchestration.fleet (extraction -> orchestration); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "orchestration",
+      "module": "attackmap.extraction.ecosystems.ecosystem_php",
+      "detail": "extraction/ecosystems/ecosystem_php.py:1237: attackmap.extraction.ecosystems.ecosystem_php imports attackmap.orchestration.analyzers (extraction -> orchestration); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "orchestration",
+      "module": "attackmap.extraction.ledger",
+      "detail": "extraction/ledger.py:92: attackmap.extraction.ledger imports attackmap.orchestration.analyzer_catalog (extraction -> orchestration); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "orchestration",
+      "module": "attackmap.extraction.ledger",
+      "detail": "extraction/ledger.py:93: attackmap.extraction.ledger imports attackmap.orchestration.analyzers (extraction -> orchestration); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "reasoning",
+      "module": "attackmap.extraction.analyzer_host",
+      "detail": "extraction/analyzer_host.py:336: attackmap.extraction.analyzer_host imports attackmap.reasoning.analyzer_contracts (extraction -> reasoning); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "reasoning",
+      "module": "attackmap.extraction.analyzer_host",
+      "detail": "extraction/analyzer_host.py:337: attackmap.extraction.analyzer_host imports attackmap.reasoning.signal_provenance (extraction -> reasoning); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "reasoning",
+      "module": "attackmap.extraction.ecosystems.ecosystem_php",
+      "detail": "extraction/ecosystems/ecosystem_php.py:74: attackmap.extraction.ecosystems.ecosystem_php imports attackmap.reasoning.analyzer_contracts (extraction -> reasoning); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "reasoning",
+      "module": "attackmap.extraction.ecosystems.python_django_routes",
+      "detail": "extraction/ecosystems/python_django_routes.py:377: attackmap.extraction.ecosystems.python_django_routes imports attackmap.reasoning.signal_provenance (extraction -> reasoning); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "reasoning",
+      "module": "attackmap.extraction.ledger",
+      "detail": "extraction/ledger.py:16: attackmap.extraction.ledger imports attackmap.reasoning.analyzer_contracts (extraction -> reasoning); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "reasoning",
+      "module": "attackmap.extraction.scanner",
+      "detail": "extraction/scanner.py:27: attackmap.extraction.scanner imports attackmap.reasoning.anomalies (extraction -> reasoning); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "reasoning",
+      "module": "attackmap.extraction.scanner",
+      "detail": "extraction/scanner.py:28: attackmap.extraction.scanner imports attackmap.reasoning.authz (extraction -> reasoning); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "reasoning",
+      "module": "attackmap.extraction.scanner",
+      "detail": "extraction/scanner.py:29: attackmap.extraction.scanner imports attackmap.reasoning.crypto (extraction -> reasoning); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "reasoning",
+      "module": "attackmap.extraction.scanner",
+      "detail": "extraction/scanner.py:30: attackmap.extraction.scanner imports attackmap.reasoning.taint (extraction -> reasoning); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "reasoning",
+      "module": "attackmap.extraction.scanner",
+      "detail": "extraction/scanner.py:31: attackmap.extraction.scanner imports attackmap.reasoning.weaknesses (extraction -> reasoning); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "extraction",
+      "target_layer": "reasoning",
+      "module": "attackmap.extraction.scanner",
+      "detail": "extraction/scanner.py:32: attackmap.extraction.scanner imports attackmap.reasoning.webhardening (extraction -> reasoning); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "foundation",
+      "target_layer": "extraction",
+      "module": "attackmap.foundation.artifact_manifest",
+      "detail": "foundation/artifact_manifest.py:160: attackmap.foundation.artifact_manifest imports attackmap.extraction.index (foundation -> extraction); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "foundation",
+      "target_layer": "model",
+      "module": "attackmap.foundation.diagnostics",
+      "detail": "foundation/diagnostics.py:16: attackmap.foundation.diagnostics imports attackmap.models (foundation -> model); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "model",
+      "target_layer": "extraction",
+      "module": "attackmap.model.observations",
+      "detail": "model/observations.py:529: attackmap.model.observations imports attackmap.extraction.evidence (model -> extraction); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "orchestration",
+      "target_layer": "surfaces",
+      "module": "attackmap.orchestration.desktop_actions",
+      "detail": "orchestration/desktop_actions.py:41: attackmap.orchestration.desktop_actions imports attackmap.surfaces.cli (orchestration -> surfaces); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "orchestration",
+      "target_layer": "surfaces",
+      "module": "attackmap.orchestration.desktop_provider",
+      "detail": "orchestration/desktop_provider.py:54: attackmap.orchestration.desktop_provider imports attackmap.surfaces.ui.secrets (orchestration -> surfaces); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "orchestration",
+      "target_layer": "surfaces",
+      "module": "attackmap.orchestration.desktop_worker",
+      "detail": "orchestration/desktop_worker.py:143: attackmap.orchestration.desktop_worker imports attackmap.surfaces.ui.secrets (orchestration -> surfaces); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "reasoning",
+      "target_layer": "output",
+      "module": "attackmap.reasoning.threat_model",
+      "detail": "reasoning/threat_model.py:20: attackmap.reasoning.threat_model imports attackmap.output.finding_identity (reasoning -> output); violates: strict stack is downward-only: surfaces > orchestration > reasoning > extraction > model > foundation"
+    },
+    {
+      "source_layer": "sdk",
+      "target_layer": "extraction",
+      "module": "attackmap.sdk.fs",
+      "detail": "sdk/fs.py:65: attackmap.sdk.fs imports attackmap.extraction.index (sdk -> extraction); violates: sdk is an import island: foundation + model only"
+    },
+    {
+      "source_layer": "sdk",
+      "target_layer": "extraction",
+      "module": "attackmap.sdk.fs",
+      "detail": "sdk/fs.py:118: attackmap.sdk.fs imports attackmap.extraction.index (sdk -> extraction); violates: sdk is an import island: foundation + model only"
+    },
+    {
+      "source_layer": "sdk",
+      "target_layer": "reasoning",
+      "module": "attackmap.sdk.contracts",
+      "detail": "sdk/contracts.py:18: attackmap.sdk.contracts imports attackmap.reasoning.analyzer_contracts (sdk -> reasoning); violates: sdk is an import island: foundation + model only"
+    }
+  ]
+}
