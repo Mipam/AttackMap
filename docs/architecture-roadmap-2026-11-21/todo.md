@@ -433,6 +433,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR027 · Parallel analyzer execution
 **Phase** 1 · **Priority** High · **Effort** 5 d · **Depends** AR024, AR007 · **Blocks** AR107-verification
 **Lease** `analyzers-runtime` · **Acceptance** AC-107, AC-108
+**Status** DONE (commit 0b05ea7, agent-delivered) — orchestration/scheduler.py (stdlib-only, 0 new import edges); isolated subprocess-host runs overlapped via bounded thread pool (pool threads never run plugin code — processes-in-processes documented as supervision-breaking); workers=1 default inline (monkeypatch-proven); merge strictly in plan-record order — duplicate-route fixture fails under completion-order merge; workers=1 vs 4 equivalence (ledger order + signals) + full-run report identity; SchedulerSpec(workers=1) on RunSpec
 
 **Files** `src/attackmap/analyzers.py`, `src/attackmap/analyzer_host.py`,
 `src/attackmap/orchestration/scheduler.py`
@@ -454,6 +455,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR028 · Thread-safe progress, budget, diagnostics
 **Phase** 1 · **Priority** High · **Effort** 2 d · **Depends** AR027 · **Blocks** AR083
 **Lease** `analyzers-runtime` · **Acceptance** AC-108
+**Status** DONE (commit dad7c2c, agent-delivered) — ScanProgress mutations lock-guarded (spinner started under lock, joined outside); JsonScanProgress NDJSON emit locked (no torn lines); TimeBudget write documented GIL-atomic + scan-thread-only; diagnostics audited frozen/pure (no lock needed); stress 8×1000 events → 8000 intact JSONL records, exact counters
 
 **Files** `src/attackmap/progress.py`, `src/attackmap/pipeline.py`,
 `src/attackmap/diagnostics.py`

@@ -688,12 +688,14 @@
       "phase": 1,
       "priority": "High",
       "effort_days": 5.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR024",
         "AR007"
       ],
-      "blocks": [],
+      "blocks": [
+        "AR028"
+      ],
       "lease_key": "analyzers-runtime",
       "acceptance_criteria": [
         "AC-107",
@@ -705,7 +707,9 @@
         "src/attackmap/orchestration/scheduler.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit 0b05ea7 (agent-delivered): orchestration/scheduler.py is stdlib-only (zero new import edges, cycles 43/43, modules 146); partition preserves (priority, name) order; isolated subprocess-host runs overlapped via a bounded ThreadPoolExecutor (pool threads never run plugin code - processes-in-processes would break supervision, documented); workers=1 default executes inline with no pool (monkeypatch-proven); merge stays in plan-record order - duplicate-route fixture whose winner is plan-decided fails under completion-order merge, proving the contract; workers=1 vs workers=4 equivalence on 3 real subprocess-host analyzers (identical ledger order + routes/auth/errors) and full-run_scan report identity (workers=1 vs 2) modulo wall-clock; EventLog start/end/ms correct under scheduling; SchedulerSpec(workers=1) added to RunSpec + from_cli mapping"
+      ]
     },
     {
       "id": "AR028",
@@ -713,7 +717,7 @@
       "phase": 1,
       "priority": "High",
       "effort_days": 2.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR027"
       ],
@@ -730,7 +734,9 @@
         "src/attackmap/diagnostics.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit dad7c2c (agent-delivered): ScanProgress shared-state mutations lock-guarded (spinner started under lock, joined outside it to avoid deadlock); JsonScanProgress counter + NDJSON emit locked (no torn lines); EventLog audited (already serialized); TimeBudget single-reference write documented GIL-atomic and scan-thread-only; diagnostics.py audited as frozen-pydantic + pure functions, no lock needed (audit in docstring); stress: 8 threads x 1000 events -> 8000 intact JSONL records, 8000 whole NDJSON lines, exact counters; 9 progress/budget thread tests green"
+      ]
     },
     {
       "id": "AR029",
