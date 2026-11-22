@@ -931,6 +931,7 @@ when no browser exists.
 ### AR069 · Fleet feature parity
 **Phase** 3 · **Priority** High · **Effort** 4 d · **Depends** AR024, AR026, AR006 · **Blocks** AR081
 **Lease** `fleet` · **Acceptance** AC-310
+**Status** DONE (commit fcefb3c, agent-delivered) — deny-list replaced by a typed admission matrix raised before any scan: llm/hunt+verify/remediate/triage/baseline/pr_comment/secrets_history wired per child (child-scoped artifact paths, full AiSpec argv, read-only baseline); diff_output/fail_on_new_high/fail_on_new_suppression are UnsupportedInFleet(feature, reason) refusals; serial×parallel parity + real 2-repo subprocess E2E incl. per-child LLM output under its own allowance; fleet suites 114+53+150+185 green
 
 **Files** `src/attackmap/scan_service.py`, `src/attackmap/fleet.py`,
 `src/attackmap/desktop_fleet.py`

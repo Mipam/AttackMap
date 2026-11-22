@@ -1344,7 +1344,7 @@
       "phase": 3,
       "priority": "High",
       "effort_days": 4.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR024",
         "AR026",
@@ -1363,7 +1363,9 @@
         "src/attackmap/desktop_fleet.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit fcefb3c (agent-delivered): _fleet_incompatible_flags deny-list replaced by _fleet_feature_admission typed matrix raised before any scan; llm/hunt+verify/remediate/triage/baseline/pr_comment/secrets_history wired per child (child-scoped artifact paths, full AiSpec argv, read-only baseline passthrough); diff_output/fail_on_new_high/fail_on_new_suppression are typed UnsupportedInFleet(feature, reason) refusals; serial+parallel parity proven; real 2-repo subprocess fleet E2E green incl. per-child LLM output under its own allowance (loopback Responses endpoint); fleet suites 114+53+150+185 passed; cycles 43/43"
+      ]
     },
     {
       "id": "AR070",
