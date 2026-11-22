@@ -14,6 +14,12 @@ of the same clean tree (the second into ``<out>-rebuild``) must produce
 identical artifact hash sets; the run exits 0 only when they do, and lists
 every mismatching artifact otherwise. A build-comparison failure exits 1;
 validation failures (dirty tree, bad environment, build errors) exit 2.
+
+``--publish DEST`` copies the attested build into a flat ``DEST/release``
+layout (artifacts, release-manifest.json, release-manifest.sha256, and the
+signature when one exists) and re-verifies every hash after the copy; any
+copy or hash failure removes what it wrote so a partial publish can never
+look complete.
 """
 from __future__ import annotations
 
@@ -22,6 +28,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -29,6 +36,7 @@ from pathlib import Path
 SCHEMA_VERSION = 1
 MANIFEST_KIND = "attackmap-release-artifacts"
 MANIFEST_NAME = "release-manifest.json"
+DETACHED_MANIFEST_NAME = "release-manifest.sha256"
 ARTIFACT_SUFFIXES = (".tar.gz", ".whl")
 GIT_TIMEOUT_SECONDS = 30
 BUILD_TIMEOUT_SECONDS = 1800
@@ -201,6 +209,95 @@ def _print_manifest(label: str, manifest: dict, target: Path) -> None:
         print(f"  {entry['sha256']}  {entry['path']} ({entry['size_bytes']} bytes)")
 
 
+def _load_attest_module():
+    """Load tools/attest_release.py from this script's directory (same lease, one parser)."""
+    spec = importlib.util.spec_from_file_location(
+        "ar085_attest_release", Path(__file__).resolve().parent / "attest_release.py"
+    )
+    if spec is None or spec.loader is None:
+        raise ToolError("Could not load tools/attest_release.py for detached-manifest handling")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def publish_release(build_dir: Path, dest: Path) -> list[Path]:
+    """Copy the attested build into a flat <dest>/release layout, re-verifying every hash.
+
+    Creates the detached sha256 manifest when it is missing (same deterministic
+    format as tools/attest_release.py), copies the signature when one exists,
+    and refuses to publish without a valid manifest pair. On any copy or hash
+    mismatch the files it wrote are removed, so a partial publish can never
+    look complete. Returns the sorted list of published paths.
+    """
+    build_dir = Path(build_dir).resolve()
+    dest = Path(dest).resolve()
+    target = dest / "release"
+    manifest_path = build_dir / MANIFEST_NAME
+    detached_path = build_dir / DETACHED_MANIFEST_NAME
+    if not manifest_path.is_file():
+        raise ToolError(f"No {MANIFEST_NAME} in {build_dir}; publish follows a build")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except ValueError as error:
+        raise ToolError(f"{MANIFEST_NAME} is not valid JSON: {error}") from error
+    if manifest.get("schema_version") != SCHEMA_VERSION or manifest.get("manifest_kind") != MANIFEST_KIND:
+        raise ToolError(f"Unsupported or malformed {MANIFEST_NAME}")
+    if not isinstance(manifest.get("artifacts"), list) or not manifest["artifacts"]:
+        raise ToolError(f"{MANIFEST_NAME} records no artifacts")
+
+    attest = _load_attest_module()
+    if not detached_path.is_file():
+        detached_path = attest.write_detached(manifest_path)
+    entries = {
+        entry["path"]: entry["sha256"]
+        for entry in manifest["artifacts"]
+        if isinstance(entry.get("path"), str) and isinstance(entry.get("sha256"), str)
+    }
+    if len(entries) != len(manifest["artifacts"]):
+        raise ToolError(f"{MANIFEST_NAME} has an artifact entry missing path or sha256")
+    detached = attest.parse_detached(detached_path)
+    if entries != detached:
+        raise ToolError(f"{MANIFEST_NAME} and {DETACHED_MANIFEST_NAME} disagree; refusing to publish")
+
+    sig_path = build_dir / (DETACHED_MANIFEST_NAME + ".sig")
+    copies = [(build_dir / name, target / name) for name in sorted(entries)]
+    copies.append((manifest_path, target / MANIFEST_NAME))
+    copies.append((detached_path, target / DETACHED_MANIFEST_NAME))
+    if sig_path.is_file():
+        copies.append((sig_path, target / sig_path.name))
+
+    target_existed = target.exists()
+    if target_existed and any(target.iterdir()):
+        raise ToolError(f"Refusing to publish into a non-empty directory: {target}")
+    target.mkdir(parents=True, exist_ok=True)
+    copied: list[Path] = []
+    try:
+        for source, destination in copies:
+            shutil.copy2(source, destination)
+            copied.append(destination)
+        for source, destination in copies:
+            if source.read_bytes() != destination.read_bytes():
+                raise ToolError(f"Copied file differs from its source: {destination.name}")
+        for name, digest in sorted(entries.items()):
+            if sha256_file(target / name) != digest:
+                raise ToolError(f"Post-copy hash mismatch: {name}")
+    except Exception:
+        for path in copied:
+            path.unlink(missing_ok=True)
+        if not target_existed:
+            shutil.rmtree(target, ignore_errors=True)
+        raise
+    return [destination for _, destination in copies]
+
+
+def _publish_and_report(build_dir: Path, dest: str) -> None:
+    published = publish_release(build_dir, Path(dest))
+    print(f"Published {len(published)} files to {Path(dest).resolve() / 'release'}")
+    for path in published:
+        print(f"  {path}")
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -216,6 +313,11 @@ def main(argv=None) -> int:
         "--compare", action="store_true",
         help="with --twice: fail the run when the two builds' artifacts differ",
     )
+    parser.add_argument(
+        "--publish", metavar="DEST",
+        help="after a successful build: copy the artifacts, both manifests and the signature "
+        "(when present) into a flat DEST/release layout, re-verifying every hash after the copy",
+    )
     args = parser.parse_args(argv)
     if args.compare and not args.twice:
         parser.error("--compare requires --twice")
@@ -229,6 +331,8 @@ def main(argv=None) -> int:
             reproducible, mismatches = compare_builds(out_dir, second_dir)
             if reproducible:
                 print("BUILD REPRODUCIBLE")
+                if args.publish:
+                    _publish_and_report(out_dir, args.publish)
                 return 0
             print("BUILD NOT REPRODUCIBLE", file=sys.stderr)
             for line in mismatches:
@@ -239,6 +343,8 @@ def main(argv=None) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 2
     _print_manifest("Manifest", manifest, target)
+    if args.publish:
+        _publish_and_report(Path(args.out).resolve(), args.publish)
     return 0
 
 

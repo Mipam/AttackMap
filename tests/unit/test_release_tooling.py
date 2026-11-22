@@ -461,3 +461,264 @@ def test_main_compare_without_twice_is_rejected(tmp_path: Path) -> None:
         build_release.main(["--out", str(tmp_path / "dist"), "--compare"])
 
     assert excinfo.value.code == 2
+
+
+# ---------------------------------------------------------------------------
+# Ed25519 signing and verification (tools/attest_release.py)
+# ---------------------------------------------------------------------------
+
+CRYPTOGRAPHY_AVAILABLE = importlib.util.find_spec("cryptography") is not None
+requires_crypto = pytest.mark.skipif(
+    not CRYPTOGRAPHY_AVAILABLE,
+    reason="cryptography not importable; signing is honestly unavailable in this environment",
+)
+
+
+def _build_dir(dist: Path, with_sig: bool = False) -> Path:
+    """A dummy attested build directory: two artifacts, manifest, detached sha256."""
+    dist.mkdir(parents=True, exist_ok=True)
+    (dist / SDIST_NAME).write_bytes(SDIST_BYTES)
+    (dist / WHEEL_NAME).write_bytes(WHEEL_BYTES)
+    _, target = build_release.write_release_manifest(dist, "c0ffee00", 1700000000)
+    detached = attest_release.write_detached(target)
+    if with_sig:
+        detached.with_name(detached.name + attest_release.SIGNATURE_SUFFIX).write_bytes(b"signature-bytes")
+    return dist
+
+
+@requires_crypto
+def test_sign_creates_keypair_and_round_trips(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    dist = _build_dir(tmp_path / "dist")
+    key_dir = tmp_path / "keys"
+    manifest = dist / "release-manifest.json"
+    detached = dist / "release-manifest.sha256"
+
+    assert attest_release.main(["--manifest", str(manifest), "--sign", str(key_dir)]) == 0
+    assert (key_dir / attest_release.PRIVATE_KEY_NAME).is_file()
+    assert (key_dir / attest_release.PUBLIC_KEY_NAME).is_file()
+    assert (dist / "release-manifest.sha256.sig").is_file()
+    assert "Signature" in capsys.readouterr().out
+
+    assert attest_release.main(["--detached", str(detached), "--verify", str(key_dir / attest_release.PUBLIC_KEY_NAME)]) == 0
+    assert "VERIFIED" in capsys.readouterr().out
+
+
+@requires_crypto
+def test_verify_is_deterministic_on_second_run(tmp_path: Path) -> None:
+    dist = _build_dir(tmp_path / "dist")
+    key_dir = tmp_path / "keys"
+    attest_release.sign_detached(dist / "release-manifest.sha256", key_dir)
+    first_sig = (dist / "release-manifest.sha256.sig").read_bytes()
+    attest_release.sign_detached(dist / "release-manifest.sha256", key_dir)
+    assert (dist / "release-manifest.sha256.sig").read_bytes() == first_sig
+    ok, reasons = attest_release.verify_detached(
+        dist / "release-manifest.sha256", key_dir / attest_release.PUBLIC_KEY_NAME
+    )
+    assert ok is True and reasons == []
+
+
+@requires_crypto
+def test_sign_refuses_keypair_rotation(tmp_path: Path) -> None:
+    dist = _build_dir(tmp_path / "dist")
+    key_dir = tmp_path / "keys"
+    attest_release.sign_detached(dist / "release-manifest.sha256", key_dir)
+    (key_dir / attest_release.PRIVATE_KEY_NAME).unlink()
+
+    with pytest.raises(attest_release.ToolError, match="refusing to generate a new keypair"):
+        attest_release.sign_detached(dist / "release-manifest.sha256", key_dir)
+
+
+@requires_crypto
+def test_verify_detects_tampered_artifact(tmp_path: Path) -> None:
+    dist = _build_dir(tmp_path / "dist")
+    key_dir = tmp_path / "keys"
+    attest_release.sign_detached(dist / "release-manifest.sha256", key_dir)
+    payload = bytearray((dist / WHEEL_NAME).read_bytes())
+    payload[-1] ^= 0x01  # flip exactly one bit of one artifact
+    (dist / WHEEL_NAME).write_bytes(bytes(payload))
+
+    ok, reasons = attest_release.verify_detached(
+        dist / "release-manifest.sha256", key_dir / attest_release.PUBLIC_KEY_NAME
+    )
+
+    assert ok is False
+    assert len(reasons) == 1
+    assert reasons[0].startswith(WHEEL_NAME)
+    assert "hash does not match" in reasons[0]
+
+
+@requires_crypto
+def test_verify_detects_tampered_detached_manifest(tmp_path: Path) -> None:
+    dist = _build_dir(tmp_path / "dist")
+    key_dir = tmp_path / "keys"
+    detached = dist / "release-manifest.sha256"
+    attest_release.sign_detached(detached, key_dir)
+    lines = detached.read_text(encoding="utf-8").splitlines()
+    lines[0] = ("0" if lines[0][0] != "0" else "1") + lines[0][1:]  # alter one recorded hash
+    detached.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    ok, reasons = attest_release.verify_detached(detached, key_dir / attest_release.PUBLIC_KEY_NAME)
+
+    assert ok is False
+    assert any("signature does not match" in reason for reason in reasons)
+
+
+@requires_crypto
+def test_verify_rejects_non_ed25519_public_key(tmp_path: Path) -> None:
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    dist = _build_dir(tmp_path / "dist")
+    key_dir = tmp_path / "keys"
+    attest_release.sign_detached(dist / "release-manifest.sha256", key_dir)
+    rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    rsa_pub = tmp_path / "rsa-public.pem"
+    rsa_pub.write_bytes(
+        rsa_key.public_key().public_bytes(
+            serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    )
+
+    with pytest.raises(attest_release.ToolError, match="Not an Ed25519 public key"):
+        attest_release.verify_detached(dist / "release-manifest.sha256", rsa_pub)
+
+
+@requires_crypto
+def test_verify_without_signature_file_is_an_error(tmp_path: Path) -> None:
+    dist = _build_dir(tmp_path / "dist")
+    key_dir = tmp_path / "keys"
+    attest_release.sign_detached(dist / "release-manifest.sha256", key_dir)
+    (dist / "release-manifest.sha256.sig").unlink()
+
+    with pytest.raises(attest_release.ToolError, match="run --sign before --verify"):
+        attest_release.verify_detached(dist / "release-manifest.sha256", key_dir / attest_release.PUBLIC_KEY_NAME)
+
+
+def test_sign_without_cryptography_exits_3(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    def no_crypto():
+        raise attest_release.SigningUnavailable(
+            "Signing requires the 'cryptography' package, which is not importable here."
+        )
+
+    monkeypatch.setattr(attest_release, "_crypto", no_crypto)
+    dist = _build_dir(tmp_path / "dist")
+
+    rc = attest_release.main(["--manifest", str(dist / "release-manifest.json"), "--sign", str(tmp_path / "keys")])
+
+    assert rc == 3
+    assert "cryptography" in capsys.readouterr().err
+    assert not (tmp_path / "keys" / attest_release.PRIVATE_KEY_NAME).exists()
+
+
+@requires_crypto
+def test_main_verify_failure_exits_1(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    dist = _build_dir(tmp_path / "dist")
+    key_dir = tmp_path / "keys"
+    attest_release.sign_detached(dist / "release-manifest.sha256", key_dir)
+    payload = bytearray((dist / SDIST_NAME).read_bytes())
+    payload[0] ^= 0x80
+    (dist / SDIST_NAME).write_bytes(bytes(payload))
+
+    rc = attest_release.main(["--detached", str(dist / "release-manifest.sha256"), "--verify", str(key_dir / attest_release.PUBLIC_KEY_NAME)])
+
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "VERIFY FAILED" in captured.err
+    assert SDIST_NAME in captured.err
+
+
+# ---------------------------------------------------------------------------
+# --publish: flat layout, post-copy re-verification, partial-copy refusal
+# ---------------------------------------------------------------------------
+
+
+def test_publish_copies_flat_layout_and_signature(tmp_path: Path) -> None:
+    dist = _build_dir(tmp_path / "dist", with_sig=True)
+
+    published = build_release.publish_release(dist, tmp_path / "dest")
+
+    target = tmp_path / "dest" / "release"
+    names = sorted(path.name for path in published)
+    assert names == sorted([
+        SDIST_NAME, WHEEL_NAME, "release-manifest.json", "release-manifest.sha256", "release-manifest.sha256.sig",
+    ])
+    assert all(path.parent == target for path in published)  # flat layout, no subdirectories
+    for path in published:
+        assert path.is_file()
+
+
+def test_publish_creates_detached_manifest_when_missing(tmp_path: Path) -> None:
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / SDIST_NAME).write_bytes(SDIST_BYTES)
+    (dist / WHEEL_NAME).write_bytes(WHEEL_BYTES)
+    build_release.write_release_manifest(dist, "c0ffee00", 1700000000)
+    assert not (dist / "release-manifest.sha256").exists()
+
+    published = build_release.publish_release(dist, tmp_path / "dest")
+
+    assert (dist / "release-manifest.sha256").is_file()  # created in the build dir too
+    assert (tmp_path / "dest" / "release" / "release-manifest.sha256").is_file()
+    assert len(published) == 4  # two artifacts + two manifests, no signature
+
+
+def test_publish_refuses_without_release_manifest(tmp_path: Path) -> None:
+    empty = tmp_path / "dist"
+    empty.mkdir()
+
+    with pytest.raises(build_release.ToolError, match="publish follows a build"):
+        build_release.publish_release(empty, tmp_path / "dest")
+
+
+def test_publish_refuses_nonempty_target(tmp_path: Path) -> None:
+    dist = _build_dir(tmp_path / "dist", with_sig=True)
+    target = tmp_path / "dest" / "release"
+    target.mkdir(parents=True)
+    (target / "previous-release.txt").write_text("old", encoding="utf-8")
+
+    with pytest.raises(build_release.ToolError, match="non-empty directory"):
+        build_release.publish_release(dist, tmp_path / "dest")
+    assert (target / "previous-release.txt").read_text(encoding="utf-8") == "old"  # untouched
+
+
+def test_publish_refuses_and_cleans_up_on_source_hash_mismatch(tmp_path: Path) -> None:
+    dist = _build_dir(tmp_path / "dist", with_sig=True)
+    payload = bytearray((dist / WHEEL_NAME).read_bytes())
+    payload[-1] ^= 0x01  # drift an artifact after its manifests were written
+    (dist / WHEEL_NAME).write_bytes(bytes(payload))
+
+    with pytest.raises(build_release.ToolError, match="Post-copy hash mismatch"):
+        build_release.publish_release(dist, tmp_path / "dest")
+    assert not (tmp_path / "dest" / "release").exists()
+
+
+def test_publish_cleans_up_when_copy_is_corrupted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    dist = _build_dir(tmp_path / "dist", with_sig=True)
+
+    def corrupting_copy2(source, destination, **kwargs):
+        destination.write_bytes(b"corrupted-in-transit")  # simulate bit rot during the copy
+
+    monkeypatch.setattr(build_release.shutil, "copy2", corrupting_copy2)
+
+    with pytest.raises(build_release.ToolError, match="differs from its source"):
+        build_release.publish_release(dist, tmp_path / "dest")
+    assert not (tmp_path / "dest" / "release").exists()
+
+
+def test_main_single_build_publishes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    _patch_gate_main(monkeypatch, [b"same"])
+
+    rc = build_release.main(["--out", str(tmp_path / "dist"), "--publish", str(tmp_path / "dest")])
+
+    assert rc == 0
+    target = tmp_path / "dest" / "release"
+    assert (target / WHEEL_NAME).is_file() and (target / SDIST_NAME).is_file()
+    assert (target / "release-manifest.json").is_file()
+    assert (target / "release-manifest.sha256").is_file()
+    assert f"Published {len(list(target.iterdir()))} files" in capsys.readouterr().out
