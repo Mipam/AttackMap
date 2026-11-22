@@ -44,6 +44,7 @@ from .index import RepoIndex, active_index_for, clear_pinned_index
 from .llm_review import LlmReviewError, generate_llm_review
 from .md import sanitize_llm_markdown
 from .models import AnalyzerError, AttackPath, AttackSurface, Finding, ScanResult
+from .orchestration.run_spec import RunSpec
 from .progress import EventLog, create_progress
 from .recon_to_analysis import translate_recon
 from .report import render_console_summary, render_pr_comment, write_reports
@@ -167,6 +168,9 @@ class AnalyzeOptions:
     time_budget_seconds: int | None = None
     run_id: str | None = None
     echo: Callable[..., None] = field(default=emit_text)
+    # AR024 carrier: the immutable RunSpec built from the request. Nothing in
+    # the pipeline reads it yet — AnalyzeOptions stays the source of truth.
+    run_spec: RunSpec | None = None
 
 
 @dataclass
@@ -202,6 +206,10 @@ class RunState:
     time_budget: TimeBudget | None = None
     attempt_started: float = field(default_factory=time.perf_counter, repr=False)
     events: EventLog | None = field(default=None, repr=False)
+    # AR024: immutable configuration carrier built from the request. Nothing
+    # reads it yet — AnalyzeOptions stays the behavioral source of truth — so
+    # reports are byte-identical with the pre-RunSpec pipeline.
+    run_spec: RunSpec | None = None
 
     def finish_scan(self, outcome: str) -> None:
         if self.scan_finished_at is None:
@@ -361,7 +369,7 @@ def _echo_opt_in_hint(names: list[str], echo: Callable[..., None]) -> None:
 
 def _run_scan(options: AnalyzeOptions, *, state: RunState | None = None) -> RunState:
     """Run one repository through recon, translation, reports, and optional LLM."""
-    state = state if state is not None else RunState(options=options)
+    state = state if state is not None else RunState(options=options, run_spec=options.run_spec)
     echo = options.echo
     repo_path = options.repo_path
     output = Path(options.output)
@@ -1131,7 +1139,7 @@ def _flush_event_log(state: RunState, folder: Path) -> None:
 def _run_scan_published(options: AnalyzeOptions) -> RunState:
     """Publish one validated generation; flat files are compatibility exports."""
     if not options.atomic_output:
-        state = RunState(options=options)
+        state = RunState(options=options, run_spec=options.run_spec)
         try:
             return _run_scan(options, state=state)
         except BaseException as exc:
@@ -1154,7 +1162,7 @@ def _run_scan_published(options: AnalyzeOptions) -> RunState:
     folder = generation_dir(base, run_id)
     staged = replace(options, output=folder, output_format="all", run_id=run_id,
                      atomic_output=False)
-    state = RunState(options=staged)
+    state = RunState(options=staged, run_spec=staged.run_spec)
     try:
         ensure_output_dir(folder, mark=True)
         state = _run_scan(staged, state=state)

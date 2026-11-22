@@ -48,6 +48,7 @@ from .fleet_admission import (
     unverified_fleet_cleanup,
 )
 from .models import AttackPath, Finding, ScanResult
+from .orchestration.run_spec import RunSpec
 from .pipeline import AnalyzeOptions, ScanAiLimits, run_scan
 from .run_contract import RunRequest
 from .safe_fs import UnsafePathError, ensure_output_dir, safe_write_text
@@ -252,7 +253,9 @@ def _write_artifact(path: Path, text: str) -> None:
 def _run_single_repo(request: ScanRequest, analyzers: list | None) -> RunSummary:
     repo_path = request.repo_paths[0]
     try:
-        state = run_scan(_analyze_options(request, repo_path, request.output, analyzers))
+        options = _analyze_options(request, repo_path, request.output, analyzers)
+        options.run_spec = getattr(request, "run_spec", None)
+        state = run_scan(options)
     except AnalysisConfigurationError as exc:
         if request.fleet_result is not None:
             _write_artifact(request.fleet_result, json.dumps({
@@ -592,7 +595,9 @@ def _run_fleet_serial(
         request.echo(f"── {repo_id}  ({repo_path}) ──")
         try:
             repo_out = output_root / repo_id
-            state = run_scan(_analyze_options(request, repo_path, repo_out, analyzers))
+            options = _analyze_options(request, repo_path, repo_out, analyzers)
+            options.run_spec = getattr(request, "run_spec", None)
+            state = run_scan(options)
             if state.exit_code != 0:
                 raise RuntimeError(f"scan exited with code {state.exit_code}")
             assert state.scan is not None
@@ -922,6 +927,7 @@ def _run_fleet_generation(request: ScanRequest, analyzers: list | None) -> RunSu
     # The parent may itself be staged by a desktop caller, but child results
     # always need independently verified, manifest-bound generations.
     child_request = replace(request, atomic_output=True)
+    child_request.run_spec = getattr(request, "run_spec", None)  # AR024 carrier
     if (_effective_max_workers(request) == 1 and not request.fleet_supervised
             and request.fleet_memory_policy is None and request.fleet_input_byte_budget is None):
         _run_fleet_serial(child_request, analyzers, fleet, output_root)
@@ -981,6 +987,7 @@ def _run_fleet(request: ScanRequest, analyzers: list | None) -> RunSummary:
     stage = generation_dir(base, run_id)
     ensure_output_dir(stage, mark=True)
     staged = replace(request, output=stage, run_id=run_id, atomic_output=False)
+    staged.run_spec = getattr(request, "run_spec", None)  # AR024 carrier; replace() drops it
     def diagnostic(state: str) -> None:
         context = diagnostic_context_from_generation(base, run_id, outcome=state)
         write_diagnostic(base, run_id, state=state,
@@ -1093,6 +1100,13 @@ def execute_scan_request(request: ScanRequest) -> RunSummary:
                                      requested_analyzers=request.modules))
         raise ScanRequestError(str(exc)) from exc
 
+    # AR024: mirror the validated request into the immutable run specification
+    # and attach it to the request (dynamic attribute, not a dataclass field,
+    # so the declared positional field layout is untouched). The single-repo
+    # and fleet-serial paths copy it onto AnalyzeOptions, and the pipeline
+    # stamps it onto RunState.run_spec. The request/options path stays the
+    # source of truth until AR025/AR026 retire it; nothing reads run_spec.
+    request.run_spec = RunSpec.from_scan_request(request)
     if len(request.repo_paths) == 1:
         return _run_single_repo(request, analyzers)
     return _run_fleet(request, analyzers)
