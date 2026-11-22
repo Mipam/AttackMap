@@ -1119,7 +1119,7 @@
       "phase": 3,
       "priority": "High",
       "effort_days": 6.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR022",
         "AR032"
@@ -1138,7 +1138,9 @@
         "src/attackmap/extraction/adapters.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit b007e7d (agent-delivered): EXTRACTION_CONTRACT_VERSION 2.0 + ExtractionResult with discriminated Observation union (12 additive variants wrapping v1 hint types); extraction/adapters.py to_extraction_result/to_scan_result round-trip preserves 13/13 payload families (normalized-dict + wire identity), merge first-seen-wins; sdk/__init__ +18 additive exports, AR032 sdk-surface gate green without a bump; cycles 43/43, models fan-in 63 unchanged; contract tier 242 passed"
+      ]
     },
     {
       "id": "AR061",

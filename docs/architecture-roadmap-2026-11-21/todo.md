@@ -754,6 +754,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR060 · Extraction contract v2 with v1 adapter
 **Phase** 3 · **Priority** High · **Effort** 6 d · **Depends** AR022, AR032 · **Blocks** AR082
 **Lease** `sdk` · **Acceptance** AC-301
+**Status** DONE (commit b007e7d, agent-delivered) — EXTRACTION_CONTRACT_VERSION 2.0; ExtractionResult with discriminated Observation union (12 additive variants); extraction/adapters.py round-trip preserves 13/13 payload families; sdk +18 additive exports (AR032 surface gate green, no bump); cycles 43/43, fan-in 63; contract tier 242 passed. Legacy EXTRACTION_PROTOCOL_VERSION stays 1.0 until AR082 flips plugin adoption
 
 **Files** `src/attackmap/sdk/contracts.py`, `src/attackmap/sdk/__init__.py`,
 `src/attackmap/model/observations.py`, `src/attackmap/extraction/adapters.py`
