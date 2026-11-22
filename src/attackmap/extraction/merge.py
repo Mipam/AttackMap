@@ -31,7 +31,7 @@ ecosystem analyzers can merge without an upward import).
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from copy import deepcopy
 from pathlib import Path
 from typing import Any

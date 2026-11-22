@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.foundation.srcpaths import evidence_locations
 from attackmap.models import Finding, FindingLocation
 from attackmap.orchestration.recon_to_analysis import translate_recon
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.output.sarif import _finding_locations, _locations_from_evidence, build_sarif
 from attackmap.output.suppress import _evidence_paths
 from attackmap.surfaces.cli import app

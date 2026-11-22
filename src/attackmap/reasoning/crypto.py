@@ -9,5 +9,4 @@ instead; this module is removed after that release.
 """
 from __future__ import annotations
 
-from attackmap.extraction.crypto import *  # noqa: F401,F403
-from attackmap.extraction.crypto import find_crypto_weaknesses  # noqa: F401
+from attackmap.extraction.crypto import *  # noqa: F403

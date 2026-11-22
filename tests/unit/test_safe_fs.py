@@ -9,7 +9,6 @@ import pytest
 from typer.testing import CliRunner
 
 from attackmap import sdk
-from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.foundation.safe_fs import (
     UnsafePathError,
     contained_file,
@@ -19,6 +18,7 @@ from attackmap.foundation.safe_fs import (
     walk_repo,
 )
 from attackmap.models import Finding, ScanResult
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.output.review_prompts import _code_excerpts
 from attackmap.surfaces.cli import app
 

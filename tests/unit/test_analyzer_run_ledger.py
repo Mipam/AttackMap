@@ -9,9 +9,9 @@ import pytest
 
 from attackmap.extraction.analyzer_host import HOST_INPUT_INVALID, HOST_TIMEOUT, IsolatedOutcome
 from attackmap.extraction.ledger import AnalyzerLifecycleEvent, AnalyzerRunLedger
-from attackmap.orchestration.analyzers import analyzer_run_identity
 from attackmap.models import Route, ScanResult
 from attackmap.orchestration import analyzers as registry
+from attackmap.orchestration.analyzers import analyzer_run_identity
 from attackmap.reasoning.analyzer_contracts import AnalyzerMetadata
 
 PRIVATE = "LEDGER_PRIVATE_SOURCE token=unknown C:/private/source.py"

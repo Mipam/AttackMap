@@ -3,12 +3,12 @@ from itertools import permutations
 import pytest
 
 from attackmap.extraction.evidence import classify_source_path
-from attackmap.models import Route, ScanResult, Signal, SignalConflict, SignalOrigin
 from attackmap.model.signal_provenance import (
     _identity,
     _semantic_dump,
     merge_normalized_signals,
 )
+from attackmap.models import Route, ScanResult, Signal, SignalConflict, SignalOrigin
 
 
 def test_role_conflicts_coalesce_and_remain_stable_when_merged_again():

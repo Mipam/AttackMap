@@ -80,7 +80,7 @@ from .paths import (  # noqa: F401
     TaintChain,
     TaintFlowStep,
 )
-from .signal_provenance import normalized_view  # noqa: F401  (re-exported; used by ScanResult.all_signals)
+from .signal_provenance import normalized_view  # re-exported; used by ScanResult.all_signals
 from .snapshot import ResourceLimitEvent, ResourceLimitScope, ScanSnapshotIdentity
 
 

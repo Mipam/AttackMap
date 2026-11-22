@@ -9,7 +9,7 @@ removed after that release.
 """
 from __future__ import annotations
 
-from attackmap.model.evidence_labels import (  # noqa: F401
+from attackmap.model.evidence_labels import (
     SURFACE_EVIDENCE_CLASSES,
     classify_source_path,
     is_low_quality_source,

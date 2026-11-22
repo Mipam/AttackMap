@@ -174,8 +174,8 @@ def test_hunt_verify_prompt_adjudicates_with_excerpts(tmp_path) -> None:
     """--hunt --verify feeds actual source excerpts and asks for verdicts."""
     from pathlib import Path as _P
 
-    from attackmap.orchestration.repo_passes import scan_repo
     from attackmap.orchestration.recon_to_analysis import translate_recon
+    from attackmap.orchestration.repo_passes import scan_repo
     from attackmap.output.review_prompts import render_hunt_verify_prompts
     (tmp_path / "app.py").write_text(
         "from flask import Flask, request\n"

@@ -10,8 +10,4 @@ module is removed after that release.
 """
 from __future__ import annotations
 
-from attackmap.extraction.webhardening import *  # noqa: F401,F403
-from attackmap.extraction.webhardening import (  # noqa: F401
-    find_web_hardening_issues,
-    has_csrf_protection,
-)
+from attackmap.extraction.webhardening import *  # noqa: F403

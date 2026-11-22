@@ -241,8 +241,8 @@ def test_unwired_top_level_feature_alias_is_not_metadata(field, tmp_path):
 def test_broker_echoes_request_schema_for_old_and_new_consumers(schema, tmp_path, monkeypatch):
     import io
 
-    from attackmap.orchestration.desktop_worker import serve
     from attackmap.orchestration.desktop_fleet import parse_run_message
+    from attackmap.orchestration.desktop_worker import serve
     class RejectedLaunch:
         def start(self, argv, *, on_done, **kwargs):
             on_done(1, "")

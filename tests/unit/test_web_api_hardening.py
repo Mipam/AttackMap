@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.model.taxonomy import taxonomy_for
 from attackmap.models import Route, ScanResult, WebHardeningIssue
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.reasoning.threat_model import generate_findings
 from attackmap.reasoning.weaknesses import find_code_weaknesses
 from attackmap.reasoning.webhardening import find_web_hardening_issues, has_csrf_protection

@@ -176,8 +176,8 @@ def test_full_incremental_findings_provenance_and_coverage_across_100_edits(tmp_
     import attackmap.extraction.incremental as cache_module
     from attackmap.extraction.index import active_index_for
     from attackmap.extraction.scanner import scan_files
-    from attackmap.orchestration.repo_passes import run_repo_passes
     from attackmap.orchestration.recon_to_analysis import translate_recon
+    from attackmap.orchestration.repo_passes import run_repo_passes
     from attackmap.reasoning.signal_provenance import merge_normalized_signals
     repo = tmp_path / "repo"
     shutil.copytree(Path(__file__).parents[1] / "fixtures" / "snapshot-shop", repo)

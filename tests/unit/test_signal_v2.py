@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from attackmap.extraction.scanner import _line_of, _line_snippet
-from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.models import (
     AuthHint,
     DatabaseHint,
@@ -16,6 +15,7 @@ from attackmap.models import (
     SecretHint,
     Signal,
 )
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.output.asset_model import detect_assets
 from attackmap.output.control_model import detect_controls
 from attackmap.output.security_overlay import build_security_overlay

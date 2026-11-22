@@ -267,7 +267,7 @@ def _handler(app: LoopbackApp):
                 return {}
             return data if isinstance(data, dict) else {}
 
-        def do_GET(self) -> None:  # noqa: N802
+        def do_GET(self) -> None:
             parsed = urlparse(self.path)
             if parsed.path in {"/", "/index.html"}:
                 html = (root / "index.html").read_bytes()
@@ -319,7 +319,7 @@ def _handler(app: LoopbackApp):
                 return
             self._json(404, {"error": "not found"})
 
-        def do_POST(self) -> None:  # noqa: N802
+        def do_POST(self) -> None:
             if not self._ok_token():
                 self._json(403, {"error": "forbidden"})
                 return
@@ -363,7 +363,7 @@ def _handler(app: LoopbackApp):
             if parsed.path == "/api/reveal":
                 if app.output and app.output.exists() and hasattr(os, "startfile"):
                     target = current_generation(app.output) or app.output
-                    os.startfile(target)  # noqa: S606 — user-opened local folder
+                    os.startfile(target)
                 self._json(200, app.state())
                 return
             if parsed.path == "/api/suppress":
@@ -772,7 +772,7 @@ def _handle_export(app: LoopbackApp, body: dict) -> dict[str, Any]:
             except OSError:
                 pass
         return {"code": 200, "body": {"ok": True, "path": str(target)}}
-    except Exception as exc:  # noqa: BLE001 — surface expected file/PDF errors
+    except Exception as exc:
         return {"code": 400, "body": {"error": str(exc)}}
 
 

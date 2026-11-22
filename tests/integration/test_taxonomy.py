@@ -8,17 +8,17 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from attackmap.orchestration.repo_passes import scan_repo
+from attackmap.model import taxonomy
 from attackmap.model.taxonomy import RULE_TAXONOMY, RuleTaxonomy, taxonomy_for, validate_entry
 from attackmap.models import Finding, Insight
 from attackmap.orchestration.recon_to_analysis import translate_recon
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.output.attack_taxonomy import annotate_findings, techniques_for_finding
 from attackmap.output.detection_opportunities import generate_detection_opportunities
 from attackmap.output.diff import FindingSnapshot
 from attackmap.output.report import render_pr_comment
 from attackmap.output.review_json import build_defensive_review_json
 from attackmap.output.sarif import build_sarif
-from attackmap.model import taxonomy
 from attackmap.reasoning.threat_model import rule_catalog
 
 ROOT = Path(__file__).resolve().parents[2]

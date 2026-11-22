@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.models import Route, ScanResult, TaintChain
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.output.sarif import build_sarif
 from attackmap.reasoning.taint import analyze_taint
 from attackmap.reasoning.threat_model import generate_findings

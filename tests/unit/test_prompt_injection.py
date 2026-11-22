@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.orchestration.recon_to_analysis import translate_recon
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.output.hunt_harness import (
     Hypothesis,
     enforce_citations,

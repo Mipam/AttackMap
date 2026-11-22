@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.models import Route, ScanResult
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.reasoning.taint import analyze_taint
 from attackmap.reasoning.threat_model import generate_findings
 

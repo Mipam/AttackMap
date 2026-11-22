@@ -19,10 +19,10 @@ from attackmap.foundation.fleet_resource_identity import (
 )
 from attackmap.models import ScanResult, SignalConflict, SignalOrigin
 from attackmap.orchestration.fleet import FleetRepoResult, FleetScan
-from attackmap.orchestration.fleet_architecture import fleet_summary_json
 from attackmap.orchestration.fleet_architecture import (
     aggregate_fleet_architecture,
     build_fleet_architecture,
+    fleet_summary_json,
 )
 from attackmap.reasoning.signal_provenance import stamp_scan_provenance
 

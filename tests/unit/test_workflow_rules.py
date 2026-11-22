@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.extraction.workflow_scanner import scan_workflows
 from attackmap.orchestration.recon_to_analysis import translate_recon
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.reasoning.threat_model import rule_catalog
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "workflows"

@@ -10,7 +10,7 @@ module is removed after that release.
 """
 from __future__ import annotations
 
-from attackmap.model.signal_provenance import (  # noqa: F401
+from attackmap.model.signal_provenance import (
     CLASSIFICATION_FIELDS,
     KINDS,
     admit_isolated_provenance,

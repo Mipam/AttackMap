@@ -9,10 +9,4 @@ module is removed after that release.
 """
 from __future__ import annotations
 
-from attackmap.extraction.weaknesses import *  # noqa: F401,F403
-from attackmap.extraction.weaknesses import (  # noqa: F401
-    PROMPT_INJECTION_RE,
-    find_code_weaknesses,
-    find_graphql_weaknesses,
-    find_prompt_injection,
-)
+from attackmap.extraction.weaknesses import *  # noqa: F403

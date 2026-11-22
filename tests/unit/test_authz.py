@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.models import BolaCandidate, DatabaseHint, Route, ScanResult, TaintChain
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.reasoning.authz import _resource_id_param, analyze_authz
 from attackmap.reasoning.threat_model import generate_attack_paths, generate_findings
 

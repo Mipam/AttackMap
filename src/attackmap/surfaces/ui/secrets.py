@@ -10,18 +10,16 @@ module is removed after that release.
 """
 from __future__ import annotations
 
-from attackmap.foundation.secrets import (  # noqa: F401
+from attackmap.foundation.secrets import (  # noqa: F401  # noqa: F401  (test-visible internals)
+    _data_dir,
+    _key_path,
+    _protect,
+    _unprotect,
     child_llm_env,
     has_llm_key,
     is_loopback_endpoint,
     load_llm_key,
     save_llm_key,
-)
-from attackmap.foundation.secrets import (  # noqa: F401  (test-visible internals)
-    _data_dir,
-    _key_path,
-    _protect,
-    _unprotect,
 )
 
 __all__ = [

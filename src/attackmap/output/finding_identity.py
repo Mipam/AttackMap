@@ -9,12 +9,4 @@ this module is removed after that release.
 """
 from __future__ import annotations
 
-from attackmap.reasoning.finding_identity import *  # noqa: F401,F403
-from attackmap.reasoning.finding_identity import (  # noqa: F401
-    dependency_entity_id,
-    finding_id,
-    identity_migration_note,
-    identity_scheme,
-    legacy_finding_id,
-    legacy_id_aliases,
-)
+from attackmap.reasoning.finding_identity import *  # noqa: F403

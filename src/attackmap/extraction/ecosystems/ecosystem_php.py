@@ -53,7 +53,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
-from attackmap.foundation.safe_fs import walk_repo
 from attackmap.foundation.srcpaths import (
     in_skipped_dir,
     is_skipped_dir,

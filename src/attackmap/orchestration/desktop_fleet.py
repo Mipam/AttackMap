@@ -13,7 +13,7 @@ import stat
 import sys
 import threading
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Literal, TextIO
+from typing import Any, Literal, TextIO
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 

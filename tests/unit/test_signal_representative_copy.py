@@ -6,11 +6,11 @@ from unittest.mock import patch
 import pytest
 from pydantic import ConfigDict, Field, PrivateAttr
 
-from attackmap.models import Signal, SignalConflict, SignalOrigin
 from attackmap.model.signal_provenance import (
     _copy_merge_representative,
     merge_normalized_signals,
 )
+from attackmap.models import Signal, SignalConflict, SignalOrigin
 
 
 class ExtendedSignal(Signal):

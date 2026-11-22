@@ -10,7 +10,7 @@ release.
 """
 from __future__ import annotations
 
-from attackmap.sdk.analyzer_contracts import (  # noqa: F401
+from attackmap.sdk.analyzer_contracts import (
     EXTRACTION_PROTOCOL_VERSION,
     AnalyzerMetadata,
     AnalyzerProtocol,

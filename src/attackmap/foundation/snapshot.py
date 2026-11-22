@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from attackmap.foundation.safe_fs import max_file_bytes, walk_repo
 from attackmap.foundation.srcpaths import is_skipped_dir
@@ -173,7 +173,7 @@ class ScanSnapshot:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     @classmethod
-    def from_indexed(cls, files: Iterable[Any], index_config: dict[str, int], sources: list[CapturedSource] | None = None) -> ScanSnapshot:
+    def from_indexed(cls, files: Iterable[object], index_config: dict[str, int], sources: list[CapturedSource] | None = None) -> ScanSnapshot:
         # ``files`` items are extraction-layer IndexedFile records used
         # structurally (rel/sha256/size); typing them here would need an
         # upward import, so the contract is duck-typed (AR030).

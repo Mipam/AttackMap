@@ -13,8 +13,8 @@ from pydantic import ValidationError
 from attackmap.orchestration import desktop_fleet as fleet
 from attackmap.orchestration import scan_service as service
 from attackmap.orchestration.desktop_capabilities import validate_desktop_request
-from attackmap.orchestration.fleet import FleetScan, fleet_repo_ids
 from attackmap.orchestration.desktop_fleet import parse_run_message
+from attackmap.orchestration.fleet import FleetScan, fleet_repo_ids
 from attackmap.orchestration.run_contract import RunProgress, accepts_update
 
 

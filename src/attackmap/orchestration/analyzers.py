@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from attackmap.extraction.progress import EventLog, ScanProgress
+    from attackmap.orchestration.analyzer_run_plan import AnalyzerRunPlan
 from urllib.error import URLError
 from urllib.request import urlopen
 

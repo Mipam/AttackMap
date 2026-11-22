@@ -8,9 +8,9 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.models import Finding, finding_rule_id, title_slug
 from attackmap.orchestration.recon_to_analysis import translate_recon
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.output import suppress
 from attackmap.output.sarif import build_sarif
 from attackmap.output.suppress import Suppression, SuppressionSet, apply_suppressions

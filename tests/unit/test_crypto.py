@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.models import ScanResult
+from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.reasoning.crypto import find_crypto_weaknesses
 from attackmap.reasoning.threat_model import generate_findings
 

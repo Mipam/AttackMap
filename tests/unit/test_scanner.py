@@ -1,9 +1,9 @@
 import base64
 from pathlib import Path
 
-from attackmap.orchestration.repo_passes import scan_repo
 from attackmap.models import AuthHint, DatabaseHint, ExternalCall, Route, ScanResult, SecretHint
 from attackmap.orchestration.analyzers import AnalyzerSignals, merge_analyzer_signals
+from attackmap.orchestration.repo_passes import scan_repo
 
 
 def test_merge_analyzer_signals_applies_core_merge_rules() -> None:

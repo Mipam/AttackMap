@@ -5,8 +5,8 @@ import threading
 
 import pytest
 
-from attackmap.orchestration.desktop_worker import run_request_file, serve
 from attackmap.orchestration.desktop_fleet import parse_run_message
+from attackmap.orchestration.desktop_worker import run_request_file, serve
 from attackmap.orchestration.run_contract import RunRequest
 
 
