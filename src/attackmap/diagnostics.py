@@ -1,7 +1,14 @@
-"""Bounded, source-free local diagnostic context. No presentation dependencies."""
+"""Bounded, source-free local diagnostic context. No presentation dependencies.
+
+AR028 thread-safety audit: no lock is required here. Every model is a frozen
+pydantic model (``_ContextModel``) and every function is pure over its
+arguments — there is no module-level mutable state to share between the
+parallel scheduler, fleet workers, or progress threads.
+"""
 from __future__ import annotations
 
-from typing import Iterable, Literal
+from collections.abc import Iterable
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 

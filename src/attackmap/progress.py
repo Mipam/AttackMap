@@ -40,7 +40,13 @@ def _fmt_duration(seconds: float) -> str:
 
 
 class ScanProgress:
-    """Render scan progress to a TTY. All methods are no-ops when disabled."""
+    """Render scan progress to a TTY. All methods are no-ops when disabled.
+
+    AR028: every shared-state mutation (counters, label, spinner swap) is
+    lock-guarded so concurrent stage/advance callers (parallel scheduler,
+    fleet workers) cannot corrupt the counter or leak a spinner thread; the
+    stream write itself was already serialized through ``_lock``.
+    """
 
     def __init__(self, *, enabled: bool = True, stream: TextIO | None = None) -> None:
         stream = stream if stream is not None else sys.stderr
@@ -63,16 +69,18 @@ class ScanProgress:
         if not self._enabled:
             return
         self._stop_spinner()
-        self._total = max(0, total)
-        self._done = 0
-        self._label = label
-        self._start = time.monotonic()
+        with self._lock:
+            self._total = max(0, total)
+            self._done = 0
+            self._label = label
+            self._start = time.monotonic()
         self._draw(force=True)
 
     def advance(self, current: str = "") -> None:
         if not self._enabled:
             return
-        self._done += 1
+        with self._lock:
+            self._done += 1
         self._draw(current=current)
 
     # --- indeterminate tail phases ---------------------------------------
@@ -82,23 +90,26 @@ class ScanProgress:
         if not self._enabled:
             return
         self._stop_spinner()
-        self._label = label
-        stop = threading.Event()
-        self._spin_stop = stop
-        started = time.monotonic()
+        with self._lock:
+            self._label = label
+            stop = threading.Event()
+            self._spin_stop = stop
+            started = time.monotonic()
 
-        def _spin() -> None:
-            i = 0
-            while not stop.is_set():
-                frame = _SPINNER[i % len(_SPINNER)]
-                with self._lock:
-                    self._write(f"{frame} {label}… ({_fmt_duration(time.monotonic() - started)})")
-                i += 1
-                stop.wait(0.12)
+            def _spin() -> None:
+                i = 0
+                while not stop.is_set():
+                    frame = _SPINNER[i % len(_SPINNER)]
+                    with self._lock:
+                        self._write(f"{frame} {label}… ({_fmt_duration(time.monotonic() - started)})")
+                    i += 1
+                    stop.wait(0.12)
 
-        thread = threading.Thread(target=_spin, daemon=True)
-        self._spin_thread = thread
-        thread.start()
+            thread = threading.Thread(target=_spin, daemon=True)
+            self._spin_thread = thread
+            # Start under the lock so a concurrent stage()/done() can never
+            # join a thread that has not been started yet.
+            thread.start()
 
     def done(self, summary: str = "") -> None:
         if not self._enabled:
@@ -113,12 +124,17 @@ class ScanProgress:
     # --- internals --------------------------------------------------------
 
     def _stop_spinner(self) -> None:
-        if self._spin_stop is not None:
-            self._spin_stop.set()
-        if self._spin_thread is not None:
-            self._spin_thread.join(timeout=0.5)
-        self._spin_stop = None
-        self._spin_thread = None
+        # Swap the spinner out under the lock, then stop and join outside it:
+        # the spinner thread needs the lock for its final write, so joining
+        # while holding the lock would deadlock.
+        with self._lock:
+            stop, thread = self._spin_stop, self._spin_thread
+            self._spin_stop = None
+            self._spin_thread = None
+        if stop is not None:
+            stop.set()
+        if thread is not None:
+            thread.join(timeout=0.5)
 
     def _draw(self, *, current: str = "", force: bool = False) -> None:
         now = time.monotonic()
@@ -178,6 +194,10 @@ class JsonScanProgress:
     to keep the stream sane on large trees; ``done`` (per-file count) stays
     accurate because every advance still increments the internal counter and the
     latest count rides on each emitted event.
+
+    AR028: counter mutations and stream writes are lock-guarded so concurrent
+    callers (parallel scheduler, fleet workers) can never interleave two
+    half-written NDJSON lines or tear the advance counter.
     """
 
     def __init__(self, *, stream: TextIO | None = None, min_interval: float = 0.1) -> None:
@@ -187,35 +207,40 @@ class JsonScanProgress:
         self._done = 0
         self._start = 0.0
         self._last_emit = 0.0
+        self._lock = threading.Lock()
 
     def begin(self, total: int, label: str = "Scanning files") -> None:
-        self._total = max(0, total)
-        self._done = 0
-        self._start = time.monotonic()
-        self._last_emit = self._start  # anchor throttle window to scan start
-        self._emit("begin", total=self._total, label=label)
+        with self._lock:
+            self._total = max(0, total)
+            self._done = 0
+            self._start = time.monotonic()
+            self._last_emit = self._start  # anchor throttle window to scan start
+            self._emit("begin", total=self._total, label=label)
 
     def advance(self, current: str = "") -> None:
-        self._done += 1
-        now = time.monotonic()
-        # Always emit the final file; throttle the rest.
-        if self._done < self._total and (now - self._last_emit) < self._min_interval:
-            return
-        self._last_emit = now
-        self._emit("advance", done=self._done, total=self._total, current=current)
+        with self._lock:
+            self._done += 1
+            now = time.monotonic()
+            # Always emit the final file; throttle the rest.
+            if self._done < self._total and (now - self._last_emit) < self._min_interval:
+                return
+            self._last_emit = now
+            self._emit("advance", done=self._done, total=self._total, current=current)
 
     def stage(self, label: str) -> None:
-        self._emit("stage", label=label)
+        with self._lock:
+            self._emit("stage", label=label)
 
     def done(self, summary: str = "") -> None:
         elapsed = round(time.monotonic() - self._start, 3) if self._start else 0.0
-        self._emit(
-            "done",
-            summary=summary,
-            done=self._done,
-            total=self._total,
-            elapsed_s=elapsed,
-        )
+        with self._lock:
+            self._emit(
+                "done",
+                summary=summary,
+                done=self._done,
+                total=self._total,
+                elapsed_s=elapsed,
+            )
 
     def _emit(self, event: str, **fields: object) -> None:
         payload = {"v": PROGRESS_PROTOCOL_VERSION, "event": event, **fields}
@@ -255,6 +280,9 @@ class EventLog:
     untouched, and logging failures never abort a scan. Every record carries
     ``ts, run_id, trace_id, stage, event, status``; ``ms`` and ``detail`` are
     attached when known.
+
+    AR028 audit: appends, snapshots and flush are serialized through
+    ``_lock`` — verified safe for the parallel scheduler's worker threads.
     """
 
     REQUIRED_FIELDS = ("ts", "run_id", "trace_id", "stage", "event", "status")

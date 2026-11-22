@@ -336,6 +336,12 @@ def _run_scan(
 
     opt_in_matches: list[str] = []
     captured_index: RepoIndex | None = None
+    # AR028 concurrency envelope for TimeBudget (run_budget.py): its only
+    # write is the single-reference ``exceeded_stage`` assignment in check()
+    # — atomic under the GIL — and this pipeline calls check()/tick() only
+    # from this thread (the AR027 scheduler pool touches the budget never;
+    # fleet workers each own their budget through a ContextVar). Reads stay
+    # lock-free; no lock is added.
     budget = TimeBudget(resolve_time_budget_seconds(spec.budget.time_budget_seconds))
     state.time_budget = budget
     scan_progress = create_progress(spec.progress_format, no_progress=spec.no_progress)
