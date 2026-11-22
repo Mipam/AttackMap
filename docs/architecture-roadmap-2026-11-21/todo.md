@@ -513,6 +513,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR031 · Per-layer import enforcement
 **Phase** 1 · **Priority** High · **Effort** 2 d · **Depends** AR030 · **Blocks** AR088
 **Lease** `tests-arch` · **Acceptance** AC-110
+**Status** IN_PROGRESS — slice 1 DONE (commit e4fd43d, agent-delivered, parallel with AR029): layer_map.py (strict stack surfaces>orchestration>reasoning>extraction>model>foundation + sdk island + output/ai lateral band + ~120-name flat transition map), test_layer_boundaries.py (6 tests incl. AC-110 negative path), tools/layer_report.py; transition-tolerant (enforces only modules already in target subpackages — violation_total 0, tightens automatically as AR029 lands). Slice 2 owed: full enforcement once AR029 + AR030 complete
 
 **Files** `tests/architecture/test_import_boundaries.py`, `tools/arch_report.py`
 

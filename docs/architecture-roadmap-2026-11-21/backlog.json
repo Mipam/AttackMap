@@ -793,7 +793,7 @@
       "phase": 1,
       "priority": "High",
       "effort_days": 2.0,
-      "status": "OPEN",
+      "status": "IN_PROGRESS",
       "depends_on": [
         "AR030"
       ],
@@ -809,7 +809,9 @@
         "tools/arch_report.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "slice 1 commit e4fd43d (agent-delivered, parallel with AR029): tests/architecture/layer_map.py (strict stack surfaces>orchestration>reasoning>extraction>model>foundation, sdk island, output+ai lateral band, ~120 flat-name transition map), test_layer_boundaries.py (6 tests incl. AC-110 negative path via synthetic planted edge), tools/layer_report.py (--json per-pair counts); rules enforce only modules already in target subpackages (transition-tolerant), violation_total 0 at capture; slice 2 owed: activate full enforcement once AR029 lands + ratchet violations to zero"
+      ]
     },
     {
       "id": "AR032",
