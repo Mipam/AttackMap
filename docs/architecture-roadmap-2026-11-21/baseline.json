@@ -21,12 +21,12 @@
     "ruff_total": 383,
     "mypy_errors": 494,
     "mypy_files_with_errors": 62,
-    "import_cycles": 49,
+    "import_cycles": 43,
     "broad_excepts": 61,
     "longest_function_lines": 788,
     "functions_over_80_lines": 74,
     "models_fan_in": 63,
-    "modules": 135,
+    "modules": 134,
     "coverage_floor_pct": 21
   }
 }

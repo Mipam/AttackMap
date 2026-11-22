@@ -313,38 +313,14 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR020 · Foundation de-cycling: safe_fs ↔ artifact_manifest
 **Phase** 1 · **Priority** High · **Effort** 3 d · **Depends** AR002 · **Blocks** AR022
 **Lease** `foundation` · **Acceptance** AC-101
-
-**Files** `src/attackmap/safe_fs.py`, `src/attackmap/artifact_manifest.py`,
-`src/attackmap/artifact_publisher.py`, `src/attackmap/index.py`
-
-**Steps**
-1. Move directory-walking primitives into `safe_fs` (`walk_repo` already lives there).
-2. Make `artifact_manifest` a pure serializer over a caller-supplied file listing.
-3. Remove the `artifact_manifest → artifact_publisher` and `index → artifact_manifest`
-   edges; inject the listing.
-4. Re-run the architecture report and drop the corresponding allowlist entries.
-
-**Verify** `pytest tests/architecture/ -v -k foundation && pytest -m "not live" -k "artifact or manifest or safe_fs"`
-
-**Rollback** The allowlist entries can be restored; behaviour is unchanged either way.
+**Status** DONE (commit d4b6041, agent-delivered) — manifest schema constants + generation validation moved verbatim into safe_fs so walk_repo's artifact filtering keeps working everywhere; artifact_manifest is a pure serializer; artifact_manifest → artifact_publisher edge removed; the card's index → artifact_manifest edge does not exist (grep-verified) and the residual lazy reverse ScanSnapshot import is cycle-free (pipeline-side injection deferred to the orchestration lease); cycles 49 → 43; foundation cycle-free (AC-101); architecture tests 5/5; focused suites 109+287 green
 
 ---
 
 ### AR021 · Remove the `recon_models` shim
 **Phase** 1 · **Priority** High · **Effort** 0.5 d · **Depends** AR020 · **Blocks** AR022
 **Lease** `foundation` · **Acceptance** AC-102
-
-**Files** delete `src/attackmap/recon_models.py`; edits in `analyzer_contracts.py` and all
-importers
-
-**Steps**
-1. Replace `from .recon_models import X` with the real module path.
-2. Delete the shim and its `__all__`.
-3. Confirm `analyzer_contracts` no longer participates in the `models` cycle.
-
-**Verify** `grep -rn "recon_models" src tests | wc -l` → `0`
-
-**Rollback** Restore the file; it is a pure re-export.
+**Status** DONE (commit d4b6041, agent-delivered) — analyzer_contracts + sdk/models import attackmap.models directly; incremental._ENGINE_MODULES updated; grep recon_models = 0 (AC-102); allowlist regenerated 49 → 43. Note: the shim's staged deletion raced into parent commit 344cb42, so intermediate commits 344cb42..5f55789 are import-broken — d4b6041 resolves them; do not deploy from those
 
 ---
 

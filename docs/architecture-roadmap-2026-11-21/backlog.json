@@ -492,7 +492,7 @@
       "phase": 1,
       "priority": "High",
       "effort_days": 3.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR002"
       ],
@@ -510,7 +510,9 @@
         "src/attackmap/index.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit d4b6041: manifest schema constants + generation validation moved verbatim into safe_fs (walk_repo's artifact filtering keeps working); artifact_manifest is a pure serializer re-importing shared names, artifact_manifest -> artifact_publisher edge removed; index -> artifact_manifest edge does not exist (grep) - the residual lazy artifact_manifest -> index ScanSnapshot import is cycle-free and needs pipeline-side injection in the orchestration phase; cycles 49 -> 43; 0 cycles among foundation modules (AC-101); architecture tests 5/5; artifact/publisher/safe_fs suites 109 + 287 green"
+      ]
     },
     {
       "id": "AR021",
@@ -518,7 +520,7 @@
       "phase": 1,
       "priority": "High",
       "effort_days": 0.5,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR020"
       ],
@@ -534,7 +536,9 @@
         "src/attackmap/analyzer_contracts.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit d4b6041 (shim file deletion landed in parent commit 344cb42 through a concurrent-staging race - intermediate commits 344cb42..5f55789 are import-broken, resolved by d4b6041): analyzer_contracts + sdk/models import attackmap.models directly; incremental._ENGINE_MODULES updated; grep recon_models across src/tests/tools = 0 (AC-102); cycle allowlist regenerated 49 -> 43"
+      ]
     },
     {
       "id": "AR022",
