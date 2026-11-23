@@ -253,6 +253,73 @@ def test_deeply_nested_yaml_rails_config_bounded(tmp_path):
                for note in config.limitations)
 
 
+def test_deeply_nested_yaml_suppress_baseline_rejected_gracefully(tmp_path):
+    """The repo-level suppress file is parsed with the unbounded
+    ``yaml.safe_load``; a pathologically deep flow document escapes the
+    pure-Python parser as ``RecursionError``, not ``YAMLError``. It must be
+    rejected exactly like a malformed document: a "Failed to parse" warning,
+    no suppressions, no crash (regression guard for #225/AR086 class)."""
+    from attackmap.output.suppress import load_suppress_file
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".attackmap-suppress.yaml").write_text(_deep_flow_yaml(3_000), encoding="utf-8")
+
+    warnings: list[str] = []
+    suppressions = load_suppress_file(repo, warnings)
+
+    assert suppressions == []
+    assert any("Failed to parse .attackmap-suppress.yaml" in w for w in warnings)
+    # Parity with a genuinely malformed (YAMLError) document: same warning,
+    # same empty result.
+    yaml_error_warnings: list[str] = []
+    malformed = repo / "malformed.yml"
+    malformed.write_text("version: [unclosed\n", encoding="utf-8")
+    yaml_error_warnings_result = load_suppress_file(
+        repo, yaml_error_warnings, explicit=malformed
+    )
+    assert yaml_error_warnings_result == []
+    assert any("Failed to parse malformed.yml" in w for w in yaml_error_warnings)
+
+
+def test_deeply_nested_yaml_suppress_text_parse_rejected_gracefully():
+    """Same guard at the ``parse_suppress_text`` level (also used for
+    suppress files read from a git ref via ``--suppress-from-ref``)."""
+    from attackmap.output.suppress import parse_suppress_text
+
+    warnings: list[str] = []
+    suppressions = parse_suppress_text(_deep_flow_yaml(3_000), ".attackmap-suppress.yaml", warnings)
+
+    assert suppressions == []
+    assert any("Failed to parse .attackmap-suppress.yaml" in w for w in warnings)
+
+
+def test_deeply_nested_yaml_suppress_append_refused(tmp_path):
+    """The GUI/desktop append path re-parses the existing suppress file; a
+    deeply nested document must raise the same ValueError as a YAMLError
+    document, and must not rewrite the file."""
+    from attackmap.surfaces.ui.suppress_write import append_suppression
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    suppress_file = repo / ".attackmap-suppress.yaml"
+    deep_document = _deep_flow_yaml(3_000)
+    suppress_file.write_text(deep_document, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="not valid YAML"):
+        append_suppression(
+            suppress_file, {"reason": "accepted risk", "rule": "hardcoded-secret"}, root=repo
+        )
+    assert suppress_file.read_text(encoding="utf-8") == deep_document
+
+    # Parity: a YAMLError document takes the identical error path.
+    suppress_file.write_text("version: [unclosed\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="not valid YAML"):
+        append_suppression(
+            suppress_file, {"reason": "accepted risk", "rule": "hardcoded-secret"}, root=repo
+        )
+
+
 # ---------------------------------------------------------------------------
 # Unicode confusables / mixed-direction names (small committed fixture)
 # ---------------------------------------------------------------------------

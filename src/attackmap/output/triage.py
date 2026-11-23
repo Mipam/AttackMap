@@ -7,15 +7,16 @@ this module does: a score-ordered, root-cause-clustered Markdown view that cites
 each finding's stable `finding_id`.
 
 The ordering is a pure function of the findings (severity → exploitability →
-score → title), so two runs over the same findings produce byte-identical
-output and the file diffs cleanly across scans.
+score → title → finding id), implemented by ``reasoning.ranking`` (AR050), so
+two runs over the same findings produce byte-identical output and the file
+diffs cleanly across scans.
 """
 
 from __future__ import annotations
 
 from attackmap.models import Finding, ScanResult
 from attackmap.output.diff import finding_id
-from attackmap.policy import SEVERITY_RANK as _SEVERITY_RANK
+from attackmap.reasoning import ranking as _ranking
 
 # Root-cause clusters, in fixed priority order. Each maps to the finding tags
 # (substring match) that belong to it. The first matching cluster wins.
@@ -34,13 +35,8 @@ _FALLBACK_CLUSTER = "Other findings"
 
 def _sort_key(finding: Finding) -> tuple:
     """Deterministic priority key: severity, then exploitability, then score,
-    then title (a total order, so output is reproducible)."""
-    return (
-        _SEVERITY_RANK.get(finding.severity, 3),
-        -(finding.exploitability or 0),
-        -(finding.score or 0),
-        finding.title,
-    )
+    then title, then finding id (a total order; see ranking.finding_sort_key)."""
+    return _ranking.finding_sort_key(finding)
 
 
 def _cluster_of(finding: Finding) -> tuple[int, str]:
@@ -54,15 +50,7 @@ def _cluster_of(finding: Finding) -> tuple[int, str]:
 
 def rank_findings(findings: list[Finding]) -> list[Finding]:
     """Findings de-duplicated by ``finding_id`` and ordered deterministically."""
-    seen: set[str] = set()
-    unique: list[Finding] = []
-    for finding in findings:
-        fid = finding_id(finding)
-        if fid in seen:
-            continue
-        seen.add(fid)
-        unique.append(finding)
-    return sorted(unique, key=_sort_key)
+    return _ranking.rank_findings(findings, None)
 
 
 def _metrics_suffix(finding: Finding) -> str:

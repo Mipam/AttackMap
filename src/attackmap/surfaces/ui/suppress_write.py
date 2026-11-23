@@ -99,7 +99,9 @@ def append_suppression(path: Path, entry: dict[str, Any], *, root: Path | None =
     if path.is_file():
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except yaml.YAMLError as exc:
+        # A pathologically deep document escapes the pure-Python parser as
+        # recursion, not YAMLError — same "existing file is unparseable" path.
+        except (yaml.YAMLError, RecursionError) as exc:
             raise ValueError(f"existing suppress file is not valid YAML: {exc}") from exc
     else:
         data = {}

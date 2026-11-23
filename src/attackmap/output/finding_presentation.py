@@ -23,7 +23,7 @@ from attackmap.output.finding_identity import finding_id
 
 # Read-only exposure of the existing prioritization weights: one source of
 # truth, so the decomposition shown to users cannot drift from the ranking.
-from attackmap.reasoning.threat_model import _CONFIDENCE_MULTIPLIER, _SEVERITY_WEIGHT
+from attackmap.reasoning import ranking as _ranking
 
 CONTEXT_VERSION = "1.0"
 MAX_CANDIDATES = 8
@@ -82,14 +82,15 @@ class FindingPresentationIndex:
         source_role = next(iter(roles)) if len(roles) == 1 else "mixed" if roles else "unknown"
         reference_status, producer_score = self._resolve_score_reference(finding)
         decomposition = self._exploitability_decomposition(finding, producer_score)
+        _weight, _multiplier = _ranking.score_components(finding.severity, finding.confidence)
         factors = [
             {"name": "severity", "value": finding.severity, "source": "finding.severity", "points": None,
              "kind": "ordering_band",
              "note": "primary ranking band: high ranks above medium above low (threat_model severity rank)"},
             {"name": "confidence", "value": finding.confidence, "source": "finding.confidence", "points": None,
              "kind": "ordering_multiplier",
-             "note": f"multiplies the severity weight ({_SEVERITY_WEIGHT.get(finding.severity, 0)}) by "
-                     f"{_CONFIDENCE_MULTIPLIER.get(finding.confidence, 0.5)} in threat_model.compute_finding_score; "
+             "note": f"multiplies the severity weight ({_weight}) by "
+                     f"{_multiplier} in threat_model.compute_finding_score; "
                      "an ordering input, not a calibrated probability"},
         ]
         if finding.exploitability is not None:

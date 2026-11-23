@@ -473,7 +473,10 @@ def parse_suppress_text(text: str, name: str, warnings: list[str]) -> list[Suppr
     path = Path(name)
     try:
         data = yaml.safe_load(text)
-    except yaml.YAMLError as exc:  # type: ignore[attr-defined]
+    # RecursionError: a pathologically deep document escapes the pure-Python
+    # parser as recursion, not YAMLError (#225/AR086 class) — treat it as an
+    # unparseable document, same "invalid suppression file" handling.
+    except (yaml.YAMLError, RecursionError) as exc:  # type: ignore[attr-defined]
         warnings.append(f"Failed to parse {path.name}: {exc}")
         return []
 

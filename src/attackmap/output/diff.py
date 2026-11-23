@@ -36,7 +36,7 @@ from attackmap.model.taxonomy import taxonomy_label
 from attackmap.models import Finding
 from attackmap.output.finding_identity import finding_id, identity_migration_note
 from attackmap.output.md import md_code, md_text
-from attackmap.policy import SEVERITY_RANK as _SEVERITY_RANK
+from attackmap.reasoning.ranking import severity_title_sort_key
 
 COVERAGE_COMPARISON_NOTE = (
     "Source-covered disappearances are not verified fixes: analyzer/config version parity is unknown; "
@@ -251,7 +251,7 @@ def render_diff_markdown(diff: DiffReport, *, title: str = "AttackMap diff") -> 
     counts = diff.counts()
 
     def _sorted(items: list[FindingSnapshot]) -> list[FindingSnapshot]:
-        return sorted(items, key=lambda s: (_SEVERITY_RANK.get(s.severity, 3), s.title))
+        return sorted(items, key=lambda s: severity_title_sort_key(s.severity, s.title))
 
     def _bullets(items: list[FindingSnapshot]) -> str:
         if not items:
@@ -269,7 +269,7 @@ def render_diff_markdown(diff: DiffReport, *, title: str = "AttackMap diff") -> 
         if not diff.new_instances:
             return "_none_"
         lines = []
-        for snap, labels in sorted(diff.new_instances, key=lambda t: (_SEVERITY_RANK.get(t[0].severity, 3), t[0].title)):
+        for snap, labels in sorted(diff.new_instances, key=lambda t: severity_title_sort_key(t[0].severity, t[0].title)):
             lines.append(f"- **[{snap.severity.upper()}]** {md_text(snap.title)} — {len(labels)} new instance(s)")
             lines.extend(f"  - {md_code(label)}" for label in labels[:10])
             if len(labels) > 10:

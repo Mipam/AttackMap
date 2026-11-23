@@ -1,12 +1,7 @@
 from __future__ import annotations
 
-import re
-
 from attackmap.extraction.evidence import (
     is_low_quality_source as _is_low_quality_source,
-)
-from attackmap.extraction.evidence import (
-    is_protocol_derived_surface as _is_protocol_derived_surface,
 )
 from attackmap.extraction.evidence import (
     surface_evidence_class as _surface_provenance,
@@ -27,33 +22,15 @@ from attackmap.models import (
 )
 from attackmap.output.md import defang_markdown, md_code, md_text
 from attackmap.output.security_overlay import SecurityOverlay, build_security_overlay
-
-
-def _severity_rank(value: str) -> int:
-    return {"high": 0, "medium": 1, "low": 2}.get(value, 3)
-
-
-def _surface_risk_rank(value: str) -> int:
-    return {"high": 0, "medium": 1, "low": 2}.get(value, 3)
-
-
-def _confidence_rank(value: str) -> float:
-    return {"high": 3.0, "medium": 2.0, "low": 1.0}.get(value, 1.0)
-
-
-def _extract_numeric_confidence(text: str) -> float | None:
-    match = re.search(r"confidence=([0-9]+(?:\.[0-9]+)?)", text.lower())
-    if match is None:
-        return None
-    try:
-        return float(match.group(1))
-    except ValueError:
-        return None
-
-
-def _contains_any(text: str, keywords: tuple[str, ...]) -> bool:
-    lowered = text.lower()
-    return any(keyword in lowered for keyword in keywords)
+from attackmap.reasoning.ranking import (
+    _finding_priority,
+    _finding_source_quality,
+    _path_priority,
+    _severity_rank,
+    _surface_priority,
+    _surface_risk_rank,
+    dedupe_hotspots,
+)
 
 
 def _provenance_breakdown(surfaces: list[AttackSurface]) -> str:
@@ -66,90 +43,6 @@ def _top_score_reasons(factors: dict[str, float], top_n: int = 3) -> str:
     ranked = sorted(factors.items(), key=lambda item: item[1], reverse=True)
     top = [f"{name}={value:.1f}" for name, value in ranked[:top_n] if value > 0]
     return ", ".join(top)
-
-
-def _surface_priority(surface: AttackSurface) -> tuple[float, dict[str, float]]:
-    exposure_score = {"public": 3.0, "unknown": 2.0, "internal": 1.0}.get(surface.exposure, 1.0)
-    privilege_score = {
-        "admin": 3.0,
-        "auth": 3.0,
-        "webhook": 2.0,
-        "upload": 2.0,
-        "public_api": 1.5,
-        "internal": 1.0,
-        "health": 0.5,
-    }.get(surface.category, 1.0)
-    reachability_score = 2.0 if surface.exposure == "public" else 1.0
-    trust_boundary_score = (2.0 if surface.data_store_interaction else 0.0) + (2.0 if surface.outbound_integration else 0.0)
-    chain_depth_score = 1.0 + (1.0 if surface.data_store_interaction and surface.outbound_integration else 0.0)
-    confidence_score = 2.0 if surface.auth_signals else 1.0
-    weighted = {
-        "exposure": 2.0 * exposure_score,
-        "privilege": 2.0 * privilege_score,
-        "reachability": 1.5 * reachability_score,
-        "trust_boundary": 1.5 * trust_boundary_score,
-        "chain_depth": 1.0 * chain_depth_score,
-        "confidence": 1.0 * confidence_score,
-    }
-    if _is_low_quality_source(surface.file):
-        weighted["source_quality_penalty"] = -8.0
-    elif _is_protocol_derived_surface(surface):
-        weighted["source_quality_penalty"] = -3.0
-    elif surface.exposure == "public":
-        weighted["source_quality_bonus"] = 1.0
-    return round(sum(weighted.values()), 2), weighted
-
-
-def _path_priority(path: AttackPath) -> tuple[float, dict[str, float]]:
-    text = f"{path.name} {path.impact} {' '.join(path.steps)}"
-    exposure_score = 3.0 if _contains_any(text, ("attacker reaches", "public", "/xrpc/")) else 2.0
-    privilege_score = 1.0 + (
-        2.0
-        if _contains_any(text, ("admin", "privileged", "authorization", "authz", "token", "identity"))
-        else 0.5
-    )
-    reachability_score = 2.0 if any(step.lower().startswith("entry:") for step in path.steps) else 1.0
-    trust_boundary_score = 1.0 + sum(
-        1.0
-        for step in path.steps
-        if _contains_any(step, ("propagation", "service", "edge", "external", "config risk", "sink"))
-    )
-    chain_depth_score = max(1.0, min(len(path.steps), 8) / 2.0)
-    evidence_text = " ".join(path.steps)
-    numeric_confidence = _extract_numeric_confidence(evidence_text)
-    confidence_score = 1.5 + (numeric_confidence if numeric_confidence is not None else 0.5)
-    weighted = {
-        "exposure": 2.0 * exposure_score,
-        "privilege": 2.0 * privilege_score,
-        "reachability": 1.5 * reachability_score,
-        "trust_boundary": 2.0 * trust_boundary_score,
-        "chain_depth": 1.2 * chain_depth_score,
-        "confidence": 1.5 * confidence_score,
-    }
-    if _is_low_quality_source(text):
-        weighted["source_quality_penalty"] = -10.0
-    return round(sum(weighted.values()), 2), weighted
-
-
-def _finding_source_quality(finding: Finding) -> str:
-    paths = [location.file for location in finding.locations if location.file]
-    if not paths:
-        return "unknown"
-    low_quality = [_is_low_quality_source(path) for path in paths]
-    return "low_quality" if all(low_quality) else "mixed" if any(low_quality) else "unclassified"
-
-
-def _finding_priority(finding: Finding, attack_surfaces: list[AttackSurface], attack_paths: list[AttackPath]) -> tuple[float, dict[str, float]]:
-    # Finding has no detector-owned surface/path IDs. Repository prose matches
-    # cannot contribute exposure, reachability, boundary or chain scores.
-    weighted = {
-        "heuristic_severity": {"high": 6.0, "medium": 4.0, "low": 2.0}[finding.severity],
-        "heuristic_confidence": 1.5 * _confidence_rank(finding.confidence),
-    }
-    quality = _finding_source_quality(finding)
-    if quality in {"low_quality", "mixed"}:
-        weighted["owned_source_quality_penalty"] = -10.0 if quality == "low_quality" else -3.0
-    return round(sum(weighted.values()), 2), weighted
 
 
 def _overview_line(scan: ScanResult) -> str:
@@ -228,17 +121,7 @@ def _weaknesses(attack_surfaces: list[AttackSurface], findings: list[Finding], a
         reverse=True,
     )
     # Avoid duplicate hotspot rows for the same logical surface (e.g., ANY/SUBSCRIBE variants in one lexicon file).
-    deduped_hotspots: list[tuple[tuple[float, dict[str, float]], AttackSurface]] = []
-    seen_hotspot_keys: set[tuple[str, str, str, str]] = set()
-    for scored_surface in hotspot_scores:
-        (_score, _factors), surface = scored_surface
-        key = (surface.route, surface.file, surface.category, surface.exposure)
-        if key in seen_hotspot_keys:
-            continue
-        seen_hotspot_keys.add(key)
-        deduped_hotspots.append(scored_surface)
-        if len(deduped_hotspots) >= 2:
-            break
+    deduped_hotspots = dedupe_hotspots(hotspot_scores)
 
     for (score, factors), surface in deduped_hotspots:
         items.append(

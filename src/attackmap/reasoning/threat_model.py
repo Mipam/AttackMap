@@ -26,6 +26,7 @@ from attackmap.reasoning.finding_format import (
     _is_low_quality_source,
     _locs,
 )
+from attackmap.reasoning.ranking import compute_finding_score
 from attackmap.reasoning.route_auth_fusion import synthesize_unauthenticated_routes
 from attackmap.reasoning.rule_specs import (
     ANOMALY_FINDING_RATIONALE as _ANOMALY_FINDING_RATIONALE,
@@ -78,19 +79,8 @@ def _severity_rank(value: str) -> int:
     return {"high": 0, "medium": 1, "low": 2}.get(value, 3)
 
 
-# #4: prioritization scoring. Higher score = triage first within severity.
-# Formula: severity_weight x confidence_multiplier, rounded to int.
-_SEVERITY_WEIGHT = {"high": 100, "medium": 50, "low": 10}
-_CONFIDENCE_MULTIPLIER = {"high": 1.0, "medium": 0.75, "low": 0.5}
-
-
-def compute_finding_score(severity: str, confidence: str) -> int:
-    """Compute the prioritization score for a finding.
-
-    Range: 5 (low/low) to 100 (high/high). Used as a secondary sort key
-    inside a severity band so a HIGH/HIGH lands above a HIGH/LOW.
-    """
-    return int(_SEVERITY_WEIGHT.get(severity, 0) * _CONFIDENCE_MULTIPLIER.get(confidence, 0.5))
+# #4 prioritization scoring (severity weight x confidence multiplier) lives
+# in reasoning.ranking; compute_finding_score is imported from there above.
 
 
 def _action_step(label: str, action: str) -> str:

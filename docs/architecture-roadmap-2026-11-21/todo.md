@@ -747,7 +747,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR050 · Single ranking and dedupe module
 **Phase** 2 · **Priority** High · **Effort** 3 d · **Depends** AR004, AR040 · **Blocks** AC-208
 **Lease** `reasoning-output` · **Acceptance** AC-208
-**Status** OPEN — unblocked by owner decision (2026-11-23, section 5.1 of the 2026-11-23 handoff): reports switched to the registry's snake_case rule ids; suppressions and SARIF accept both old and new ids via `legacy_rule_ids` (e5597c4). Wiring pass LANDED (wave 13, commit 5b53029) — findings now carry registry ids. Shares the `reasoning-output` lease with AR049 — run sequentially.
+**Status** DONE (wave 14b) — new reasoning/ranking.py holds all weight tables/dedupe; total deterministic ordering (id tie-breaker); identity hash unchanged — unblocked by owner decision (2026-11-23, section 5.1 of the 2026-11-23 handoff): reports switched to the registry's snake_case rule ids; suppressions and SARIF accept both old and new ids via `legacy_rule_ids` (e5597c4). Wiring pass LANDED (wave 13, commit 5b53029) — findings now carry registry ids. Shares the `reasoning-output` lease with AR049 — run sequentially.
 
 **Files** new `src/attackmap/reasoning/ranking.py`; edits in `threat_model.py`,
 `exploitability.py`, `defensive_review.py`, `diff.py`, `triage.py`

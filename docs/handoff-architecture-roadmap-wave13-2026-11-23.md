@@ -175,20 +175,13 @@ Wave 13 (owner decision 11ed09d; commits `e5597c4`, `5b53029`, integration `0647
 - **Machine-local scan identity** (`compute_scan_identity`): vulnerable-app now
   hashes `5ad12d57…` (id cutover consequence). Nothing in CI consumes it;
   re-baseline where a local workflow pins it.
-- **yaml RecursionError latent sites** (same defect class as AR086, NOT fixed;
-  outside that lane's lease): `output/suppress.py:~476`,
-  `surfaces/ui/suppress_write.py:~101` (the wave-14 lane CONFIRMED both
-  reachable and fixed them in its worktree — the fix was LOST in the incident;
-  recreate: `except (yaml.YAMLError, RecursionError)` + regression case in
-  tests/integration/test_hostile_inputs.py). `ai/supply_chain.py:152` was
-  checked and found ALREADY SAFE (`except Exception:` since AR029) — the
-  wave-11 handoff's claim was stale.
-- **Wave 14 was interrupted by the incident** (three lanes, all uncommitted,
-  work lost but fully recreatable): AR049 rationale/evidence (design was
-  settled: model fields + populate in reasoning + render in output; re-brief
-  from the card), AR088 ADRs + drift tool (ADRs were drafted, 8/8 drift tests
-  passed pre-incident), yaml hardening (see above — two except clauses + one
-  additive test case).
+- **yaml RecursionError latent sites** — FIXED in wave 14b (commit after
+  `ddc0046`): both `except (yaml.YAMLError, RecursionError)` clauses +
+  3 regression tests in `tests/integration/test_hostile_inputs.py` (before/after
+  proven). `ai/supply_chain.py:152` confirmed ALREADY SAFE.
+- **sarif.py local severity-weight table** (`output/sarif.py:49-51`, separate
+  `{"high": 9.0, …}`) — NOT centralized by AR050 (out of its lease); candidate
+  for a future ranking-centralization follow-up if the owner wants it.
 - **GUI/desktop readers still bypass the derived index** (AR061 follow-ups):
   `surfaces/ui/server.py`, `surfaces/ui/output.py`, desktop_actions/worker/
   capabilities, diagnostics_export, retention, desktop_provider — AR070's job.
@@ -219,6 +212,15 @@ Wave 13 (owner decision 11ed09d; commits `e5597c4`, `5b53029`, integration `0647
   `git branch --show-current` before each commit, final report with exact
   commands/results/deviations/unverified. Agents work in the main tree in
   parallel; never stash/checkout/reset/clean.
+- **Wave 14a/b amendment (post-incident, proven): agents NEVER run any git
+  mutation at all** — no `add/commit/reset/clean/checkout`; they leave all
+  changes uncommitted and the parent integrates after gates. Rationale: index
+  lock collisions and un-integratable half-states across parallel lanes; the
+  2026-11-23 worktree destruction happened while parallel agents shared the
+  tree, so lanes are kept as small as possible (2) with lease disjointness
+  VERIFIED AGAINST CURRENT CODE by the parent before every launch (wave 14a:
+  AR049×AR088; wave 14b: AR050×yaml-fixes — 14c was deferred a wave because
+  both AR050 and 14c collide with AR049's blast radius).
 - Parent integration checklist: (1) `git show --stat` per commit = leased paths
   only; (2) diff `surfaces/cli.py` and every pre-existing test an agent touched;
   (3) an agent's "pre-existing failure" is unverified until reproduced on the
