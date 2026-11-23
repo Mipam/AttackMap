@@ -111,8 +111,14 @@ where = ["src"]
 [tool.setuptools.package-data]
 # Declarative taint sink registry (#240) lives next to reasoning/taint_sinks.py;
 # the desktop UI assets live under surfaces/ui (AR029 subpackage restructure).
-attackmap.reasoning = ["taint_sinks.yaml"]
-attackmap.surfaces.ui = ["web/**/*", "fixtures/*.json"]
+# Single flat key with paths relative to the attackmap package: current
+# setuptools (>=78) rejects the previously used per-subpackage dotted keys
+# (it merges them into a nested table and fails schema validation).
+attackmap = [
+  "reasoning/taint_sinks.yaml",
+  "surfaces/ui/web/**/*",
+  "surfaces/ui/fixtures/*.json",
+]
 
 [tool.setuptools.dynamic]
 version = {attr = "attackmap.__version__"}
