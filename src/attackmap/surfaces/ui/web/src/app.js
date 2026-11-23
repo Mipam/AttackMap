@@ -185,6 +185,13 @@ function renderSettings(state) {
 
 function renderMain(state, report) {
   if (currentView === "settings") return renderSettings(state);
+  // The Activity view stays live during a run — it must render before the
+  // running/failed early returns below (AR083). Feature-detected: the
+  // node-based frontend harness (tests/ui_freshness.cjs) loads app.js
+  // without activity.js, so the globals may legitimately be absent.
+  if (currentView === "activity" && typeof renderActivity === "function") {
+    return renderActivity(state, report);
+  }
   if (state.status === "running") {
     const p = state.progress || {};
     return `<div class="running">Scanning… ${escapeHtml(p.label || p.event || "")} ${escapeHtml(p.current || "")}</div>`;
@@ -334,6 +341,7 @@ async function loadReportIfNeeded(state, isCurrent = () => true) {
 
 const VIEW_TITLES = {
   overview: "Overview",
+  activity: "Activity",
   findings: "Findings",
   exploitability: "Exploitability",
   paths: "Attack paths",
@@ -397,6 +405,7 @@ async function refreshPending() {
       state = await getState();
       if (!isCurrent()) { refreshRequested = true; continue; }
       paintStatus(state);
+      if (typeof activityObserve === "function") activityObserve(state);
       const pendingReport = loadReportIfNeeded(state, isCurrent);
       // Clear the old view while the new generation is still in flight.
       if (!reportCache) paintMain(state, null);

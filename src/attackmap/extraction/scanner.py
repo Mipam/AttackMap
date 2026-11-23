@@ -756,6 +756,10 @@ def scan_files(
     fleet worker subprocesses inherit it). The cache lives under
     ``cache_dir`` (or a temp-derived location outside the scanned repo) and
     is an optimization only: any doubt means full recompute of the file.
+    The content-addressed store (AR080/AC-401) rides the same activation:
+    analyzer payloads keyed by ``(analyzer_id, analyzer_version,
+    blob_hash)`` in the CAS root (``<cache_dir>/cas``, ``ATTACKMAP_CAS_ROOT``
+    or ``~/.attackmap/cas``) give a second, repo-independent reuse path.
     """
     from attackmap.extraction.index import RepoIndex
 
@@ -786,6 +790,9 @@ def scan_files(
         if (enabled_by_env() if incremental is None else incremental)
         else None
     )
+    # AR080/AC-401: the content-addressed per-analyzer store rides along
+    # whenever the per-file cache is active (same activation, same lifetime).
+    cas = _open_cas(cache_dir) if cache is not None else None
 
     csrf_protected = False
     files_since_checkpoint = 0
@@ -799,7 +806,7 @@ def scan_files(
         if language not in result.languages:
             result.languages.append(language)
 
-        signals, file_csrf = _cached_file_signals(item, cache, suffixes)
+        signals, file_csrf = _cached_file_signals(item, cache, suffixes, cas)
         result.routes.extend(signals["routes"])
         result.external_calls.extend(signals["external_calls"])
         result.databases.extend(signals["databases"])
@@ -831,6 +838,8 @@ def scan_files(
 
     if cache is not None:
         cache.save()
+    if cas is not None:
+        cas.save()
 
     if csrf_protected:
         # A CSRF defence anywhere in the repo (#244) — session config and CSRF
@@ -861,9 +870,24 @@ def _open_incremental_cache(root_path: Path, cache_dir: str | Path | None):
         return None  # optimization only: never fail the scan over the cache
 
 
-def _cached_file_signals(item: IndexedFile, cache, suffixes: set[str] | None):
-    """One file's per-file signals — from the cache when provably fresh,
-    else freshly computed (and cached for the next run)."""
+def _open_cas(cache_dir: str | Path | None):
+    """The content-addressed per-analyzer store (AR080/AC-401), or None when
+    disabled or unavailable. Optimization only: a CAS problem never fails
+    the scan — it degrades to the per-file cache alone."""
+    from attackmap.extraction import cas as cas_store
+
+    try:
+        return cas_store.open_cas(cache_dir)
+    except (OSError, ValueError, RuntimeError):
+        # Belt-and-suspenders: open_cas already degrades to None on these;
+        # a CAS problem must never fail the scan (optimization only).
+        return None
+
+
+def _cached_file_signals(item: IndexedFile, cache, suffixes: set[str] | None,
+                         cas=None):
+    """One file's per-file signals — from the per-file cache or the CAS when
+    provably fresh, else freshly computed (and stored for the next run)."""
     from attackmap.extraction.incremental import FileCacheKey, dump_payload, load_payload
 
     if cache is not None:
@@ -883,8 +907,31 @@ def _cached_file_signals(item: IndexedFile, cache, suffixes: set[str] | None):
             rebuilt = load_payload(payload)
             if rebuilt is not None:
                 return rebuilt
+        if cas is not None:
+            # Per-file cache missed: the CAS is the second chance, keyed by
+            # content address, so a hit here also repairs the per-file cache.
+            from attackmap.extraction import cas as cas_store
+
+            version = cas_store.analyzer_version(
+                engine=cache.engine,
+                policy=cache.policy,
+                rel=item.rel,
+                suffix=item.suffix,
+                pass_suffixes=suffixes,
+            )
+            cas.pin(content_sha)  # this run's blobs are never evicted
+            payload = cas.get(cas_store.BUILTIN_PASS_ANALYZER, version, content_sha)
+            if payload is not None:
+                rebuilt = load_payload(payload)
+                if rebuilt is not None:
+                    cache.put(key, payload)
+                    return rebuilt
         signals, csrf_protected = _analyze_indexed_file(item)
-        cache.put(key, dump_payload(signals, csrf_protected))
+        payload = dump_payload(signals, csrf_protected)
+        cache.put(key, payload)
+        if cas is not None:
+            cas.put(cas_store.BUILTIN_PASS_ANALYZER, version, content_sha,
+                    item.text, payload)
         return signals, csrf_protected
     return _analyze_indexed_file(item)
 

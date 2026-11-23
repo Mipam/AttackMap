@@ -991,6 +991,7 @@ when no browser exists.
 ### AR080 · Content-addressed incremental store
 **Phase** 4 · **Priority** High · **Effort** 10 d · **Depends** AR027, AR061 · **Blocks** AC-401
 **Lease** `cas` · **Acceptance** AC-401
+**Status** PARTIAL (wave 17) — CAS landed (sha256 blob store, per-analyzer (id,version,blob) cache, LRU eviction w/ current-run pinning, equivalence 5/5) BUT AC-401 gate NOT met on this machine: 10k/50 warm p95 21.1s vs 10s target (ratio 0.29 met); cold run 1.7x full. Card stays OPEN for perf work
 
 **Files** new `src/attackmap/extraction/cas.py`; edits in `scanner.py`, `incremental.py`,
 `tools/bench_incremental.py` (extend the existing benchmark)
@@ -1046,6 +1047,7 @@ when no browser exists.
 ### AR083 · Observability: metrics, trace ids, activity feed
 **Phase** 4 · **Priority** Medium · **Effort** 4 d · **Depends** AR003, AR028, AR067 · **Blocks** AC-404
 **Lease** `observability` · **Acceptance** AC-404
+**Status** DONE (wave 17) — trace_id per run in events.jsonl + budget ledger anchor; diagnostics/metrics (analyzer_ms/files/signals/budget_skips/stage_ms, additive events record); `attackmap explain-run <generation> [--json]`; GUI activity view (client-side from existing endpoints)
 
 **Files** `src/attackmap/progress.py`, new `src/attackmap/diagnostics/metrics.py`,
 `ui/web/src/views/activity.js`

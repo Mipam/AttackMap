@@ -104,6 +104,42 @@ AR067; AR080/AR081 need AR061/AR069 (all done); AR088 needs AR031 (done).
 
 ## 3. What landed since the wave-11 handoff (all verified, see commits)
 
+Wave 17 (2 parallel lanes, same protocol; AR083×AR080, lease disjointness
+verified against current code — `orchestration/`+`ai`+`surfaces/ui` vs
+`extraction/`+`tools/bench_incremental.py`):
+- **AR083** (`orchestration` lease) — observability: `src/attackmap/diagnostics/`
+  (new leaf package; `metrics.py` RunMetrics counters/timings) + `trace_id`
+  (uuid4 per run) threaded through `run_spec`/`pipeline`/`analyzers` via a
+  budget `ContextVar`; `extraction/progress.py` additive `extra=` merge so
+  progress events carry trace context; new CLI `explain-run
+  <generation|path|current> [-o BASE] [--json]` surfacing run metrics and
+  evidence from existing endpoints; activity view in
+  `surfaces/ui/web/src/activity.js` wired into app.js/index.html
+  (feature-detected, reads existing endpoints only). Tests:
+  `test_diagnostics_metrics.py`, `test_explain_run.py`. Identity hash
+  unchanged; ratchet PASS (ruff 649→648, modules 197→200, longest fn 750
+  after parent extracted `_init_run_events`/`_record_scan_metrics`/
+  `_record_budget_skip` from pipeline.py).
+- **AR080** (`extraction` lease) — CAS cache: `src/attackmap/extraction/cas.py`
+  sha256 blob store, per-analyzer cache keyed `(analyzer_id, analyzer_version,
+  blob_hash)`, LRU eviction with current-run pinning, degrade-to-no-cache
+  guards (broad excepts narrowed by parent to `(OSError, ValueError,
+  RuntimeError)`); wiring in `scanner.py`; `tools/bench_incremental.py`
+  extended `--files --changed --repeat --json`; `test_cas.py` (19 tests).
+  **AC-401 gate NOT met**: 10k files / 50 changed, warm p95 = **21.07 s vs
+  target < 10 s** (ratio 0.29 ≤ 0.5 ✓; cold 1.7× full). Card stays
+  **PARTIAL/OPEN** — perf follow-up is now measurable via AR084 suite.
+  Log: `C:/tmp/attackmap-scratch/ar080/bench-10k.log`.
+  Integration fix at wave-17 gates: the WP033 mutation campaign audits the
+  per-file cache layer, but the CAS rode the global default root
+  (`~/.attackmap/cas`, shared across processes) and masked per-file cache
+  corruption by design (second-chance + repair). The campaign now disables
+  CAS (`ATTACKMAP_CAS=0` monkeypatch, env scrubbed) — CAS has its own
+  `test_cas.py`; no product behavior change.
+- After wave 17: **49.5/56** (AR080 code landed, perf gate open). Remaining
+  7.5: AR063, AR064, AR065, AR066, AR070 (GUI cluster — biggest unlock,
+  needs visible preview per M3), AR081, AR082, AR080-perf.
+
 Wave 16 (2 parallel lanes, same protocol; AR012×AR068 chosen because
 AR012 **blocks** AR083 and AR083's trace_id work would have collided with
 AR012's pipeline edits — AR080 deferred to pair with AR083 in wave 17):
@@ -307,18 +343,18 @@ rebuilt; if anything is missing, `pip install -e ".[llm,dev]"` again.
 | Check | Command | Expected |
 | --- | --- | --- |
 | Layers/cycles | `-m pytest tests/architecture -q` | 11 passed |
-| Contracts | `-m pytest tests/contract -q` | 242 passed, 1 skipped |
+| Contracts | `-m pytest tests/contract -q` | 246 passed, 1 skipped |
 | Rule tests + meta-tests | `-m pytest tests/rules -q` | 439 passed |
 | Rule docs | `tools/gen_rule_docs.py --check` | 50 files up to date |
 | Ratchet | `tools/ratchet_check.py --baseline docs/architecture-roadmap-2026-11-21/baseline.json` | PASS |
 | Report identity | `-m tools.report_identity` | 84c7b18a… |
-| Full suite | `-m pytest -q -ra -m "not live" -n auto --timeout=300 -p no:cacheprovider` | ~6975 passed, 11 known failures, ~5.3 min |
+| Full suite | `-m pytest -q -ra -m "not live" -n auto --timeout=300 -p no:cacheprovider` | ~7058 passed, 11 known failures + up to 2 load-flaky, ~6.8 min |
 | Registry in pipeline | `attackmap.exe rules list --json` | 49 registry ids |
 | Eval baseline | `attackmap.exe eval rules --corpus corpus/reference.yaml --json` | exit 0, per-rule tp/fp/fn |
 
-Baseline recorded at `0647c9d`: ruff 649 (repo-wide), mypy 537/69, cycles 0,
-broad excepts 63, longest function 750, 75 functions >80 lines, models fan-in
-60, 194 modules. Tighten-only.
+Baseline recorded at `0647c9d` (last tightened wave 17): ruff 648 (repo-wide),
+mypy 537/69, cycles 0, broad excepts 58, longest function 750, 75 functions
+>80 lines, models fan-in 61, 200 modules. Tighten-only.
 
 ## 9. Known host failures (NOT regressions)
 
@@ -328,7 +364,8 @@ Flask blueprint prefix, path normalization),
 `tests/unit/test_regex_budget.py::test_pattern_scales_linearly` for
 `python_django_routes._MODULE` (1). Also load-flaky under `-n auto`:
 `tests/integration/test_resource_budgets.py::test_time_budget_check_overhead_is_negligible`
-(timing assertion; passes solo and in small groups — re-run before treating as
+and `tests/integration/test_execution_supervision.py::test_fifty_cancel_cycles`
+(timing assertions; pass solo and in small groups — re-run before treating as
 regression). Anything else failing is new.
 
 ## 10. Pitfalls (accumulated, incl. new this session)

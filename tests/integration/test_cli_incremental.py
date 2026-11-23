@@ -20,12 +20,30 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+import pytest
+
 import attackmap.extraction.scanner as scanner_mod
+from attackmap.extraction import cas as cas_mod
 from attackmap.extraction import incremental
 from attackmap.extraction.incremental import default_cache_dir
 from attackmap.orchestration.run_spec import FeatureFlags, RunSpec
 from attackmap.orchestration.scan_service import ScanRequest, _run_fleet_repo_argv
 from attackmap.surfaces.cli import app
+
+
+@pytest.fixture(autouse=True)
+def _no_cas(monkeypatch):
+    """This module proves the per-file cache contract (C34/AM048).
+
+    The AR080 CAS sits above it as a second chance (per-file miss -> CAS hit
+    -> repair), and its default root (~/.attackmap/cas) is global across
+    processes, so a live CAS would both mask per-file cache corruption and
+    make call-count assertions depend on unrelated runs. Disable it here;
+    extraction/cas.py and test_cas.py own that layer.
+    """
+    for name in (cas_mod.CAS_ENV, cas_mod.CAS_ROOT_ENV, cas_mod.CAS_MAX_BYTES_ENV):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv(cas_mod.CAS_ENV, "0")
 
 APP_PY = (
     "from flask import Blueprint\n"

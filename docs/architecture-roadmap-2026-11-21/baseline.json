@@ -51,10 +51,11 @@
     "(analyzer_catalog.get_analyzer_catalog) failing in tests/integration;",
     "the fast selection cannot see that tier.",
     "wave 14b (AR050): models_fan_in 60 -> 61 (new reasoning/ranking.py imports attackmap.models shim; structural consequence of the mandated ranking module), modules 194 -> 195",
-    "wave 16 (AR012): broad_excepts 63 -> 58 (typed taxonomy), modules 195 -> 197"
+    "wave 16 (AR012): broad_excepts 63 -> 58 (typed taxonomy), modules 195 -> 197",
+    "wave 17 (AR083/AR080): modules 197 -> 200 (diagnostics pkg + cas), ruff 649 -> 648; longest function kept at 750 by extracting _init_run_events/_record_scan_metrics/_record_budget_skip"
   ],
   "metrics": {
-    "ruff_total": 649,
+    "ruff_total": 648,
     "mypy_errors": 537,
     "mypy_files_with_errors": 69,
     "import_cycles": 0,
@@ -62,7 +63,7 @@
     "longest_function_lines": 750,
     "functions_over_80_lines": 75,
     "models_fan_in": 61,
-    "modules": 197,
+    "modules": 200,
     "coverage_floor_pct": 21
   }
 }

@@ -19,9 +19,9 @@ import json
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC
-from typing import TextIO
+from typing import Any, TextIO
 
 # NDJSON progress protocol version (consumed by the macOS GUI and other
 # non-TTY front-ends). Bump only on a breaking change to the event shape.
@@ -279,7 +279,8 @@ class EventLog:
     (``events.jsonl``). Purely additive: stdout progress rendering is
     untouched, and logging failures never abort a scan. Every record carries
     ``ts, run_id, trace_id, stage, event, status``; ``ms`` and ``detail`` are
-    attached when known.
+    attached when known. AR083: ``record(..., extra={...})`` merges additive
+    metric fields (e.g. files/signals/budget_skips) without renaming anything.
 
     AR028 audit: appends, snapshots and flush are serialized through
     ``_lock`` — verified safe for the parallel scheduler's worker threads.
@@ -296,7 +297,8 @@ class EventLog:
         self._lock = threading.Lock()
 
     def record(self, *, stage: str, event: str, status: str,
-               ms: int | None = None, detail: str | None = None) -> None:
+               ms: int | None = None, detail: str | None = None,
+               extra: Mapping[str, Any] | None = None) -> None:
         entry: dict = {
             "ts": self._clock(),
             "run_id": self.run_id,
@@ -309,6 +311,13 @@ class EventLog:
             entry["ms"] = int(ms)
         if detail is not None:
             entry["detail"] = str(detail)[:500]
+        if extra:
+            # AR083: additive metric payload (files/signals/budget_skips/…).
+            # Existing field names are never overwritten — consumers of the
+            # pre-AR083 shape keep seeing exactly their known fields.
+            for key, value in extra.items():
+                if key not in entry:
+                    entry[key] = value
         with self._lock:
             self._records.append(entry)
 

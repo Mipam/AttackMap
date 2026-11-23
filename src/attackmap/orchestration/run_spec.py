@@ -128,6 +128,9 @@ class RunSpec:
     no_progress: bool = False
     atomic_output: bool = True
     run_id: str | None = None
+    # AR083: run-scoped correlation id (uuid4 hex) created at scan start when
+    # left None; threaded into every events.jsonl record of the run.
+    trace_id: str | None = None
     baseline: str | None = None
     diff_output: str | None = None
     fail_on_new_high: bool = False

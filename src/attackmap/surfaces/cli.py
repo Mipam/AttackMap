@@ -151,6 +151,29 @@ def _ensure_output_dir(path: Path, *, mark: bool = False) -> Path:
         raise typer.Exit(2) from exc
 
 
+def _resolve_events_path(generation: str, base: Path) -> Path | None:
+    """Locate a generation's events.jsonl for ``explain-run`` (AR083).
+
+    Accepts a path to a generation directory, a generation id under ``base``,
+    or ``current`` resolved through the output base's generation pointer.
+    """
+    candidates: list[Path] = []
+    direct = Path(generation)
+    if direct.is_dir():
+        candidates.append(direct / "events.jsonl")
+    candidates.append(base / generation / "events.jsonl")
+    if generation == "current":
+        pointer = base / "current-generation.json"
+        with suppress(OSError, ValueError):
+            named = json.loads(pointer.read_text(encoding="utf-8")).get("generation")
+            if named:
+                candidates.append(base / str(named) / "events.jsonl")
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def _write_text(path: Path, text: str) -> None:
     """Write a CLI artifact without following symlinks (#228)."""
     path = Path(path)
@@ -808,6 +831,83 @@ def trends(
     for run in payload["runs"]:
         typer.echo(f"- {run['run_id']} [{run['repo_name']}] {run['status']}: "
                    f"{run['findings']} findings, {run['suppressed']} suppressed, {run['routes']} routes")
+
+
+@app.command("explain-run")
+def explain_run(
+    generation: str = typer.Argument(
+        ...,
+        help="Generation id (run id), 'current', or a path to a generation directory.",
+    ),
+    output: str = typer.Option(
+        "reports", "--output", "-o",
+        help="AttackMap output base containing report generations.",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit the summary as JSON instead of human-readable text.",
+    ),
+) -> None:
+    """Explain what a published run did: stages, timings, skips (AR083, AC-404).
+
+    Reads the generation's events.jsonl and renders the stage timeline,
+    per-analyzer timings, budget skips with their reasons, and the additive
+    metric totals (files, signals) recorded by the run.
+    """
+    from attackmap.diagnostics.metrics import summarize_run_events
+
+    events_path = _resolve_events_path(generation, Path(output))
+    if events_path is None:
+        typer.echo(
+            f"Error: no events.jsonl found for generation {generation!r} "
+            f"(looked under {Path(output).resolve()})",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    try:
+        records = [json.loads(line) for line in
+                   events_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Error: could not read {events_path}: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    if not records:
+        typer.echo(f"Error: {events_path} has no records.", err=True)
+        raise typer.Exit(code=2)
+    payload = summarize_run_events(records, generation=events_path.parent.name)
+    if as_json:
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+
+    totals = payload["totals"]
+    lines = [
+        f"run {payload['generation']}",
+        f"  run_id: {payload['run_id']}  trace_id: {payload['trace_id']}  "
+        f"records: {payload['records']}",
+    ]
+    lines.append("stages:")
+    for row in payload["stages"]:
+        ms = f" ({row['ms']} ms)" if isinstance(row.get("ms"), int | float) else ""
+        detail = f" — {row['detail']}" if row.get("detail") else ""
+        lines.append(f"  - {row['stage']}: {row['status']}{ms}{detail}")
+    if payload["analyzers"]:
+        lines.append("analyzers:")
+        for row in payload["analyzers"]:
+            if row["status"] != "end":
+                continue
+            ms = f" ({row['ms']} ms)" if isinstance(row.get("ms"), int | float) else ""
+            lines.append(f"  - {row['analyzer']}{ms}")
+    if payload["skips"]:
+        lines.append("skips:")
+        for row in payload["skips"]:
+            lines.append(f"  - {row['stage']}: {row['reason']}")
+    lines.append(
+        "totals: "
+        f"files={totals['files']} signals={totals['signals']} "
+        f"budget_skips={totals['budget_skips']} "
+        f"analyzer_ms={totals['analyzer_ms_total']} stage_ms={totals['stage_ms_total']}"
+    )
+    typer.echo("\n".join(lines))
 
 
 @app.command("capabilities")

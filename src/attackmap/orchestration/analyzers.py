@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
+    from attackmap.diagnostics.metrics import RunMetrics
     from attackmap.extraction.progress import EventLog, ScanProgress
     from attackmap.orchestration.analyzer_run_plan import AnalyzerRunPlan
 from urllib.error import URLError
@@ -869,6 +870,7 @@ def analyze_repository(
     index: object | None = None,
     run_plan: AnalyzerRunPlan | None = None,
     events: EventLog | None = None,
+    metrics: RunMetrics | None = None,
     allow_untrusted: bool | None = None,
     workers: int = 1,
 ) -> AnalyzerResult:
@@ -878,6 +880,10 @@ def analyze_repository(
     result) no longer aborts the scan (#220): it is logged, recorded under
     ``analyzer_errors`` and skipped. ``strict=True`` re-raises instead, for
     plugin development and CI that wants fail-fast.
+
+    ``metrics`` (AR083) optionally receives every analyzer's wall-time
+    sample for the run's ``events.jsonl`` metrics record; it changes no
+    behaviour.
 
     ``isolated_analyzers=True`` (opt-in, default off) runs every NON-builtin
     analyzer inside the supervised subprocess host (``analyzer_host``) with
@@ -946,7 +952,7 @@ def analyze_repository(
         for analyzer, ledger_row in zip(active_analyzers, plan._selected_records, strict=True):
             scheduled_run = scheduled.get(analyzer.name)
             analysis_started = None
-            event_started = time.perf_counter() if events is not None else None
+            event_started = time.perf_counter() if (events is not None or metrics is not None) else None
             if scheduled_run is not None and event_started is not None:
                 # The worker emitted this analyzer's "start" event before the
                 # real subprocess run; backdate so the "end"/"error" ms below
@@ -979,10 +985,14 @@ def analyze_repository(
                     if outcome.error_type is not None:
                         ledger_row.failed("captured_input" if input_error is not None else "isolated_host", outcome.error_type)
                         plan.observe(ledger_row, "analysis", "failed", error_type=outcome.error_type)
-                        if events is not None:
-                            events.analyzer(analyzer.name, "error",
-                                            ms=int((time.perf_counter() - event_started) * 1000),
-                                            detail=outcome.error_type)
+                        if events is not None or metrics is not None:
+                            analyzer_ms = int((time.perf_counter() - event_started) * 1000)
+                            if events is not None:
+                                events.analyzer(analyzer.name, "error",
+                                                ms=analyzer_ms,
+                                                detail=outcome.error_type)
+                            if metrics is not None:
+                                metrics.record_analyzer(analyzer.name, analyzer_ms)
                         if strict:
                             raise AnalyzerHostError(
                                 f"isolated analyzer '{analyzer.name}': {outcome.error_type}: {outcome.message}"
@@ -1039,10 +1049,14 @@ def analyze_repository(
                 if ledger_row.error is None:
                     ledger_row.failed("analysis", _log_exception_type(exc))
                     plan.observe(ledger_row, "analysis", "failed", error_type=_log_exception_type(exc))
-                if events is not None:
-                    events.analyzer(analyzer.name, "error",
-                                    ms=int((time.perf_counter() - event_started) * 1000),
-                                    detail=_log_exception_type(exc))
+                if events is not None or metrics is not None:
+                    analyzer_ms = int((time.perf_counter() - event_started) * 1000)
+                    if events is not None:
+                        events.analyzer(analyzer.name, "error",
+                                        ms=analyzer_ms,
+                                        detail=_log_exception_type(exc))
+                    if metrics is not None:
+                        metrics.record_analyzer(analyzer.name, analyzer_ms)
                 if strict:
                     raise
                 error = AnalyzerError(
@@ -1063,9 +1077,12 @@ def analyze_repository(
                     # Scheduled in the AR027 pool: keep the measured run
                     # duration instead of the near-zero consumption wait.
                     ledger_row.analysis_duration_ms = scheduled_run.duration_ms
-            if events is not None:
-                events.analyzer(analyzer.name, "end",
-                                ms=int((time.perf_counter() - event_started) * 1000))
+            if events is not None or metrics is not None:
+                analyzer_ms = int((time.perf_counter() - event_started) * 1000)
+                if events is not None:
+                    events.analyzer(analyzer.name, "end", ms=analyzer_ms)
+                if metrics is not None:
+                    metrics.record_analyzer(analyzer.name, analyzer_ms)
             results.append(result)
             ledger_row.analysis_started = True
             ledger_row.execution = "succeeded"

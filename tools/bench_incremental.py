@@ -17,19 +17,28 @@ whatever host it runs on and states that in its JSON record.
 Usage:
     python tools/bench_incremental.py [--files 400] [--reps 10]
                                       [--edit-percent 1.0]
+                                      [--changed 50]
+                                      [--repeat 5] [--json]
+                                      [--scratch DIR]
                                       [--out reports/incremental-bench.json]
+
+AC-401 scenario (10k files, 50 changed, 5 repetitions, JSON on stdout):
+    python tools/bench_incremental.py --files 10000 --changed 50 --repeat 5 --json
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import math
+import os
 import platform
 import statistics
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -97,10 +106,12 @@ def _build_repo(root: Path, count: int) -> None:
             (src / f"svc{i}.js").write_text(_js_module(i), encoding="utf-8")
 
 
-def _apply_edits(root: Path, count: int, percent: float, generation: int) -> int:
-    """Rewrite ~percent% of the files with changed content; return how many."""
+def _apply_edits(root: Path, count: int | None, percent: float, generation: int) -> int:
+    """Rewrite ~percent% (or exactly ``count`` when given) of the files with
+    changed content; return how many."""
     files = sorted(p for p in root.rglob("*") if p.is_file())
-    n = max(1, round(len(files) * percent / 100.0))
+    n = max(1, min(count, len(files))) if count is not None \
+        else max(1, round(len(files) * percent / 100.0))
     step = max(1, len(files) // n)
     edited = 0
     for offset in range(0, len(files), step):
@@ -118,15 +129,30 @@ def _apply_edits(root: Path, count: int, percent: float, generation: int) -> int
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--files", type=int, default=400)
-    parser.add_argument("--reps", type=int, default=10,
+    parser.add_argument("--reps", "--repeat", dest="reps", type=int, default=10,
                         help="repetitions per mode (roadmap C34 wants 20 on fixed hardware)")
-    parser.add_argument("--edit-percent", type=float, default=EDIT_PERCENT)
+    parser.add_argument("--edit-percent", type=float, default=EDIT_PERCENT,
+                        help="share of files rewritten per rep (ignored when --changed is given)")
+    parser.add_argument("--changed", type=int, default=None,
+                        help="exact number of files rewritten per rep (AC-401 scenario: 50)")
+    parser.add_argument("--json", action="store_true",
+                        help="also print the JSON record to stdout")
+    parser.add_argument("--scratch", type=Path, default=None,
+                        help="keep the generated corpus and caches under this directory "
+                             "instead of a fresh temp dir (the AC-401 corpus is generated, "
+                             "never committed to the repo)")
     parser.add_argument("--out", type=Path, default=REPO_ROOT / "reports" / "incremental-bench.json")
     args = parser.parse_args()
 
-    with tempfile.TemporaryDirectory(prefix="attackmap-bench-") as tmp:
-        repo = Path(tmp) / "repo"
-        cache_dir = Path(tmp) / "cache"
+    if args.scratch is not None:
+        args.scratch.mkdir(parents=True, exist_ok=True)
+        tmp_ctx: object = contextlib.nullcontext(args.scratch)
+    else:
+        tmp_ctx = tempfile.TemporaryDirectory(prefix="attackmap-bench-")
+    with tmp_ctx as tmp:
+        tmp_path = Path(tmp)
+        repo = tmp_path / "repo"
+        cache_dir = tmp_path / "cache"
         _build_repo(repo, args.files)
 
         full_times: list[float] = []
@@ -138,7 +164,7 @@ def main() -> int:
         scan_files(repo, incremental=True, cache_dir=cache_dir)
 
         for rep in range(args.reps):
-            edited = _apply_edits(repo, args.files, args.edit_percent, rep)
+            edited = _apply_edits(repo, args.changed, args.edit_percent, rep)
 
             start = time.perf_counter()
             full = scan_files(repo)
@@ -173,10 +199,12 @@ def main() -> int:
     cold_median = statistics.median(cold_times)
     ratio = inc_median / full_median
     cold_ratio = cold_median / full_median
+    inc_p95 = sorted(inc_times)[min(len(inc_times) - 1, math.ceil(0.95 * len(inc_times)) - 1)]
 
+    cas_state = os.environ.get("ATTACKMAP_CAS", "1") != "0"
     record = {
         "schema": "attackmap-incremental-bench/1.0",
-        "generated_utc": datetime.now(timezone.utc).isoformat(),
+        "generated_utc": datetime.now(UTC).isoformat(),
         "mode": "synthetic-repo, per-file pass only (scan_files; no repo passes, no merge)",
         "host": {
             "platform": platform.platform(),
@@ -187,7 +215,9 @@ def main() -> int:
         "parameters": {
             "files": args.files,
             "reps": args.reps,
-            "edit_percent": args.edit_percent,
+            "changed": args.changed,
+            "edit_percent": args.edit_percent if args.changed is None else None,
+            "cas_enabled": cas_state,
             "reps_note": (
                 f"{args.reps} repetitions on this single non-fixed host; "
                 "roadmap C34 requires a 20-repetition campaign on fixed hardware "
@@ -206,17 +236,31 @@ def main() -> int:
             "equivalences_checked": equivalences_checked,
         },
     }
+    if args.changed is not None:
+        # AC-401: 10k-file repo, 50 modified files, warm store, p95 of 5 reps.
+        record["ac401"] = {
+            "scenario": f"{args.files} files, {args.changed} changed per rep, "
+                        f"warm cache + CAS ({'on' if cas_state else 'OFF'})",
+            "target_warm_p95_s": 10.0,
+            "warm_p95_s": round(inc_p95, 4),
+            "target_met": inc_p95 < 10.0,
+        }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(record, indent=2), encoding="utf-8")
 
     print()
     print(f"full scan median          : {full_median * 1000:8.1f} ms")
-    print(f"incremental median (1% ed): {inc_median * 1000:8.1f} ms  "
+    print(f"incremental median        : {inc_median * 1000:8.1f} ms  "
           f"(ratio {ratio:.3f}, target <= 0.500 : {'MET' if ratio <= 0.5 else 'NOT MET'})")
+    if args.changed is not None:
+        print(f"incremental p95 ({args.changed} chg): {inc_p95 * 1000:8.1f} ms  "
+              f"(AC-401 target < 10.0 s : {'MET' if inc_p95 < 10.0 else 'NOT MET'})")
     print(f"cold incremental median   : {cold_median * 1000:8.1f} ms  "
           f"(ratio {cold_ratio:.3f}, target <= 1.100 : {'MET' if cold_ratio <= 1.1 else 'NOT MET'})")
     print(f"equivalence checks passed : {equivalences_checked}/{args.reps} reps")
     print(f"record written to         : {args.out}")
+    if args.json:
+        print(json.dumps(record, indent=2))
     return 0
 
 

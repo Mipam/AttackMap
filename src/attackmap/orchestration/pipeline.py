@@ -9,18 +9,20 @@ from __future__ import annotations
 import json
 import os
 import time
+import uuid
 from collections import Counter
 from collections.abc import Callable
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from attackmap import __version__
 from attackmap.ai.ai_budget import AiBudget, budget_scope, current_budget
 from attackmap.ai.cve import query_vulnerabilities
 from attackmap.analyzer_run_ledger import AnalyzerRunLedger, AnalyzerRunPlan
+from attackmap.diagnostics.metrics import RunMetrics
 from attackmap.extraction.index import RepoIndex, clear_pinned_index
 from attackmap.extraction.progress import EventLog, create_progress
 from attackmap.extraction.run_budget import BudgetExpired, TimeBudget, time_budget_scope
@@ -147,6 +149,9 @@ class RunState:
     time_budget: TimeBudget | None = None
     attempt_started: float = field(default_factory=time.perf_counter, repr=False)
     events: EventLog | None = field(default=None, repr=False)
+    # AR083: run-scoped correlation id and metric accumulator (see RunMetrics).
+    trace_id: str = ""
+    metrics: RunMetrics = field(default_factory=RunMetrics)
 
     def finish_scan(self, outcome: str) -> None:
         if self.scan_finished_at is None:
@@ -179,6 +184,7 @@ def _diagnostic_phase(state: RunState, name: str):
     finally:
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         state.timings.append(StageTiming(name=name, milliseconds=elapsed_ms))
+        state.metrics.record_stage(name, elapsed_ms)
         state.diagnostic_stages.append(DiagnosticStage(stage_id=name, outcome=outcome,
                                                        duration_milliseconds=elapsed_ms))
         if events is not None and outcome == "completed":
@@ -305,6 +311,57 @@ def _echo_opt_in_hint(names: list[str], echo: Callable[..., None]) -> None:
         )
 
 
+def _ledger_signal_count(ledger: Any) -> int:
+    """Total structured signals every ledger entry emitted (AR083 metrics).
+
+    Duck-typed on the persisted AnalyzerRunLedger/AnalyzerSignalCounts models
+    so this module needs no model-layer import just for the metric.
+    """
+    if ledger is None:
+        return 0
+    total = 0
+    for entry in getattr(ledger, "entries", None) or ():
+        counts = getattr(entry, "signal_counts", None)
+        if counts is None:
+            continue
+        # model_fields lives on the class (pydantic v2.11 deprecates instance
+        # access); the duck-type keeps this free of a model-layer import.
+        for field_name in getattr(type(counts), "model_fields", {}):
+            total += int(getattr(counts, field_name, 0) or 0)
+    return total
+
+
+def _init_run_events(state: RunState, spec: RunSpec) -> None:
+    """Create or adopt the run-scoped event log with its trace id (AR083).
+
+    The trace id correlates every events.jsonl record of this run; it is
+    created here (one per _run_scan body) when the spec carries none, and
+    adopted from a pre-attached event log otherwise.
+    """
+    if state.events is not None:
+        state.trace_id = state.events.trace_id
+        return
+    trace_id = spec.trace_id or uuid.uuid4().hex
+    state.trace_id = trace_id
+    state.events = EventLog(run_id=spec.run_id or make_run_id(), trace_id=trace_id)
+
+
+def _record_scan_metrics(state: RunState) -> None:
+    """Fold the finished scan's file/signal totals into the run metrics (AR083)."""
+    scanned = state.scan
+    if scanned is None:
+        return
+    state.metrics.add_files(int(getattr(scanned, "files_scanned", 0) or 0))
+    state.metrics.add_signals(_ledger_signal_count(scanned.analyzer_run_ledger))
+
+
+def _record_budget_skip(state: RunState, stage: str, reason: str) -> None:
+    """Log a stage skip — event record plus metrics counter — with its reason (AR083)."""
+    if state.events is not None:
+        state.events.stage(stage, "skip", detail=reason)
+    state.metrics.record_budget_skip(stage, reason)
+
+
 def _run_scan(
     spec: RunSpec,
     *,
@@ -320,9 +377,9 @@ def _run_scan(
     output = Path(output)
     # AR003: structured run event log. Additive only — stdout progress is
     # untouched, and the log is persisted into the generation directory by
-    # _run_scan_published before the pointer swap.
-    if state.events is None:
-        state.events = EventLog(run_id=spec.run_id or make_run_id())
+    # _run_scan_published before the pointer swap. AR083: the event log also
+    # carries the run-scoped trace id (see _init_run_events).
+    _init_run_events(state, spec)
 
     with _diagnostic_phase(state, "request_validation"):
         if spec.fail_on_new_high and spec.baseline is None:
@@ -387,9 +444,7 @@ def _run_scan(
         if state.scan is None:
             state.scan = ScanResult(root=str(repo_path))
         scan_now = state.scan
-        if state.events is not None:
-            state.events.stage(skipped_stage, "skip",
-                               detail=f"time budget of {budget.seconds}s expired")
+        _record_budget_skip(state, skipped_stage, f"time budget of {budget.seconds}s expired")
         if state.analyzer_run_plan is not None and not state.analyzer_run_plan.ledger.execution_complete:
             state.analyzer_run_plan.skip_for_deadline()
             scan_now.analyzer_run_ledger = state.analyzer_run_plan.ledger.model_copy(deep=True)
@@ -427,8 +482,10 @@ def _run_scan(
                     incremental=spec.features.incremental,
                     index=captured_index,
                     events=state.events,
+                    metrics=state.metrics,
                     workers=max(1, int(spec.scheduler.workers)),
                 )
+                _record_scan_metrics(state)
 
         def _recover_partial_scan(exc: BudgetExpired) -> None:
             """Convert an intra-stage budget breach into a publishable partial
@@ -438,9 +495,9 @@ def _run_scan(
             partial = getattr(exc, "partial", None)
             scan_now = partial if isinstance(partial, ScanResult) else ScanResult(root=str(repo_path))
             state.scan = scan_now
-            if state.events is not None:
-                state.events.stage("scan_and_merge", "skip",
-                                   detail=f"time budget of {budget.seconds}s expired inside the stage")
+            _record_budget_skip(
+                state, "scan_and_merge",
+                f"time budget of {budget.seconds}s expired inside the stage")
             note = (
                 f"elapsed-time budget of {budget.seconds}s expired inside the scan stage; "
                 "the scan stopped early - ANALYSIS IS PARTIAL, not complete. "
@@ -1072,6 +1129,14 @@ def run_scan(
     any AI feature is enabled.
     """
     ai = spec.ai
+    # AR083: one trace id per run, pinned onto the spec when the caller did
+    # not provide one, so it rides into the event log, and — for AI runs —
+    # onto the shared budget ledger so any AI call site can correlate via the
+    # existing budget ContextVar (ai/ stays read-only this wave). Only AI runs
+    # copy the spec: the no-AI path must keep passing the original object
+    # through unchanged.
+    if (ai.enabled or ai.hunt or ai.remediate or ai.triage) and spec.trace_id is None:
+        spec = replace(spec, trace_id=uuid.uuid4().hex)
     kwargs = {"repo_path": repo_path, "output": output, "analyzers": analyzers, "echo": echo}
     if not (ai.enabled or ai.hunt or ai.remediate or ai.triage):
         return _run_scan_published(spec, **kwargs)
@@ -1081,8 +1146,15 @@ def run_scan(
             raise AnalysisConfigurationError(f"AI {name} must be an integer from 1 to {maximum}.")
     if current_budget() is not None:
         return _run_scan_published(spec, **kwargs)
-    with budget_scope(AiBudget(max_calls=ai.max_calls, max_seconds=ai.timeout_seconds,
-                               output_token_limit=ai.output_tokens)):
+    ledger = AiBudget(max_calls=ai.max_calls, max_seconds=ai.timeout_seconds,
+                      output_token_limit=ai.output_tokens)
+    # Additive correlation attribute on the run's allowance; nothing in ai/
+    # reads it yet (that layer was read-only for AR083) — it exists so the
+    # next wave can log trace_id per provider call without a new transport.
+    # cast(Any): AiBudget is outside this lease, so the extension attribute
+    # cannot be declared on the class itself.
+    cast(Any, ledger).trace_id = spec.trace_id
+    with budget_scope(ledger):
         return _run_scan_published(spec, **kwargs)
 
 
@@ -1091,10 +1163,14 @@ def _flush_event_log(state: RunState, folder: Path) -> None:
 
     Called before ``publish_generation`` so a committed generation always
     carries its ``events.jsonl``. Extra files are not part of the artifact
-    manifest, so validation is unaffected.
+    manifest, so validation is unaffected. AR083: appends the one additive
+    ``metrics`` record (files/signals/budget_skips/analyzer_ms/stage_ms);
+    ``emit_events`` is idempotent so the best-effort failure-path flush below
+    cannot duplicate it.
     """
     if state.events is None or not state.events.records():
         return
+    state.metrics.emit_events(state.events)
     safe_write_text(folder, folder / "events.jsonl",
                     "".join(json.dumps(r, ensure_ascii=False) + "\n"
                             for r in state.events.records()))

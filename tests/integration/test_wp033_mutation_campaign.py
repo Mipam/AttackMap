@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 import attackmap
+import attackmap.extraction.cas as cas_mod
 import attackmap.extraction.incremental as cache_mod
 import attackmap.extraction.scanner as scanner_mod
 from attackmap.extraction.index import RepoIndex, clear_pinned_index
@@ -204,8 +205,15 @@ def _mutate(kind: str, repo: Path, cache: Path, state: dict, step: int, monkeypa
 @pytest.mark.parametrize("sequence", range(100), ids=lambda value: f"seed-{SEED_BASE + value}")
 def test_wp033_generated_full_incremental_sequences(tmp_path: Path, monkeypatch, sequence: int) -> None:
     for name in (*cache_mod._POLICY_ENV, cache_mod.INCREMENTAL_ENV,
-                 "ATTACKMAP_INDEX_BYTE_BUDGET", "ATTACKMAP_INDEX_FILE_LIMIT", "ATTACKMAP_MAX_FILE_BYTES"):
+                 "ATTACKMAP_INDEX_BYTE_BUDGET", "ATTACKMAP_INDEX_FILE_LIMIT", "ATTACKMAP_MAX_FILE_BYTES",
+                 cas_mod.CAS_ENV, cas_mod.CAS_ROOT_ENV, cas_mod.CAS_MAX_BYTES_ENV):
         monkeypatch.delenv(name, raising=False)
+    # This campaign audits the per-file cache layer. The AR080 CAS is a
+    # second chance above it (a per-file miss consults the CAS and a hit
+    # repairs the per-file entry), so a live CAS would mask per-file cache
+    # corruption — and its global default root (~/.attackmap/cas) is shared
+    # across processes. Disable it here; extraction/cas.py has its own tests.
+    monkeypatch.setenv(cas_mod.CAS_ENV, "0")
     repo = tmp_path / "repo"
     state = _seed(repo, sequence)
     cache = tmp_path / "cache" / "per-file-cache.json"
