@@ -11,10 +11,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-# AR031 slice 2: the run-ledger record models live here in model/ (moved
-# down from extraction/ so this annotation carries no upward edge);
-# attackmap.extraction.ledger is a one-release re-export shim.
-from .ledger import AnalyzerRunLedger
 from .evidence import (  # noqa: F401
     _EVIDENCE_LIST_FIELDS,
     _EVIDENCE_TEXT_FIELDS,
@@ -37,6 +33,11 @@ from .findings import (  # noqa: F401
     finding_rule_id,
     title_slug,
 )
+
+# AR031 slice 2: the run-ledger record models live here in model/ (moved
+# down from extraction/ so this annotation carries no upward edge);
+# attackmap.extraction.ledger is a one-release re-export shim.
+from .ledger import AnalyzerRunLedger
 from .observations import (  # noqa: F401
     DEPENDENCY_ECOSYSTEMS,
     AnalyzerError,
