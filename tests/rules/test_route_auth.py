@@ -1,7 +1,7 @@
 """AR041 route/auth rule tests: positive/negative/low-quality fixtures per
 rule plus field-for-field equivalence against the legacy cascade branches
 (``threat_model.generate_findings``), which stay the active producer until
-the AR046 wiring.
+the cascade-retirement wiring.
 
 Self-contained by design: scans and contexts are built in-memory here; no
 shared harness. ``unit`` tier: pure functions, no filesystem or network.
@@ -118,7 +118,8 @@ def test_public_webhook_positive_and_equivalent():
     assert finding.tags == ["exposed-endpoint", "auth-missing"]
     assert finding.locations[0].file == "api.py"
     assert finding.evidence == ["POST /webhook/stripe in api.py; no auth signals observed; inferred outbound relationship"]
-    # taxonomy/ATT&CK carried over from the legacy rule id.
+    # taxonomy/ATT&CK auto-attach from the registered stable id (AR046):
+    # identical to the legacy entry's data.
     assert finding.taxonomy is not None and finding.taxonomy.cwe == ["CWE-345"]
     assert [t.technique_id for t in finding.attack_techniques] == ["T1190", "T1199"]
     _assert_equivalent(RoutePublicWebhookRule(), scan, "public-webhook")

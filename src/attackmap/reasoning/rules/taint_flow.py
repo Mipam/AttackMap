@@ -3,15 +3,18 @@ cascade (``threat_model.generate_findings``, the "Dangerous taint sinks",
 "Flow-confirmed SQL injection / path traversal" and "Speculative recall
 findings" blocks), ported 1:1 into kernel rules.
 
-The legacy cascade STAYS the active producer until the wiring pass flips
-findings over to ``REGISTRY``; these rules are proven equivalent on fixtures
-(``tests/rules/test_taint_flow.py``) and change no pipeline behavior.
+The legacy cascade STAYS the active producer until the cascade-retirement
+wiring flips findings over to ``REGISTRY``; these rules are proven equivalent
+on fixtures (``tests/rules/test_taint_flow_rules.py``) and change no pipeline
+behavior.
 
-Three families, one registered rule per sink kind. ``RuleMeta.id`` values are
-the new stable snake_case identities; the ``Finding.rule_id`` each rule emits
-stays the LEGACY detector id so SARIF ruleIds, suppression keys and the
-taxonomy registry (``model.taxonomy`` is keyed by the legacy ids) keep working
-unchanged. The recorded legacy mapping:
+Three families, one registered rule per sink kind. Findings emit
+``rule_id=meta.id`` — the kernel contract, unified AR046: every stable
+snake_case id is registered in ``RULE_TAXONOMY`` with exactly its legacy
+entry's data, so SARIF ruleIds, suppression keys and the CWE/OWASP/ASVS/
+ATT&CK enrichment all resolve by the new id. The recorded legacy mapping
+(the dashed ids the cascade still emits; they stay registered for the
+cascade period and live on each rule as ``legacy_rule_ids``):
 
 ==========================  ==================================  ==========================
 ``RuleMeta.id``             family                              legacy ``Finding.rule_id``
@@ -189,8 +192,9 @@ def _code_flows(chains: list[TaintChain]) -> list[list[TaintFlowStep]]:
 
 def _technique(spec: dict[str, str]) -> list[AttackTechnique]:
     """The spec table's ATT&CK technique, built the legacy way. Note: the
-    Finding model validator replaces this from the taxonomy registry when the
-    legacy rule id is registered there — identical on both sides."""
+    Finding model validator replaces this from the taxonomy registry by the
+    emitted rule id (registered with its legacy entry's data, AR046) —
+    identical on both sides."""
     return [
         AttackTechnique(
             technique_id=spec["technique_id"],
@@ -225,6 +229,9 @@ class TaintSinkKindRule:
         self.meta = meta
         self._kind = kind
         self._legacy_rule_id = _rule_slug_kind(kind)
+        # The dashed detector id this rule's findings carried before the
+        # AR046 snake_case unification (still emitted by the live cascade).
+        self.legacy_rule_ids = (self._legacy_rule_id,)
         self._label = TAINT_SINK_LABEL.get(kind, kind)
 
     def evaluate(self, ctx: ReasoningContext) -> list[Finding]:
@@ -247,7 +254,7 @@ class TaintSinkKindRule:
         spec = TAINT_FINDING_SPEC[self._kind]
         finding = Finding(
             title=spec["title"],
-            rule_id=self._legacy_rule_id,
+            rule_id=self.meta.id,
             severity=spec["severity"],  # type: ignore[arg-type]
             evidence=evidence,
             locations=_chain_locations(chains),
@@ -272,6 +279,7 @@ class FlowConfirmedSinkRule:
         self.meta = meta
         self._kind = kind
         self._legacy_rule_id = legacy_rule_id
+        self.legacy_rule_ids = (legacy_rule_id,)
         self._label = TAINT_SINK_LABEL.get(kind, kind)
 
     def evaluate(self, ctx: ReasoningContext) -> list[Finding]:
@@ -295,7 +303,7 @@ class FlowConfirmedSinkRule:
         return [
             Finding(
                 title=spec["title"],
-                rule_id=self._legacy_rule_id,
+                rule_id=self.meta.id,
                 severity=spec["severity"],  # type: ignore[arg-type]
                 evidence=evidence,
                 locations=_chain_locations(chains),
@@ -320,6 +328,7 @@ class SpeculativeTaintKindRule:
         self.meta = meta
         self._kind = kind
         self._legacy_rule_id = f"speculative-{_rule_slug_kind(kind)}"
+        self.legacy_rule_ids = (self._legacy_rule_id,)
         self._label = TAINT_SINK_LABEL.get(kind, kind)
 
     def evaluate(self, ctx: ReasoningContext) -> list[Finding]:
@@ -343,7 +352,7 @@ class SpeculativeTaintKindRule:
         return [
             Finding(
                 title=f"Speculative reach to a {self._label} sink (recall mode)",
-                rule_id=self._legacy_rule_id,
+                rule_id=self.meta.id,
                 severity="low",
                 evidence=evidence,
                 locations=_chain_locations(chains),

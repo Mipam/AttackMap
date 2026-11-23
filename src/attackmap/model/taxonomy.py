@@ -28,6 +28,10 @@ Add one line to ``RULE_TAXONOMY``::
 ``speculative-<rule>`` (recall mode) ids inherit their base rule's entry.
 Rules that flag no weakness at all go in ``INFORMATIONAL_RULES`` instead.
 
+The ``RULE_TAXONOMY.update`` block at the bottom registers the stable
+snake_case ids of the kernel REGISTRY rules (AR046) by referencing their
+legacy entries' objects — never hand-copy the data into a new entry.
+
 Verify ids against the source, not memory: cwe.mitre.org (CWE view 1000),
 owasp.org/Top10, owasp.org/API-Security, the ASVS 4.0.3 JSON release and
 the MITRE ATT&CK STIX bundle. The names below were checked against CWE
@@ -308,6 +312,60 @@ RULE_TAXONOMY: dict[str, RuleTaxonomy] = {
     "method-outlier": RuleTaxonomy(cwe=(749,), owasp=("A01:2021", "API5:2023"), asvs=("V13.2.1",), attack=("T1190",)),
     "invariant-violation": RuleTaxonomy(cwe=(693,), owasp=("A04:2021",), attack=("T1190",)),
 }
+
+# --- AR046: kernel rule ids ---------------------------------------------------
+# Stable snake_case ids of the rules registered in the
+# ``attackmap.reasoning.rules`` REGISTRY, each mapped to exactly its legacy
+# entry above (same frozen object, so the data cannot drift). The dashed
+# cascade ids stay registered for the cascade period;
+# tests/rules/test_taxonomy_unification.py pins every mapping and the
+# deliberate skips (rules with no single legacy entry).
+RULE_TAXONOMY.update(
+    {
+        "debug_mode_exposure": RULE_TAXONOMY["debug-enabled"],
+        "hardcoded_secret_literals": RULE_TAXONOMY["hardcoded-secret"],
+        "route_exposed_admin": RULE_TAXONOMY["exposed-admin-route"],
+        "route_public_webhook": RULE_TAXONOMY["public-webhook"],
+        "route_upload_import": RULE_TAXONOMY["upload-route"],
+        "route_weak_auth_controls": RULE_TAXONOMY["weak-auth-route"],
+        "secret_env_references": RULE_TAXONOMY["secret-env-reference"],
+        "taint_flow_path_traversal": RULE_TAXONOMY["path-traversal"],
+        "taint_flow_sql_execute": RULE_TAXONOMY["sql-injection"],
+        "taint_sink_code_injection": RULE_TAXONOMY["code-injection"],
+        "taint_sink_eval": RULE_TAXONOMY["eval"],
+        "taint_sink_exec": RULE_TAXONOMY["exec"],
+        "taint_sink_expression_injection": RULE_TAXONOMY["expression-injection"],
+        "taint_sink_header_injection": RULE_TAXONOMY["header-injection"],
+        "taint_sink_jndi_injection": RULE_TAXONOMY["jndi-injection"],
+        "taint_sink_ldap_injection": RULE_TAXONOMY["ldap-injection"],
+        "taint_sink_nosql_injection": RULE_TAXONOMY["nosql-injection"],
+        "taint_sink_open_redirect": RULE_TAXONOMY["open-redirect"],
+        "taint_sink_regex_injection": RULE_TAXONOMY["regex-injection"],
+        "taint_sink_ssrf": RULE_TAXONOMY["ssrf"],
+        "taint_sink_ssti": RULE_TAXONOMY["ssti"],
+        "taint_sink_subprocess_shell": RULE_TAXONOMY["subprocess-shell"],
+        "taint_sink_unsafe_deserialization": RULE_TAXONOMY["unsafe-deserialization"],
+        "taint_sink_xpath_injection": RULE_TAXONOMY["xpath-injection"],
+        "taint_sink_zip_slip": RULE_TAXONOMY["zip-slip"],
+        "taint_speculative_code_injection": RULE_TAXONOMY["code-injection"],
+        "taint_speculative_eval": RULE_TAXONOMY["eval"],
+        "taint_speculative_exec": RULE_TAXONOMY["exec"],
+        "taint_speculative_expression_injection": RULE_TAXONOMY["expression-injection"],
+        "taint_speculative_header_injection": RULE_TAXONOMY["header-injection"],
+        "taint_speculative_jndi_injection": RULE_TAXONOMY["jndi-injection"],
+        "taint_speculative_ldap_injection": RULE_TAXONOMY["ldap-injection"],
+        "taint_speculative_nosql_injection": RULE_TAXONOMY["nosql-injection"],
+        "taint_speculative_open_redirect": RULE_TAXONOMY["open-redirect"],
+        "taint_speculative_regex_injection": RULE_TAXONOMY["regex-injection"],
+        "taint_speculative_ssrf": RULE_TAXONOMY["ssrf"],
+        "taint_speculative_ssti": RULE_TAXONOMY["ssti"],
+        "taint_speculative_subprocess_shell": RULE_TAXONOMY["subprocess-shell"],
+        "taint_speculative_unsafe_deserialization": RULE_TAXONOMY["unsafe-deserialization"],
+        "taint_speculative_xpath_injection": RULE_TAXONOMY["xpath-injection"],
+        "taint_speculative_zip_slip": RULE_TAXONOMY["zip-slip"],
+        "vulnerable_dependency": RULE_TAXONOMY["vulnerable-dependency"],
+    }
+)
 
 _SPECULATIVE = "speculative-"
 _ASVS_ID = re.compile(r"V\d{1,2}\.\d{1,2}\.\d{1,2}")

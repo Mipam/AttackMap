@@ -87,9 +87,13 @@ def test_documented_examples_use_real_rule_ids() -> None:
     assert documented and documented <= RULE_IDS
 
 
-def test_rules_command_lists_catalog() -> None:
-    result = runner.invoke(app, ["rules", "--json"])
+def test_rules_command_lists_the_registry_catalog() -> None:
+    """AR046: `attackmap rules` is the REGISTRY-backed sub-app (`list`/`show`);
+    the legacy cascade catalog above keeps its own tests."""
+    from attackmap.reasoning.rules import REGISTRY
+
+    result = runner.invoke(app, ["rules", "list", "--json"])
     assert result.exit_code == 0, result.output
-    assert {r["rule_id"] for r in json.loads(result.output)} == RULE_IDS
-    plain = runner.invoke(app, ["rules"])
-    assert "hardcoded-secret" in plain.output and "insecure-tls" in plain.output
+    assert {r["id"] for r in json.loads(result.output)} == set(REGISTRY.ids())
+    plain = runner.invoke(app, ["rules", "list"])
+    assert "hardcoded_secret_literals" in plain.output and "vulnerable_dependency" in plain.output

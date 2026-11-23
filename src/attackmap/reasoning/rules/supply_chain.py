@@ -43,6 +43,12 @@ Per-kind CWE mapping (``external/cwe/cwe-NNN`` tags) is resolved from the
 model taxonomy through each kind's legacy id, so findings carry exactly the
 CWE tags they carried before; ``RuleMeta.cwe`` stays empty on the two
 aggregated families because no single CWE describes them honestly.
+AR046 registered ``vulnerable_dependency`` in ``RULE_TAXONOMY`` from its
+1:1 legacy entry, so its findings auto-attach the legacy enrichment; the
+two aggregated families stay unregistered on purpose — no single CWE/
+OWASP entry honestly describes them, and their per-kind CWE tags already
+travel on the findings' ``tags``. Every rule records the dashed ids it
+replaces as ``legacy_rule_ids``.
 ``_dependency_entity_id`` mirrors
 ``attackmap.output.finding_identity.dependency_entity_id`` byte for byte
 (importing it would add a reasoning -> output layer edge; a drift test
@@ -207,6 +213,7 @@ class VulnerableDependencyRule:
         ),
         tags=("cve", "dependency"),
     )
+    legacy_rule_ids = ("vulnerable-dependency",)
 
     def evaluate(self, ctx: ReasoningContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -299,6 +306,10 @@ class WorkflowSecurityRule:
         ),
         tags=("ci-security", "supply-chain"),
     )
+    # One aggregated rule replaces the whole per-kind dashed family; the
+    # legacy ids stay registered (they key the cascade's findings and the
+    # per-kind CWE resolution) and are surfaced by the generated docs.
+    legacy_rule_ids = tuple(_legacy_rule_id(kind) for kind in WORKFLOW_FINDING_SPEC)
 
     def evaluate(self, ctx: ReasoningContext) -> list[Finding]:
         return _aggregate_kind_findings(
@@ -336,6 +347,7 @@ class SupplyChainRiskRule:
         ),
         tags=("supply-chain", "dependency-risk"),
     )
+    legacy_rule_ids = tuple(_legacy_rule_id(kind) for kind in SUPPLY_CHAIN_FINDING_SPEC)
 
     def evaluate(self, ctx: ReasoningContext) -> list[Finding]:
         return _aggregate_kind_findings(

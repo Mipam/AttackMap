@@ -1,9 +1,13 @@
 """Reasoning rule package: the contract (`base`), the registry (`registry`),
 the seed reference rule, and the ported cascade rule modules (AR041-AR045).
 
-Each rule module self-registers its rules into ``REGISTRY`` on import; the
-registry is not yet wired into the pipeline (AR046 owns the wiring pass),
-so the legacy cascade in ``threat_model`` remains the active producer.
+Each rule module self-registers its rules into ``REGISTRY`` on import.
+AR046 unified the emitted ``Finding.rule_id`` convention (``meta.id`` —
+stable snake_case ids registered in ``RULE_TAXONOMY`` with their legacy
+entries' data), added the catalog surface (``attackmap rules``), the
+generated reference docs and the ``evaluate_rules`` score helper. The
+registry is still NOT the scan-pipeline producer — the legacy cascade in
+``threat_model`` stays active until the cascade-retirement wiring lands.
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from ...model import Finding, FindingLocation
 from .base import RuleMeta, confidence_band
+from .evaluation import evaluate_rules
 from .registry import REGISTRY
 
 if TYPE_CHECKING:
@@ -20,6 +25,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "WeakDefaultCredentialsRule",
+    "evaluate_rules",
 ]
 
 # Names a hard-coded default credential typically travels under. Name-only

@@ -36,9 +36,12 @@ from attackmap.orchestration.run_spec import RunSpec
 from attackmap.orchestration.scan_service import ScanRequest, ScanRequestError, execute_scan_request
 from attackmap.output.report import OUTPUT_FORMATS
 from attackmap.output.review_prompts import HUNT_LENSES
+from attackmap.surfaces.rules_cli import rules_app
 from attackmap.surfaces.suggest import detect_ecosystems
 
 app = typer.Typer(help="AttackMap: understand your system and map your attack surface.")
+# AR046: the rule catalog lives in its own sub-app, backed by the kernel REGISTRY.
+app.add_typer(rules_app, name="rules")
 
 
 def _select_modules(module: list[str], install_missing: bool) -> list:
@@ -912,23 +915,6 @@ def suggest(
             typer.echo(f"  Failed: {exc}")
             raise typer.Exit(code=1) from exc
     typer.echo("Done.")
-
-
-@app.command("rules")
-def rules(
-    as_json: bool = typer.Option(False, "--json", help="Emit the rule catalog as JSON."),
-) -> None:
-    """List every core detector's stable rule id (#223) — the SARIF ruleId and
-    the value for `rule:` suppressions and `attackmap:ignore[...]`."""
-    from attackmap.reasoning.threat_model import rule_catalog
-
-    catalog = rule_catalog()
-    if as_json:
-        typer.echo(json.dumps([{"rule_id": r, "title": t, "severity": sev} for r, t, sev in catalog], indent=2))
-        return
-    width = max(len(r) for r, _, _ in catalog)
-    for rule_id, title, severity in catalog:
-        typer.echo(f"{rule_id.ljust(width)}  {severity:<7}  {title}")
 
 
 @app.command("bench")

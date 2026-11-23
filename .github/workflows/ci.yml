@@ -157,6 +157,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[llm,dev]"
 
+      # AR046: the generated rule reference docs must match the kernel
+      # REGISTRY. Report-only for one release, then flip continue-on-error
+      # off (same ratchet onboarding as the AR011 pip-audit step).
+      - name: Generated rule docs fresh (tools/gen_rule_docs.py --check)
+        continue-on-error: true
+        run: python tools/gen_rule_docs.py --check
+
       # AR008 marked the suite (unit/integration/contract/live); the fast leg
       # runs the pure tier plus the SDK/merge/artifact contracts. AC-003:
       # < 5 minutes, no test over 120 s. The coverage floor comes from the

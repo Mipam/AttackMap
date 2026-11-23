@@ -37,17 +37,19 @@ Equivalence scope: the four ported predicates read only fields the
 legacy internal-handler downgrade never touches (see
 :func:`_surfaces_from_context`), so they match the cascade on every
 input, not just hint-free fixtures. Findings carry ``rule_id=meta.id``
-(kernel contract); the legacy branch's ``taxonomy`` and ATT&CK mapping
-are carried over explicitly because the taxonomy registry is keyed by
-the old cascade ids.
+(kernel contract); their CWE/OWASP/ASVS/ATT&CK enrichment auto-attaches
+from ``RULE_TAXONOMY`` by the stable id — AR046 registered each
+snake_case id with exactly its legacy entry's data, so the fields stay
+byte-identical to what the cascade branch emits. The dashed cascade ids
+remain registered for the cascade period; each rule records them as
+``legacy_rule_ids``.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ...model import AttackSurface, AttackTechnique, Finding, FindingTaxonomy
-from ...model.taxonomy import ATTACK_TECHNIQUES, attack_url, taxonomy_for
+from ...model import AttackSurface, Finding
 from ...policy import WEBHOOK_MUTATING_METHODS
 from ..analyzer import _auth_hints_for_route
 from ..threat_model import _finding_evidence, _is_low_quality_source, _locs
@@ -157,32 +159,6 @@ def _surfaces_from_context(ctx: ReasoningContext) -> list[AttackSurface]:
     return surfaces
 
 
-def _legacy_taxonomy(legacy_rule_id: str) -> tuple[FindingTaxonomy | None, list[AttackTechnique]]:
-    """Carry the cascade finding's taxonomy + ATT&CK mapping across the id change.
-
-    ``Finding`` auto-fills those fields from ``RULE_TAXONOMY`` by
-    ``rule_id``; the new snake-case ids are not registered there (and this
-    module must not edit the taxonomy registry), so the legacy entry is
-    resolved and attached explicitly — byte-identical to what the cascade
-    branch emits.
-    """
-    entry = taxonomy_for(legacy_rule_id)
-    if entry is None:
-        return None, []
-    taxonomy = FindingTaxonomy(
-        cwe=entry.cwe_ids,
-        owasp=list(entry.owasp),
-        asvs=list(entry.asvs),
-        attack=list(entry.attack),
-    )
-    techniques = [
-        AttackTechnique(technique_id=technique_id, name=name, tactic=tactic, url=attack_url(technique_id))
-        for technique_id in entry.attack
-        for name, tactic in [ATTACK_TECHNIQUES[technique_id]]
-    ]
-    return taxonomy, techniques
-
-
 def _runtime_surfaces(ctx: ReasoningContext) -> list[AttackSurface]:
     """Surfaces behind the cascade's low-quality-source filter (verbatim)."""
     return [surface for surface in _surfaces_from_context(ctx) if not _is_low_quality_source(surface.file)]
@@ -190,16 +166,15 @@ def _runtime_surfaces(ctx: ReasoningContext) -> list[AttackSurface]:
 
 def _emit(
     meta: RuleMeta,
-    legacy_rule_id: str,
     surfaces: list[AttackSurface],
     mitigation: str,
 ) -> list[Finding]:
     """One aggregated Finding, field-for-field the legacy branch's output.
 
     Evidence and locations reuse the cascade's own formatters so the
-    strings match byte-for-byte; taxonomy/ATT&CK come from the legacy id.
+    strings match byte-for-byte; taxonomy/ATT&CK auto-attach from the
+    registered stable id (``RULE_TAXONOMY``, AR046).
     """
-    taxonomy, techniques = _legacy_taxonomy(legacy_rule_id)
     return [
         Finding(
             title=meta.title,
@@ -210,8 +185,6 @@ def _emit(
             mitigation=mitigation,
             confidence=confidence_band(meta.confidence),
             tags=list(meta.tags),
-            attack_techniques=techniques,  # type: ignore[arg-type]
-            taxonomy=taxonomy,
         )
     ]
 
@@ -240,6 +213,7 @@ class RoutePublicWebhookRule:
         ),
         tags=("exposed-endpoint", "auth-missing"),
     )
+    legacy_rule_ids = ("public-webhook",)
 
     def evaluate(self, ctx: ReasoningContext) -> list[Finding]:
         surfaces = [
@@ -256,7 +230,6 @@ class RoutePublicWebhookRule:
             return []
         return _emit(
             self.meta,
-            "public-webhook",
             surfaces,
             mitigation=(
                 "Require signature verification before processing webhook payloads, "
@@ -286,6 +259,7 @@ class RouteExposedAdminRule:
         ),
         tags=("exposed-endpoint", "auth-missing", "privileged"),
     )
+    legacy_rule_ids = ("exposed-admin-route",)
 
     def evaluate(self, ctx: ReasoningContext) -> list[Finding]:
         surfaces = [surface for surface in _runtime_surfaces(ctx) if surface.category == "admin"]
@@ -293,7 +267,6 @@ class RouteExposedAdminRule:
             return []
         return _emit(
             self.meta,
-            "exposed-admin-route",
             surfaces,
             mitigation=(
                 "Require strong authentication and explicit server-side authorization on every "
@@ -324,6 +297,7 @@ class RouteUploadImportRule:
         ),
         tags=("exposed-endpoint", "input-handling"),
     )
+    legacy_rule_ids = ("upload-route",)
 
     def evaluate(self, ctx: ReasoningContext) -> list[Finding]:
         surfaces = [surface for surface in _runtime_surfaces(ctx) if surface.category == "upload"]
@@ -331,7 +305,6 @@ class RouteUploadImportRule:
             return []
         return _emit(
             self.meta,
-            "upload-route",
             surfaces,
             mitigation=(
                 "Constrain accepted formats, isolate parsers, scan uploaded content, and treat "
@@ -362,6 +335,7 @@ class RouteWeakAuthControlsRule:
         ),
         tags=("exposed-endpoint", "auth-missing"),
     )
+    legacy_rule_ids = ("weak-auth-route",)
 
     def evaluate(self, ctx: ReasoningContext) -> list[Finding]:
         surfaces = [surface for surface in _runtime_surfaces(ctx) if surface.category == "auth"]
@@ -369,7 +343,6 @@ class RouteWeakAuthControlsRule:
             return []
         return _emit(
             self.meta,
-            "weak-auth-route",
             surfaces,
             mitigation=(
                 "Review these routes for rate limiting, credential validation, token or session "

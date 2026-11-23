@@ -15,11 +15,11 @@ Legacy rule-id mappings (the old dashed ids remain in the taxonomy registry):
 ``debug_mode_exposure``        ``debug-enabled``           web-hardening ``debug_enabled`` (#71)
 ============================  -------------------------  ------------------------------------
 
-Each rule emits ``rule_id=meta.id``. ``Finding`` auto-fills CWE/OWASP/ASVS/
-ATT&CK taxonomy from the legacy dashed id; a snake_case id misses that lookup,
-so the rules replicate the legacy entry's taxonomy and ATT&CK techniques
-explicitly (derived live from the registry, not hardcoded) to keep every
-finding field identical.
+Each rule emits ``rule_id=meta.id`` and records its legacy dashed id as
+``legacy_rule_ids``. AR046 registered every snake_case id in
+``RULE_TAXONOMY`` with exactly its legacy entry's data, so the CWE/OWASP/
+ASVS/ATT&CK enrichment auto-attaches by the stable id — byte-identical to
+what the cascade branch emits — and no explicit carry-over remains.
 
 Deliberately NOT ported here:
 * ``secret-in-git-history`` — its branch reads ``scan.secret_history``, a slice
@@ -32,8 +32,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ...model import AttackTechnique, Finding, FindingLocation, FindingTaxonomy
-from ...model.taxonomy import ATTACK_TECHNIQUES, attack_url, taxonomy_for
+from ...model import Finding, FindingLocation
 from ...policy import SEVERITY_ORDER
 from .base import RuleMeta
 from .registry import REGISTRY
@@ -55,32 +54,6 @@ _NON_LITERAL_SECRET_KINDS = frozenset({"env_reference", "env_template"})
 
 # The cascade caps every evidence list at 10 lines.
 _EVIDENCE_CAP = 10
-
-
-def _legacy_finding_fields(legacy_rule_id: str) -> tuple[FindingTaxonomy, list[AttackTechnique]]:
-    """The taxonomy and ATT&CK techniques the legacy ``rule_id`` auto-fills on
-    every cascade ``Finding`` (see ``Finding._apply_rule_taxonomy``), so a
-    snake_case rule id can emit the exact same fields."""
-    entry = taxonomy_for(legacy_rule_id)
-    if entry is None:
-        return FindingTaxonomy(), []
-    taxonomy = FindingTaxonomy(
-        cwe=entry.cwe_ids,
-        owasp=list(entry.owasp),
-        asvs=list(entry.asvs),
-        attack=list(entry.attack),
-    )
-    techniques = [
-        AttackTechnique(technique_id=tid, name=name, tactic=tactic, url=attack_url(tid))
-        for tid in entry.attack
-        for name, tactic in [ATTACK_TECHNIQUES[tid]]
-    ]
-    return taxonomy, techniques
-
-
-_HARDCODED_TAXONOMY, _HARDCODED_TECHNIQUES = _legacy_finding_fields("hardcoded-secret")
-_ENV_REFERENCE_TAXONOMY, _ENV_REFERENCE_TECHNIQUES = _legacy_finding_fields("secret-env-reference")
-_DEBUG_TAXONOMY, _DEBUG_TECHNIQUES = _legacy_finding_fields("debug-enabled")
 
 
 def _locations(records) -> list[FindingLocation]:
@@ -122,6 +95,7 @@ class HardcodedSecretLiteralsRule:
         ),
         tags=("secret-exposure", "data-risk", "hardcoded-literal"),
     )
+    legacy_rule_ids = ("hardcoded-secret",)
 
     def evaluate(self, ctx: ReasoningContext) -> list[Finding]:
         literals = [h for h in ctx.secret_hints if h.kind not in _NON_LITERAL_SECRET_KINDS]
@@ -144,8 +118,6 @@ class HardcodedSecretLiteralsRule:
                 # Keyword-proximity assignments alone (#252) are a weaker signal.
                 confidence="high" if any(hint.confidence >= 0.6 for hint in literals) else "medium",
                 tags=list(self.meta.tags),
-                taxonomy=_HARDCODED_TAXONOMY,
-                attack_techniques=_HARDCODED_TECHNIQUES,
             )
         ]
 
@@ -173,6 +145,7 @@ class SecretEnvReferencesRule:
         ),
         tags=("secret-exposure",),
     )
+    legacy_rule_ids = ("secret-env-reference",)
 
     def evaluate(self, ctx: ReasoningContext) -> list[Finding]:
         env_references = [h for h in ctx.secret_hints if h.kind in _NON_LITERAL_SECRET_KINDS]
@@ -191,8 +164,6 @@ class SecretEnvReferencesRule:
                 ),
                 confidence="high",
                 tags=list(self.meta.tags),
-                taxonomy=_ENV_REFERENCE_TAXONOMY,
-                attack_techniques=_ENV_REFERENCE_TECHNIQUES,
             )
         ]
 
@@ -220,6 +191,7 @@ class DebugModeExposureRule:
         ),
         tags=("web-hardening",),
     )
+    legacy_rule_ids = ("debug-enabled",)
 
     def evaluate(self, ctx: ReasoningContext) -> list[Finding]:
         issues = [issue for issue in ctx.web_hardening_issues if issue.kind == "debug_enabled"]
@@ -246,8 +218,6 @@ class DebugModeExposureRule:
                 ),
                 confidence="medium",
                 tags=list(self.meta.tags),
-                taxonomy=_DEBUG_TAXONOMY,
-                attack_techniques=_DEBUG_TECHNIQUES,
             )
         ]
 

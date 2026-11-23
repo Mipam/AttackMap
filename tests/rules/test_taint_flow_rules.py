@@ -9,6 +9,11 @@ block emits for the same chains. The exploitability fusion is deliberately
 not ported (it needs full-scan slices outside ``ReasoningContext``), so it
 is excluded from the comparison and asserted absent on rule findings.
 
+AR046 unified the emitted rule id: findings carry ``rule_id=meta.id`` (the
+kernel contract), the legacy cascade still emits the dashed detector ids,
+and the equivalence helpers below compare the two sides through each rule's
+recorded ``legacy_rule_ids`` mapping.
+
 Self-contained: no conftest, no shared harness — fixtures are constructed
 in-code.
 """
@@ -69,7 +74,7 @@ def _scan(chains: list[TaintChain]) -> ScanResult:
 
 
 def _rule_findings(scan: ScanResult) -> dict[str, Finding]:
-    """The ported rules' findings keyed by the (legacy) rule id they emit."""
+    """The ported rules' findings keyed by the stable rule id they emit."""
     ctx = ReasoningContext.from_scan(scan)
     out: dict[str, Finding] = {}
     for rule in (*TAINT_SINK_RULES, *FLOW_SINK_RULES, *SPECULATIVE_RULES):
@@ -88,8 +93,19 @@ def _legacy_taint_findings(scan: ScanResult) -> dict[str, Finding]:
     }
 
 
-def _assert_equivalent(new: Finding, old: Finding) -> None:
-    """Field-for-field equivalence on every ported field."""
+def _legacy_to_stable_id() -> dict[str, str]:
+    """legacy detector id -> stable meta.id, from the rules' own mapping."""
+    mapping: dict[str, str] = {}
+    for rule in (*TAINT_SINK_RULES, *FLOW_SINK_RULES, *SPECULATIVE_RULES):
+        for legacy_id in rule.legacy_rule_ids:
+            mapping[legacy_id] = rule.meta.id
+    return mapping
+
+
+def _assert_equivalent(new: Finding, old: Finding, stable_id: str) -> None:
+    """Field-for-field equivalence on every ported field. The one intentional
+    delta is ``rule_id``: the rule emits the stable meta.id while the legacy
+    cascade keeps the dashed detector id (mapping recorded on the rule)."""
     assert new.title == old.title
     assert new.severity == old.severity
     assert new.confidence == old.confidence
@@ -105,8 +121,8 @@ def _assert_equivalent(new: Finding, old: Finding) -> None:
     assert [
         [(step.file, step.line, step.kind) for step in flow] for flow in new.code_flows
     ] == [[(step.file, step.line, step.kind) for step in flow] for flow in old.code_flows]
-    assert new.taxonomy == old.taxonomy
-    assert new.rule_id == old.rule_id  # legacy detector id preserved
+    assert new.taxonomy == old.taxonomy  # identical enrichment (registered ids, AR046)
+    assert new.rule_id == stable_id  # kernel contract: rule_id == meta.id
 
 
 def _assert_matches_legacy(scan: ScanResult) -> None:
@@ -114,9 +130,10 @@ def _assert_matches_legacy(scan: ScanResult) -> None:
     rules emit nothing the legacy block doesn't."""
     legacy = _legacy_taint_findings(scan)
     ported = _rule_findings(scan)
-    assert set(ported) == set(legacy), (sorted(ported), sorted(legacy))
+    legacy_to_stable = _legacy_to_stable_id()
+    assert set(ported) == {legacy_to_stable[rid] for rid in legacy}, (sorted(ported), sorted(legacy))
     for rule_id in legacy:
-        _assert_equivalent(ported[rule_id], legacy[rule_id])
+        _assert_equivalent(ported[legacy_to_stable[rule_id]], legacy[rule_id], legacy_to_stable[rule_id])
     for finding in ported.values():
         # The exploitability fusion (score_exploitability + attack surfaces)
         # needs full-scan slices outside ReasoningContext — deliberately not
@@ -142,8 +159,8 @@ def test_sql_sink_traced_flow_matches_legacy():
     )
     scan = _scan([chain])
     findings = _rule_findings(scan)
-    assert list(findings) == ["sql-injection"]
-    finding = findings["sql-injection"]
+    assert list(findings) == ["taint_flow_sql_execute"]
+    finding = findings["taint_flow_sql_execute"]
     assert finding.confidence == "high"  # chain confidence 0.75 clears the flow band
     assert finding.locations[0].file == "svc/db.py"
     assert any(step.kind == "source" for flow in finding.code_flows for step in flow)
@@ -165,8 +182,8 @@ def test_command_sink_finding_matches_legacy():
     )
     scan = _scan([chain])
     findings = _rule_findings(scan)
-    assert list(findings) == ["subprocess-shell"]
-    finding = findings["subprocess-shell"]
+    assert list(findings) == ["taint_sink_subprocess_shell"]
+    finding = findings["taint_sink_subprocess_shell"]
     assert finding.severity == "high"
     assert finding.confidence == "medium"  # reach band, preserved from the legacy block
     assert finding.locations[0].line == 12
@@ -187,8 +204,8 @@ def test_template_sink_finding_matches_legacy():
     )
     scan = _scan([chain])
     findings = _rule_findings(scan)
-    assert list(findings) == ["ssti"]
-    finding = findings["ssti"]
+    assert list(findings) == ["taint_sink_ssti"]
+    finding = findings["taint_sink_ssti"]
     assert finding.severity == "high"
     _assert_matches_legacy(scan)
 
@@ -225,8 +242,8 @@ def test_path_sink_finding_matches_legacy():
     )
     scan = _scan([traced_open, gated_send_file])
     findings = _rule_findings(scan)
-    assert list(findings) == ["path-traversal"]
-    finding = findings["path-traversal"]
+    assert list(findings) == ["taint_flow_path_traversal"]
+    finding = findings["taint_flow_path_traversal"]
     assert finding.confidence == "high"  # any chain >= 0.75 lifts the band
     # Only the traced chain contributes a `flow:` evidence line; the gated
     # send_file-style chain counts on reach alone.
@@ -262,7 +279,7 @@ def test_low_quality_sources_are_down_ranked():
     scan = _scan(chains)
     assert _rule_findings(scan) == {}
     # Control: the same chains rooted in runtime sources do produce findings.
-    assert set(_rule_findings(_scan([_chain(route_file="src/search.py")]))) == {"eval"}
+    assert set(_rule_findings(_scan([_chain(route_file="src/search.py")]))) == {"taint_sink_eval"}
 
 
 def test_sanitized_chain_is_never_raised():
@@ -282,8 +299,8 @@ def test_speculative_chain_only_produces_the_speculative_finding():
     chain = _chain(sink_kind="exec", speculative=True, confidence=0.3)
     scan = _scan([chain])
     findings = _rule_findings(scan)
-    assert list(findings) == ["speculative-exec"]
-    finding = findings["speculative-exec"]
+    assert list(findings) == ["taint_speculative_exec"]
+    finding = findings["taint_speculative_exec"]
     assert finding.severity == "low"
     assert finding.confidence == "low"
     assert finding.tags == ["taint-chain", "speculative", "recall"]
@@ -316,7 +333,7 @@ def test_multiple_routes_aggregate_into_one_finding_per_kind():
     )
     closest = _chain(sink_file="svc/dynamic.py", sink_line=10, hops=0, files=["app/web.py"], confidence=0.65)
     scan = _scan([farther, closest])  # list order != top-chain order
-    finding = _rule_findings(scan)["eval"]
+    finding = _rule_findings(scan)["taint_sink_eval"]
     # Top chain = fewest hops (tie broken by confidence), overflow line, then
     # the traced-flow evidence lines (none: reach-only chains).
     assert "import path: app/web.py (0 hop(s))" in finding.evidence
@@ -353,7 +370,7 @@ def test_hop_confidence_bands_match_the_legacy_mapping(hops: int):
         flow=_flow((30, "source", "query"), (31, "sink", "cursor.execute(query)")),
     )
     scan = _scan([chain])
-    finding = _rule_findings(scan)["sql-injection"]
+    finding = _rule_findings(scan)["taint_flow_sql_execute"]
     expected_band = "high" if traced_confidence >= 0.75 else "medium"
     assert finding.confidence == expected_band
     assert finding.confidence == _legacy_taint_findings(scan)["sql-injection"].confidence
@@ -361,7 +378,7 @@ def test_hop_confidence_bands_match_the_legacy_mapping(hops: int):
     # on either side — the mapping's taper is preserved end-to-end.
     pure = _chain(sink_kind="sql_execute", hops=hops, confidence=base, source_kind="query")
     pure_scan = _scan([pure])
-    pure_finding = _rule_findings(pure_scan)["sql-injection"]
+    pure_finding = _rule_findings(pure_scan)["taint_flow_sql_execute"]
     assert pure_finding.confidence == "medium"
     assert pure_finding.confidence == _legacy_taint_findings(pure_scan)["sql-injection"].confidence
 
@@ -422,15 +439,15 @@ def test_registry_evaluate_all_matches_per_rule_evaluation():
     # no errors (other families' errors, if any, are their own tests' scope).
     assert not [error for error in result.errors if error.rule_id.startswith("taint_")]
     taint_ids = (
-        "sql-injection",
-        "path-traversal",
-        "speculative-eval",
-        "subprocess-shell",
-        "eval",
+        "taint_flow_sql_execute",
+        "taint_flow_path_traversal",
+        "taint_speculative_eval",
+        "taint_sink_subprocess_shell",
+        "taint_sink_eval",
     )
     by_id = {
         finding.rule_id: finding
         for finding in result.findings
-        if finding.rule_id in taint_ids or finding.rule_id.startswith("speculative-")
+        if finding.rule_id in taint_ids or finding.rule_id.startswith("taint_speculative_")
     }
     assert by_id == _rule_findings(scan)

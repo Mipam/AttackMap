@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import ClassVar
 
 import jsonschema
 import pytest
@@ -40,12 +41,15 @@ def test_every_catalogued_rule_has_cwe_and_owasp(rule_id: str) -> None:
 
 
 def test_registry_has_no_entries_for_unknown_rules() -> None:
-    """Catches typos: every registered id is a catalogued rule."""
-    assert set(RULE_TAXONOMY) <= set(CATALOG)
+    """Catches typos: every registered id is a catalogued rule (the legacy
+    cascade catalog) or a kernel REGISTRY rule id (AR046 registrations)."""
+    from attackmap.reasoning.rules import REGISTRY
+
+    assert set(RULE_TAXONOMY) <= set(CATALOG) | set(REGISTRY.ids())
 
 
 def test_informational_rules_are_catalogued() -> None:
-    assert taxonomy.INFORMATIONAL_RULES <= set(CATALOG)
+    assert set(CATALOG) >= taxonomy.INFORMATIONAL_RULES
 
 
 def test_catalogs_are_well_formed() -> None:
@@ -227,8 +231,8 @@ def test_pr_comment_labels_new_findings_with_taxonomy() -> None:
     snap = FindingSnapshot.from_finding(Finding(title="SSRF", severity="medium", mitigation="m", rule_id="ssrf"))
 
     class _Diff:
-        new = [snap]
-        resolved: list = []
+        new: ClassVar[list] = [snap]
+        resolved: ClassVar[list] = []
         has_new_high = False
 
     text = render_pr_comment([], _Diff())
