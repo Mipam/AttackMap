@@ -100,16 +100,10 @@ a major-version bump; deprecations get one release of overlap.
 
 from __future__ import annotations
 
-from attackmap.foundation.safe_fs import contained_file, is_contained, read_repo_text, walk_repo
-from attackmap.reasoning.taint_sinks import PLUGIN_GROUP as TAINT_SINK_PLUGIN_GROUP
-from attackmap.reasoning.taint_sinks import SINK_KINDS as TAINT_SINK_KINDS
-from attackmap.reasoning.taint_sinks import validate_sink_entry as validate_taint_sink
+import importlib
 
-from ..extraction.adapters import (
-    merge_extraction_results,
-    to_extraction_result,
-    to_scan_result,
-)
+from attackmap.foundation.safe_fs import contained_file, is_contained, read_repo_text, walk_repo
+
 from ..model.observations import (
     DependencyObservation,
     EdgeObservation,
@@ -216,3 +210,35 @@ __all__ = [
     # of Path.rglob / read_text.
     "walk_repo",
 ]
+
+# AR031 slice 2: ``attackmap.sdk`` is an import island (foundation + model
+# only). The contract names below are implemented in reasoning/extraction
+# modules, so they resolve lazily (PEP 562) from their canonical homes:
+# ``import attackmap.sdk`` no longer drags in the taint-sink registry or the
+# v1<->v2 adapters, while every documented import path keeps working (a
+# ``from attackmap.sdk import validate_taint_sink`` triggers __getattr__).
+# Retire this shim when AR082 migrates the core to ExtractionResult v2 and
+# the registry pieces move down into sdk/model.
+_LAZY_CONTRACT_NAMES: dict[str, tuple[str, str]] = {
+    "TAINT_SINK_PLUGIN_GROUP": ("attackmap.reasoning.taint_sinks", "PLUGIN_GROUP"),
+    "TAINT_SINK_KINDS": ("attackmap.reasoning.taint_sinks", "SINK_KINDS"),
+    "validate_taint_sink": ("attackmap.reasoning.taint_sinks", "validate_sink_entry"),
+    "merge_extraction_results": ("attackmap.extraction.adapters", "merge_extraction_results"),
+    "to_extraction_result": ("attackmap.extraction.adapters", "to_extraction_result"),
+    "to_scan_result": ("attackmap.extraction.adapters", "to_scan_result"),
+}
+
+
+def __getattr__(name: str) -> object:
+    """Resolve the transitional contract names on first access (PEP 562)."""
+    try:
+        module_name, attr = _LAZY_CONTRACT_NAMES[name]
+    except KeyError:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from None
+    value = getattr(importlib.import_module(module_name), attr)
+    globals()[name] = value  # cache: subsequent accesses skip the import
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_LAZY_CONTRACT_NAMES))
