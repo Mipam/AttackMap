@@ -61,6 +61,7 @@ from attackmap.extraction.config_scanner import should_scan_config_file
 from attackmap.policy import LOW_QUALITY_SEGMENTS
 
 from ...model import Finding, FindingLocation
+from ..finding_format import _rule_rationale
 from .base import RuleMeta, confidence_band
 from .registry import REGISTRY
 
@@ -165,6 +166,7 @@ def _build_edge_finding(
         evidence=evidence,
         locations=locations,
         tags=[*meta.tags, status_tag],
+        rationale=_rule_rationale(meta, evidence),
     )
 
 

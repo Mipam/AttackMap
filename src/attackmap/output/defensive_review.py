@@ -210,6 +210,8 @@ def _weaknesses(attack_surfaces: list[AttackSurface], findings: list[Finding], a
             f"- [{finding.severity.upper()} | score {score:.1f}] {md_text(finding.title)}"
             + (f" ({label})" if label else "")
         )
+        if finding.rationale:
+            items.append(f"- Rationale: {md_text(finding.rationale)}")
         items.append(f"- Reason: {_top_score_reasons(factors, top_n=3)}")
         items.append(f"- Provenance: heuristic_static; source quality={_finding_source_quality(finding)}; surface/path association=unknown; runtime unverified")
 

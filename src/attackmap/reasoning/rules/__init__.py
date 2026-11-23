@@ -16,6 +16,7 @@ import re
 from typing import TYPE_CHECKING
 
 from ...model import Finding, FindingLocation
+from ..finding_format import _rule_rationale
 from .base import RuleMeta, confidence_band
 from .evaluation import evaluate_rules
 from .registry import REGISTRY
@@ -79,6 +80,9 @@ class WeakDefaultCredentialsRule:
                     evidence=[hint.evidence_text] if hint.evidence_text else [hint.name],
                     locations=[FindingLocation(file=hint.file, line=hint.line)],
                     tags=list(self.meta.tags),
+                    rationale=_rule_rationale(
+                        self.meta, [hint.evidence_text] if hint.evidence_text else [hint.name]
+                    ),
                 )
             )
         return findings

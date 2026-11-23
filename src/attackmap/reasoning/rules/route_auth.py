@@ -52,7 +52,7 @@ from typing import TYPE_CHECKING
 from ...model import AttackSurface, Finding
 from ...policy import WEBHOOK_MUTATING_METHODS
 from ..analyzer import _auth_hints_for_route
-from ..finding_format import _finding_evidence, _is_low_quality_source, _locs
+from ..finding_format import _finding_evidence, _is_low_quality_source, _locs, _rule_rationale
 from .base import RuleMeta, confidence_band
 from .registry import REGISTRY
 
@@ -175,16 +175,18 @@ def _emit(
     strings match byte-for-byte; taxonomy/ATT&CK auto-attach from the
     registered stable id (``RULE_TAXONOMY``, AR046).
     """
+    evidence = [_finding_evidence(surface) for surface in surfaces[:10]]
     return [
         Finding(
             title=meta.title,
             rule_id=meta.id,
             severity=meta.severity,
-            evidence=[_finding_evidence(surface) for surface in surfaces[:10]],
+            evidence=evidence,
             locations=_locs(surfaces),
             mitigation=mitigation,
             confidence=confidence_band(meta.confidence),
             tags=list(meta.tags),
+            rationale=_rule_rationale(meta, evidence),
         )
     ]
 

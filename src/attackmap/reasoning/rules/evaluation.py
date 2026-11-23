@@ -46,4 +46,11 @@ def evaluate_rules(ctx: ReasoningContext) -> list[Finding]:
     result = REGISTRY.evaluate_all(ctx)
     for finding in result.findings:
         finding.score = _compute_finding_score(finding.severity, finding.confidence)
+        # AR049/AC-207: a rule finding must explain itself even when the rule's
+        # own construction did not set a rationale — fall back to the rule's
+        # declared rationale rather than emitting an unexplained finding.
+        if not finding.rationale and finding.rule_id:
+            rule = REGISTRY.get(finding.rule_id)
+            if rule is not None:
+                finding.rationale = rule.meta.rationale
     return result.findings

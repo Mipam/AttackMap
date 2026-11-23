@@ -231,6 +231,9 @@ def _build_result(finding: Finding, *, suppression_reason: str | None = None) ->
         properties["rank"] = float(finding.score)
     if finding.evidence:
         properties["evidence"] = list(finding.evidence[:8])
+    if finding.rationale:
+        # AR049/AC-207: why the finding exists, in the tool's own words.
+        properties["rationale"] = finding.rationale
 
     def result(location: dict[str, Any] | None, fingerprint: str) -> dict[str, Any]:
         r: dict[str, Any] = {

@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING
 
 from ...model import Finding, FindingLocation
 from ...policy import SEVERITY_ORDER
+from ..finding_format import _rule_rationale
 from .base import RuleMeta
 from .registry import REGISTRY
 
@@ -118,6 +119,7 @@ class HardcodedSecretLiteralsRule:
                 # Keyword-proximity assignments alone (#252) are a weaker signal.
                 confidence="high" if any(hint.confidence >= 0.6 for hint in literals) else "medium",
                 tags=list(self.meta.tags),
+                rationale=_rule_rationale(self.meta, evidence),
             )
         ]
 
@@ -151,12 +153,13 @@ class SecretEnvReferencesRule:
         env_references = [h for h in ctx.secret_hints if h.kind in _NON_LITERAL_SECRET_KINDS]
         if not env_references:
             return []
+        evidence = [f"{hint.name} in {hint.file}" for hint in env_references[:_EVIDENCE_CAP]]
         return [
             Finding(
                 title=self.meta.title,
                 severity=self.meta.severity,
                 rule_id=self.meta.id,
-                evidence=[f"{hint.name} in {hint.file}" for hint in env_references[:_EVIDENCE_CAP]],
+                evidence=evidence,
                 locations=_locations(env_references),
                 mitigation=(
                     "Confirm these secrets are injected securely, never logged or returned, "
@@ -164,6 +167,7 @@ class SecretEnvReferencesRule:
                 ),
                 confidence="high",
                 tags=list(self.meta.tags),
+                rationale=_rule_rationale(self.meta, evidence),
             )
         ]
 
@@ -218,6 +222,7 @@ class DebugModeExposureRule:
                 ),
                 confidence="medium",
                 tags=list(self.meta.tags),
+                rationale=_rule_rationale(self.meta, evidence),
             )
         ]
 

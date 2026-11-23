@@ -19,7 +19,7 @@ _PROVENANCE_FIELD = Field(default=None, exclude=True, repr=False)
 # with one of these redacts it at construction time (#235), so no detector —
 # core or plugin — can put a raw credential into a report, SARIF, PR comment
 # or LLM pack.
-_EVIDENCE_TEXT_FIELDS = ("evidence_text", "db_evidence", "sanitizer_evidence", "target")
+_EVIDENCE_TEXT_FIELDS = ("evidence_text", "db_evidence", "sanitizer_evidence", "target", "rationale")
 _EVIDENCE_LIST_FIELDS = ("evidence",)
 
 

@@ -156,6 +156,7 @@ class FindingPresentationIndex:
             "finding_id": finding_id(finding),
             "claim": {"kind": "heuristic_static_analysis", "text": finding.title,
                       "evidence_kind": "heuristic_static_claim", "runtime_verification": "unknown"},
+            "rationale": finding.rationale,
             "priority": {"severity": finding.severity, "confidence": finding.confidence,
                          "score": finding.score, "exploitability_score": finding.exploitability,
                          "exploitability_tier": finding.exploitability_tier,

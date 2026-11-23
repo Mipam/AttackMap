@@ -191,6 +191,34 @@ FLOW_FINDING_SPEC: dict[str, dict[str, str]] = {
     },
 }
 
+CRYPTO_FINDING_RATIONALE: dict[str, str] = {
+    "weak_password_hash": (
+        "Passwords hashed with MD5/SHA-1 are fast to brute-force; an attacker who "
+        "obtains the hash store can recover user passwords offline."
+    ),
+    "weak_cipher": (
+        "DES/3DES/RC4/Blowfish are broken or deprecated ciphers, so ciphertext "
+        "produced with them is decryptable by a capable adversary."
+    ),
+    "ecb_mode": (
+        "ECB encrypts identical plaintext blocks to identical ciphertext, leaking "
+        "data structure, and provides no integrity."
+    ),
+    "static_iv_salt": (
+        "A hard-coded IV/nonce or salt removes the per-operation randomness the "
+        "primitive depends on, enabling pattern, replay and dictionary attacks."
+    ),
+    "insecure_random": (
+        "Math.random()/rand()-class PRNGs are predictable; tokens, keys, nonces or "
+        "OTPs drawn from them can be forecast or replayed by an attacker."
+    ),
+    "insecure_tls": (
+        "Disabled certificate/hostname verification or deprecated TLS lets a "
+        "network adversary intercept or substitute the peer."
+    ),
+}
+
+
 CRYPTO_FINDING_SPEC: dict[str, dict[str, str]] = {
     "weak_password_hash": {
         "severity": "high",
@@ -241,6 +269,42 @@ CRYPTO_FINDING_SPEC: dict[str, dict[str, str]] = {
         "tactic": "Credential Access",
     },
 }
+
+WEB_HARDENING_FINDING_RATIONALE: dict[str, str] = {
+    "cors_wildcard_credentials": (
+        "Access-Control-Allow-Credentials with a wildcard or reflected origin lets "
+        "any website make credentialed cross-origin reads of a victim's data."
+    ),
+    "cors_wildcard_origin": (
+        "A wildcard or reflected origin exposes responses to any site; acceptable "
+        "only for genuinely public, unauthenticated data."
+    ),
+    "cors_untrusted_origin": (
+        "An unanchored, partial or null origin match admits attacker-chosen "
+        "origins, enabling cross-origin data theft whenever credentials ride along."
+    ),
+    "csrf_disabled": (
+        "CSRF protection disabled on cookie-authenticated, state-changing routes "
+        "lets a cross-site request run actions as the victim."
+    ),
+    "csrf_unprotected_session": (
+        "Cookie-session authentication plus state-changing routes with no CSRF "
+        "defence is the classic cross-site request forgery shape."
+    ),
+    "insecure_cookie": (
+        "Session cookies without HttpOnly/Secure/SameSite can be read by injected "
+        "script or sent over plaintext HTTP."
+    ),
+    "weak_csp": (
+        "'unsafe-inline'/'unsafe-eval' largely neutralize Content-Security-Policy, "
+        "leaving XSS free to execute injected script."
+    ),
+    "debug_enabled": (
+        "Debug mode or wildcard-exposed management endpoints leak stack traces and "
+        "internals and can enable remote code execution."
+    ),
+}
+
 
 WEB_HARDENING_FINDING_SPEC: dict[str, dict[str, str]] = {
     "cors_wildcard_credentials": {
@@ -308,6 +372,51 @@ WEB_HARDENING_FINDING_SPEC: dict[str, dict[str, str]] = {
         "tactic": "Initial Access",
     },
 }
+
+CODE_WEAKNESS_FINDING_RATIONALE: dict[str, str] = {
+    "prototype_pollution": (
+        "Merging attacker-controlled keys into objects can pollute "
+        "Object.prototype, altering the behavior of every object in the process."
+    ),
+    "mass_assignment": (
+        "Binding a whole request body to a model lets an attacker set privileged "
+        "fields (role, is_admin, owner_id) the form never showed them."
+    ),
+    "jwt_weakness": (
+        "Accepting alg=none or skipping signature verification lets an attacker "
+        "forge tokens and impersonate any principal."
+    ),
+    "xxe": (
+        "External-entity processing lets an XML parser read local files or issue "
+        "server-side requests on the attacker's behalf."
+    ),
+    "redos": (
+        "A catastrophic-backtracking regular expression lets a short untrusted "
+        "string stall the endpoint for seconds or minutes (algorithmic DoS)."
+    ),
+    "insecure_upload": (
+        "Persisting an uploaded file under a client-controlled name or path "
+        "enables path traversal or executable-content placement."
+    ),
+    "graphql_exposure": (
+        "Introspection and the playground UI in production disclose the full "
+        "schema, making targeted attacks much easier."
+    ),
+    "graphql_no_query_limits": (
+        "Unbounded query depth/complexity lets a single cheap request exhaust the "
+        "server (application-exhaustion DoS)."
+    ),
+    "graphql_batching": (
+        "HTTP request batching multiplies attacker attempts per request, "
+        "sidestepping per-request rate limits on login/OTP-style operations."
+    ),
+    "prompt_injection_attempt": (
+        "Text addressed to automated reviewers, role-tag chatter or invisible/"
+        "bidi Unicode signals an attempt to steer automated review or hide code "
+        "from humans; it flags content for human review rather than a code flaw."
+    ),
+}
+
 
 CODE_WEAKNESS_FINDING_SPEC: dict[str, dict[str, str]] = {
     "prototype_pollution": {
@@ -559,6 +668,27 @@ SUPPLY_CHAIN_FINDING_SPEC: dict[str, dict[str, str]] = {
         "tactic": "Credential Access",
     },
 }
+
+ANOMALY_FINDING_RATIONALE: dict[str, str] = {
+    "auth_outlier": (
+        "A cohort of sibling routes consistently enforces authentication while "
+        "this one does not; inconsistent enforcement is the classic shape of a "
+        "forgotten check."
+    ),
+    "validation_outlier": (
+        "Sibling handlers validate their input and this one does not; the "
+        "deviation is a likely gap for injection or malformed-input bugs."
+    ),
+    "method_outlier": (
+        "A lone state-changing method in an otherwise read-only resource cohort "
+        "suggests an accidentally exposed mutation."
+    ),
+    "invariant_violation": (
+        "A mined invariant — a guard every sibling handler places before the same "
+        "dangerous sink — is broken at exactly this handler."
+    ),
+}
+
 
 ANOMALY_FINDING_SPEC: dict[str, dict[str, str]] = {
     "auth_outlier": {

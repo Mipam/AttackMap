@@ -9,10 +9,15 @@ from a module that depends on nothing in ``reasoning``.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from attackmap.model import AttackSurface, FindingLocation
 from attackmap.policy import LOW_QUALITY_SEGMENTS
 
-__all__ = ["_finding_evidence", "_is_low_quality_source", "_locs", "_surface_label"]
+if TYPE_CHECKING:
+    from .rules.base import RuleMeta
+
+__all__ = ["_finding_evidence", "_is_low_quality_source", "_locs", "_rule_rationale", "_surface_label"]
 
 
 def _surface_label(surface: AttackSurface) -> str:
@@ -51,3 +56,15 @@ def _finding_evidence(surface: AttackSurface) -> str:
     if surface.outbound_integration:
         details.append("inferred outbound relationship")
     return "; ".join(details)
+
+
+def _rule_rationale(meta: RuleMeta, evidence: list[str]) -> str:
+    """AR049/AC-207: a rule finding's rationale = why the rule exists
+    (``RuleMeta.rationale``) plus the concrete observation that fired (the
+    first evidence line). The text is redacted with the evidence fields at
+    construction, so an observation copied from the repo cannot leak a
+    credential through the rationale."""
+    base = meta.rationale.rstrip(".")
+    if evidence:
+        return f"{base}. Observed: {evidence[0]}"
+    return f"{base}."

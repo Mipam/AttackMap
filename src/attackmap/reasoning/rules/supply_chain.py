@@ -73,6 +73,7 @@ from ...model import (
 )
 from ...model.taxonomy import ATTACK_TECHNIQUES, attack_url, cwe_tag, taxonomy_for
 from ...policy import SEVERITY_ORDER, SEVERITY_RANK
+from ..finding_format import _rule_rationale
 from ..rule_specs import SUPPLY_CHAIN_FINDING_SPEC, WORKFLOW_FINDING_SPEC
 from .base import RuleMeta, confidence_band
 from .registry import REGISTRY
@@ -184,7 +185,7 @@ def _legacy_enrichment(kind: str) -> tuple[FindingTaxonomy | None, list[AttackTe
 def _aggregate_kind_findings(
     issues: tuple[WorkflowIssue | SupplyChainIssue, ...],
     spec_table: dict[str, dict[str, str]],
-    rule_id: str,
+    meta: RuleMeta,
     base_tags: tuple[str, ...],
     confidence_by_kind: dict[str, _Band],
     *,
@@ -211,7 +212,7 @@ def _aggregate_kind_findings(
         findings.append(
             Finding(
                 title=spec["title"],
-                rule_id=rule_id,
+                rule_id=meta.id,
                 severity=_severity_max(items),
                 evidence=evidence,
                 locations=_locations(items),
@@ -233,6 +234,7 @@ def _aggregate_kind_findings(
                         url=f"https://attack.mitre.org/techniques/{spec['technique_id'].replace('.', '/')}/",
                     )
                 ],
+                rationale=_rule_rationale(meta, evidence),
             )
         )
     return findings
@@ -325,6 +327,7 @@ class VulnerableDependencyRule:
                         FindingLocation(file=file, line=line)
                         for file, line in evidence_locations(evidence)
                     ],
+                    rationale=_rule_rationale(self.meta, evidence),
                 )
             )
         return findings
@@ -366,7 +369,7 @@ class WorkflowSecurityRule:
         return _aggregate_kind_findings(
             ctx.workflow_issues,
             WORKFLOW_FINDING_SPEC,
-            self.meta.id,
+            self.meta,
             ("ci-security", "supply-chain"),
             {kind: "high" for kind in WORKFLOW_FINDING_SPEC},
             with_context=True,
@@ -404,7 +407,7 @@ class SupplyChainRiskRule:
         return _aggregate_kind_findings(
             ctx.supply_chain_issues,
             SUPPLY_CHAIN_FINDING_SPEC,
-            self.meta.id,
+            self.meta,
             ("supply-chain", "dependency-risk"),
             {kind: ("medium" if kind == "typosquat_candidate" else "high") for kind in SUPPLY_CHAIN_FINDING_SPEC},
             with_context=False,

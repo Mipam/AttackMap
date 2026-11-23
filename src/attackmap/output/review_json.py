@@ -122,6 +122,7 @@ def _weaknesses_and_hotspots(
                 "taxonomy": finding.taxonomy.model_dump() if finding.taxonomy else None,
                 "severity": finding.severity,
                 "confidence": finding.confidence,
+                "rationale": finding.rationale,
                 **_finding_evidence_context(finding, attack_surfaces),
                 "evidence": finding.evidence[:10],
                 "locations": [loc.model_dump() for loc in finding.locations],

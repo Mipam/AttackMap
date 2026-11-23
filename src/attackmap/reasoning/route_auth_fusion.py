@@ -219,6 +219,13 @@ def synthesize_unauthenticated_routes(
                 ),
                 confidence="medium",
                 tags=["exposed-endpoint", "auth-missing", "state-changing"],
+                rationale=(
+                    f"{len(flagged)} state-changing route(s) on public/admin/internal "
+                    "surfaces resolved to no authentication control: the plugin did not "
+                    "declare auth, no guard/decorator/middleware was found in the handler "
+                    "source, and no global auth policy applies — so an unauthenticated "
+                    "request can mutate application state."
+                ),
                 attack_techniques=[
                     AttackTechnique(
                         technique_id="T1190",
@@ -557,5 +564,12 @@ def _webhook_exposure_findings(
             ),
             confidence="medium",
             tags=["exposed-endpoint", "auth-missing"],
+            rationale=(
+                f"{len(flagged)} public webhook-style route(s) accept mutating requests "
+                "with no signature-verification code in their handler while same-file "
+                "datastore/outbound activity shows processed events reach sensitive "
+                "operations — an attacker who learns the URL can forge events the "
+                "application will trust."
+            ),
         )
     ]

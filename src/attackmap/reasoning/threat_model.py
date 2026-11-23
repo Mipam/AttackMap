@@ -28,16 +28,28 @@ from attackmap.reasoning.finding_format import (
 )
 from attackmap.reasoning.route_auth_fusion import synthesize_unauthenticated_routes
 from attackmap.reasoning.rule_specs import (
+    ANOMALY_FINDING_RATIONALE as _ANOMALY_FINDING_RATIONALE,
+)
+from attackmap.reasoning.rule_specs import (
     ANOMALY_FINDING_SPEC as _ANOMALY_FINDING_SPEC,
 )
 from attackmap.reasoning.rule_specs import (
+    CODE_WEAKNESS_FINDING_RATIONALE as _CODE_WEAKNESS_FINDING_RATIONALE,
+)
+from attackmap.reasoning.rule_specs import (
     CODE_WEAKNESS_FINDING_SPEC as _CODE_WEAKNESS_FINDING_SPEC,
+)
+from attackmap.reasoning.rule_specs import (
+    CRYPTO_FINDING_RATIONALE as _CRYPTO_FINDING_RATIONALE,
 )
 from attackmap.reasoning.rule_specs import (
     CRYPTO_FINDING_SPEC as _CRYPTO_FINDING_SPEC,
 )
 from attackmap.reasoning.rule_specs import (
     TAINT_SINK_LABEL as _TAINT_SINK_LABEL,
+)
+from attackmap.reasoning.rule_specs import (
+    WEB_HARDENING_FINDING_RATIONALE as _WEB_HARDENING_FINDING_RATIONALE,
 )
 from attackmap.reasoning.rule_specs import (
     WEB_HARDENING_FINDING_SPEC as _WEB_HARDENING_FINDING_SPEC,
@@ -861,6 +873,12 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 mitigation="Check how outbound requests are authenticated, signed, and authorized, and confirm that untrusted route input cannot directly steer third-party actions.",
                 confidence="medium",
                 tags=["integration-risk", "auth-missing"],
+                rationale=(
+                    "These routes are inferred as public, carry a route-linked outbound (SSRF-class) "
+                    "relationship, and show no jwt/oauth/bearer/token auth signal — so untrusted "
+                    "request input may steer server-side requests to third parties without an "
+                    "authorization gate."
+                ),
             )
         )
 
@@ -888,6 +906,11 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 ),
                 confidence="high",
                 tags=["secret-exposure", "data-risk", "git-history"],
+                rationale=(
+                    f"Static scanning of git history found {len(history)} hard-coded "
+                    "credential occurrence(s); every clone and fork keeps history, so a "
+                    "value removed in a later commit stays usable until it is rotated."
+                ),
             )
         )
 
@@ -902,6 +925,12 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 mitigation="Validate untrusted input before it reaches business logic, enforce authorization at the route boundary, and verify that downstream queries or writes stay parameterized.",
                 confidence="medium",
                 tags=["exposed-endpoint", "data-risk"],
+                rationale=(
+                    "These routes are inferred as public and a route-linked static chain "
+                    "suggests datastore access; with no auth signals observed, untrusted "
+                    "input may reach sensitive data operations without an authorization "
+                    "check at the boundary."
+                ),
             )
         )
 
@@ -919,6 +948,13 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 ),
                 confidence="high" if top_atproto_chain.confidence >= 0.7 else "medium",
                 tags=["atproto-chain", "data-risk"],
+                rationale=(
+                    f"Static analysis linked an XRPC lexicon surface to a "
+                    f"'{top_atproto_chain.sink}' sink (chain confidence "
+                    f"{top_atproto_chain.confidence:.2f}); in a distributed AT Protocol "
+                    "deployment each hop must re-verify identity and authorization or a "
+                    "public request can ride the chain across a service trust boundary."
+                ),
             )
         )
 
@@ -936,6 +972,13 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 ),
                 confidence="high" if top_service_chain.confidence >= 0.7 else "medium",
                 tags=["service-chain", "data-risk"],
+                rationale=(
+                    f"Service/edge hints chain an entry service to a "
+                    f"'{top_service_chain.sink}' sink (chain confidence "
+                    f"{top_service_chain.confidence:.2f}); inter-service calls that do "
+                    "not re-authenticate and re-authorize at each hop let a single "
+                    "compromised entry point reach a sensitive downstream sink."
+                ),
             )
         )
 
@@ -953,6 +996,12 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 ),
                 confidence="high" if top_chain.confidence >= 0.7 else "medium",
                 tags=["framework-chain", "data-risk"],
+                rationale=(
+                    f"In an MVC-shaped scan, framework hints chain a route to a "
+                    f"'{top_chain.sink}' sink (chain confidence {top_chain.confidence:.2f}); "
+                    "without controller-level policy checks, request input can reach "
+                    "database writes or privileged actions through the service layer."
+                ),
             )
         )
 
@@ -1004,6 +1053,13 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                     ),
                     confidence="medium",
                     tags=["broken-authorization", "exposed-endpoint", "data-risk"],
+                    rationale=(
+                        f"{len(group)} route(s) accept an object identifier via "
+                        f"{'a mutating method' if verb == 'modify' else 'a read method'} "
+                        "and reach a datastore with no ownership check observed nearby; "
+                        "an attacker who can guess, enumerate or substitute an id may "
+                        f"{verb} another principal's records (BOLA/IDOR, OWASP API #1)."
+                    ),
                     attack_techniques=[
                         AttackTechnique(
                             technique_id="T1190",
@@ -1040,6 +1096,7 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 mitigation=spec["mitigation"],
                 confidence="medium",
                 tags=["insecure-crypto"],
+                rationale=_CRYPTO_FINDING_RATIONALE[kind],
                 attack_techniques=[
                     AttackTechnique(
                         technique_id=spec["technique_id"],
@@ -1082,6 +1139,7 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 mitigation=spec["mitigation"],
                 confidence="medium",
                 tags=["web-hardening"],
+                rationale=_WEB_HARDENING_FINDING_RATIONALE[kind],
                 attack_techniques=[
                     AttackTechnique(
                         technique_id=spec["technique_id"],
@@ -1117,6 +1175,7 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 mitigation=spec["mitigation"],
                 confidence="medium",
                 tags=["novel-vuln"],
+                rationale=_CODE_WEAKNESS_FINDING_RATIONALE[kind],
                 attack_techniques=[
                     AttackTechnique(
                         technique_id=spec["technique_id"],
@@ -1161,6 +1220,7 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 mitigation=spec["mitigation"],
                 confidence=_numeric_to_confidence(items[0].confidence),
                 tags=["anomaly"],
+                rationale=_ANOMALY_FINDING_RATIONALE[kind],
                 attack_techniques=[
                     AttackTechnique(
                         technique_id=spec["technique_id"],
@@ -1203,6 +1263,12 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 mitigation="Treat this as a weak signal, expand parser coverage, and manually validate the real entry points and trust boundaries.",
                 confidence="low",
                 tags=["weak-signal"],
+                rationale=(
+                    "None of the detectors found routes, secrets, taint chains or "
+                    "integration patterns strong enough to report; the absence of "
+                    "findings reflects parser coverage and heuristics, not proof the "
+                    "repository is safe."
+                ),
             )
         )
 

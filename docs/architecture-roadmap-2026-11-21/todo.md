@@ -727,7 +727,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR049 · Explainability: rationale and evidence chains
 **Phase** 2 · **Priority** High · **Effort** 3 d · **Depends** AR041–AR045 · **Blocks** AC-207
 **Lease** `reasoning-output` · **Acceptance** AC-207
-**Status** OPEN — unblocked by owner decision (2026-11-23, section 5.1 of the 2026-11-23 handoff): reports switched to the registry's snake_case rule ids; suppressions and SARIF accept both old and new ids via every rule's `legacy_rule_ids` (dual-id commit e5597c4, helper `rule_id_aliases` in model/taxonomy.py). The wiring pass LANDED (wave 13, commit 5b53029): REGISTRY is in the scan pipeline, ported cascade branches retired (generate_findings 788→417 lines), equivalence 0 divergences on a 122-repo corpus. Findings now carry registry ids — the rationale fields can land. Remaining legacy-id findings come only from the unported cascade families (unauth-state-change + AM038 webhook variant, unauth-outbound-integration/public-data-route, bola-modify/bola-read, AM038 observed-activity).
+**Status** DONE (wave 14a) — rationale on every Finding (registry RuleMeta + observed evidence line; 12 cascade backfills; SARIF property bag; redaction-aware) — unblocked by owner decision (2026-11-23, section 5.1 of the 2026-11-23 handoff): reports switched to the registry's snake_case rule ids; suppressions and SARIF accept both old and new ids via every rule's `legacy_rule_ids` (dual-id commit e5597c4, helper `rule_id_aliases` in model/taxonomy.py). The wiring pass LANDED (wave 13, commit 5b53029): REGISTRY is in the scan pipeline, ported cascade branches retired (generate_findings 788→417 lines), equivalence 0 divergences on a 122-repo corpus. Findings now carry registry ids — the rationale fields can land. Remaining legacy-id findings come only from the unported cascade families (unauth-state-change + AM038 webhook variant, unauth-outbound-integration/public-data-route, bola-modify/bola-read, AM038 observed-activity).
 
 **Files** `src/attackmap/model/findings.py`, `src/attackmap/report.py`,
 `src/attackmap/defensive_review.py`
@@ -1139,6 +1139,7 @@ when no browser exists.
 ### AR088 · ADRs and architecture drift dashboard
 **Phase** 4 · **Priority** Low · **Effort** 3 d · **Depends** AR031 · **Blocks** AC-409
 **Lease** `docs` · **Acceptance** AC-409
+**Status** DONE (wave 14a) — 8 ADRs + index, arch_drift tool (cycles/fan-in/function/broad-excepts per commit)
 
 **Files** `docs/adr/`, `tools/arch_drift.py`
 

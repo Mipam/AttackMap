@@ -66,6 +66,13 @@ class Finding(_RedactedEvidence):
     # Aggregate rules leave this unset; never derive it from display prose.
     entity_id: str | None = None
     evidence: list[str] = Field(default_factory=list)
+    # Why this finding exists, in the detector's own words (AR049/AC-207):
+    # the rule's rationale plus the concrete observation that fired. Every
+    # finding a scan emits must carry a non-empty rationale; the default only
+    # keeps hand-built/test fixtures constructible. `evidence` above is the
+    # finding's evidence-reference list — at least one entry is required on
+    # emitted findings alongside this field.
+    rationale: str = ""
     # Every location the finding covers — not capped like `evidence` (#214).
     locations: list[FindingLocation] = Field(default_factory=list)
     mitigation: str

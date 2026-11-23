@@ -65,6 +65,7 @@ from typing import TYPE_CHECKING
 from ...model import AttackTechnique, Finding, FindingLocation, TaintChain, TaintFlowStep
 from ...model.taxonomy import cwe_tag, taxonomy_for
 from ...policy import LOW_QUALITY_SEGMENTS
+from ..finding_format import _rule_rationale
 from ..rule_specs import FLOW_FINDING_SPEC, TAINT_FINDING_SPEC, TAINT_SINK_LABEL
 from ..taint_sinks import canonical_kind
 from .base import RuleMeta
@@ -262,6 +263,7 @@ class TaintSinkKindRule:
             confidence="medium",
             tags=["taint-chain", "input-handling", "data-risk"],
             attack_techniques=_technique(spec),
+            rationale=_rule_rationale(self.meta, evidence),
         )
         finding.code_flows = _code_flows(chains)
         return [finding]
@@ -312,6 +314,7 @@ class FlowConfirmedSinkRule:
                 tags=["taint-chain", "taint-flow", "input-handling", "data-risk"],
                 attack_techniques=_technique(spec),
                 code_flows=_code_flows(chains),
+                rationale=_rule_rationale(self.meta, evidence),
             )
         ]
 
@@ -364,6 +367,7 @@ class SpeculativeTaintKindRule:
                 confidence="low",
                 tags=["taint-chain", "speculative", "recall"],
                 attack_techniques=_technique(spec),
+                rationale=_rule_rationale(self.meta, evidence),
             )
         ]
 
