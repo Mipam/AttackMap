@@ -382,6 +382,42 @@ def taxonomy_for(rule_id: str | None) -> RuleTaxonomy | None:
     return entry
 
 
+# Bidirectional legacy<->stable rule-id aliases (owner decision 2026-11-23):
+# the AR046 block above registers every kernel snake_case id by referencing
+# its legacy entry's frozen object, so all ids that denote the same rule
+# share one RuleTaxonomy instance. Grouping keys by object identity yields
+# the alias set in both directions from data that provably lives here —
+# no reasoning/ import needed (output/ consumes this to accept either id
+# form in suppressions during the rule-id cutover).
+_ALIAS_CACHE: dict[str, frozenset[str]] = {}
+
+
+def rule_id_aliases(rule_id: str) -> frozenset[str]:
+    """Every registered rule id that denotes the same rule as ``rule_id``
+    (its legacy dashed id(s) and/or its stable snake_case id), excluding
+    ``rule_id`` itself. Empty for unknown ids. Resolved once per id and
+    cached; ``register`` invalidates the cache.
+
+    ``speculative-<id>`` is itself a registered id form — ``taxonomy_for``
+    strips the prefix — so speculative dashed ids a rule declares in
+    ``legacy_rule_ids`` (e.g. ``speculative-code-injection``) alias the
+    same entry as their confirmed counterparts."""
+    cached = _ALIAS_CACHE.get(rule_id)
+    if cached is not None:
+        return cached
+    entry = RULE_TAXONOMY.get(rule_id)
+    if entry is None and rule_id.startswith(_SPECULATIVE):
+        entry = RULE_TAXONOMY.get(rule_id[len(_SPECULATIVE):])
+    if entry is None:
+        aliases: frozenset[str] = frozenset()
+    else:
+        group = {k for k, v in RULE_TAXONOMY.items() if v is entry}
+        variants = group | {_SPECULATIVE + k for k in group}
+        aliases = frozenset(variants - {rule_id})
+    _ALIAS_CACHE[rule_id] = aliases
+    return aliases
+
+
 def register(rule_id: str, entry: RuleTaxonomy) -> None:
     """Register (or replace) a rule's taxonomy at runtime, for plugins that
     emit their own rule ids. Validates the ids against the catalogs here."""
@@ -389,6 +425,7 @@ def register(rule_id: str, entry: RuleTaxonomy) -> None:
     if problems:
         raise ValueError(f"invalid taxonomy for {rule_id!r}: {'; '.join(problems)}")
     RULE_TAXONOMY[rule_id] = entry
+    _ALIAS_CACHE.clear()
 
 
 def validate_entry(entry: RuleTaxonomy) -> list[str]:
@@ -426,6 +463,7 @@ __all__ = [
     "cwe_tag",
     "cwe_url",
     "register",
+    "rule_id_aliases",
     "taxonomy_for",
     "taxonomy_label",
     "validate_entry",

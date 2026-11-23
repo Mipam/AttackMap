@@ -85,6 +85,7 @@ from pathlib import Path
 from attackmap.foundation.gitref import added_lines, show_file, validate_ref
 from attackmap.foundation.safe_fs import contained_file, read_repo_text
 from attackmap.foundation.srcpaths import evidence_locations
+from attackmap.model.taxonomy import rule_id_aliases
 from attackmap.models import Finding, finding_rule_id, title_slug
 from attackmap.output.diff import finding_id
 from attackmap.output.finding_identity import legacy_finding_id
@@ -297,13 +298,23 @@ class SuppressionSet:
         return [s for s in self._all if id(s) not in self._used]
 
     def _rule_ok(self, selector_rule: str | None, finding: Finding) -> bool:
-        """A ``None`` selector is a wildcard. Otherwise it must equal the stable
-        rule id, or — deprecated — the finding's title slug."""
+        """A ``None`` selector is a wildcard. Otherwise it must equal the
+        stable rule id — or any registered alias of that rule (legacy dashed
+        ↔ snake_case, both directions; owner decision 2026-11-23) — or,
+        deprecated, the finding's title slug."""
         if selector_rule is None:
             return True
-        selector = rule_slug(selector_rule)
         stable = finding_rule_id(finding)
+        selector = rule_slug(selector_rule)
         if selector == stable:
+            return True
+        aliases = rule_id_aliases(stable)
+        if selector in aliases:
+            return True
+        # A snake_case selector is mangled by rule_slug (underscore → dash);
+        # compare its raw text too, against the id and its aliases.
+        raw = selector_rule.strip()
+        if raw != selector and (raw == stable or raw in aliases):
             return True
         legacy = title_slug(finding.title)
         if finding.rule_id and selector == legacy:
