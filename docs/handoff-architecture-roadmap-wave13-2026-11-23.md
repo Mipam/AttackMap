@@ -243,8 +243,11 @@ Wave 13 (owner decision 11ed09d; commits `e5597c4`, `5b53029`, integration `0647
    AR081 (portfolio), AR083 (observability, needs AR067 first), AR063+ (GUI work
    — M3 steering: GUI tasks must produce a visible preview and real visual
    review, not just green tests). AR082 needs external analyzer-repo work.
-3. **After the next verified wave: push or mirror.** This repo survived a total
-   worktree loss only because .git/objects was left behind. See section 0.
+3. **PUSHED 2026-11-23 (wave 15):** `origin` = https://github.com/Mipam/AttackMap,
+   branch `codex/windows-build-development` @ `bd6007e` (remote also has older
+   `main` @ `611a379`). The repo is no longer local-only — but keep making
+   pushes at stable checkpoints; the 2026-11-23 total worktree loss only worked
+   out because .git/objects was left behind. See section 0.
 
 ## 7. Working protocol (proven this session — keep)
 
