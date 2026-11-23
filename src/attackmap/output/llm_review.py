@@ -43,6 +43,11 @@ from attackmap.ai.ai_budget import (
     current_reservation,
     reservation_scope,
 )
+from attackmap.ai.evidence_bundle import (
+    EvidenceBundle,
+    build_evidence_bundle,
+    validate_bundle_citations,
+)
 from attackmap.models import AttackPath, AttackSurface, Finding, ScanResult
 from attackmap.output.review_prompts import (
     render_critic_prompts,
@@ -54,6 +59,7 @@ from attackmap.output.review_prompts import (
     render_skeptic_prompts,
     render_triage_prompts,
 )
+from attackmap.output.security_overlay import build_security_overlay
 
 _LLM_INSTALL = 'pip install "attackmap[llm] @ git+https://github.com/mlaify/AttackMap.git"'
 
@@ -136,7 +142,7 @@ def _claim_support_assessments(markdown: str, candidates: list[str]) -> list[dic
     return assessments
 
 
-def _validate_narrative_references(result: LlmReviewResult, rendered) -> LlmReviewResult:
+def _validate_narrative_references(result: LlmReviewResult, rendered, bundle: EvidenceBundle | None = None) -> LlmReviewResult:
     """Check producer IDs in precisely the selected, sanitized prompt, not claims."""
     import hashlib
 
@@ -192,6 +198,17 @@ def _validate_narrative_references(result: LlmReviewResult, rendered) -> LlmRevi
                 "context_sha256": hashlib.sha256(rendered.evidence_json.encode()).hexdigest(),
                 "valid_references": list(dict.fromkeys(valid)), "invalid_references": list(invalid),
                 "allowed_reference_count": len(allowed)}
+    if bundle is not None:
+        # Bundle grounding enforcement (AR067/AC-309): claim lines that cite no
+        # bundle id are rejected and reported here. This never rewrites model
+        # prose and never weakens the reference check above.
+        bundle_check = validate_bundle_citations(result.markdown, bundle)
+        metadata["bundle_schema_version"] = bundle.schema_version
+        metadata["bundle_run_id"] = bundle.run_id
+        metadata["bundle_citation_enforcement"] = (
+            "no_uncited_claims" if bundle_check.accepted else "uncited_claims_rejected"
+        )
+        metadata["uncited_claims"] = list(bundle_check.rejected_claims)
     notice = "> Evidence reference check: " + status + ". Claim support and source-location validity are not assessed."
     if invalid:
         notice += " Unresolved evidence IDs are present; inspect reference_validation metadata. IDs have not been corrected."
@@ -1026,21 +1043,32 @@ def generate_llm_review(
     """
     resolved_effort = effort or DEFAULT_EFFORT
 
+    # The AI layer consumes the versioned EvidenceBundle (AR067), not the raw
+    # ScanResult: every prompt pack is projected from it, and model-output
+    # citations are enforced against its stable citation ids.
+    bundle = build_evidence_bundle(
+        scan,
+        attack_surfaces,
+        findings,
+        attack_paths,
+        overlay=build_security_overlay(scan, attack_surfaces, findings, attack_paths),
+    )
+
     if mode == "hunt_skeptic":
         # The skeptic pass needs the fixed hypothesis list (#147a).
         rendered = render_skeptic_prompts(
-            scan, attack_surfaces, findings, attack_paths, hypotheses or []
+            scan, attack_surfaces, findings, attack_paths, hypotheses or [], bundle=bundle
         )
     elif mode == "hunt_generate":
         # Generation can be primed with a lens (#147b) and prior-round context (#147c).
         rendered = render_hunt_generate_prompts(
             scan, attack_surfaces, findings, attack_paths,
-            lens=lens, avoid_titles=avoid_titles, critic_hint=critic_hint,
+            lens=lens, avoid_titles=avoid_titles, critic_hint=critic_hint, bundle=bundle,
         )
     elif mode == "hunt_critic":
         # The completeness critic names untried angles from the leads so far (#147c).
         rendered = render_critic_prompts(
-            scan, attack_surfaces, findings, attack_paths, hypotheses or []
+            scan, attack_surfaces, findings, attack_paths, hypotheses or [], bundle=bundle
         )
     else:
         render = {
@@ -1053,13 +1081,14 @@ def generate_llm_review(
                     if provider == "openai" else str(getattr(client, "base_url", "") or os.environ.get("ANTHROPIC_BASE_URL", "")))
         if mode == "review" and backend != "cli" and _literal_loopback_url(endpoint):
             rendered = render_review_prompts(scan, attack_surfaces, findings, attack_paths,
-                                             max_evidence_chars=14000)
+                                             max_evidence_chars=14000, bundle=bundle)
         else:
-            rendered = render(scan, attack_surfaces, findings, attack_paths)
+            rendered = render(scan, attack_surfaces, findings, attack_paths, bundle=bundle)
 
     def review_call(*args, **kwargs):
         result = _provider_call(*args, **kwargs)
-        return _validate_narrative_references(result, rendered) if mode in {"review", "remediate", "triage"} else result
+        return (_validate_narrative_references(result, rendered, bundle)
+                if mode in {"review", "remediate", "triage"} else result)
 
     if provider == "openai":
         resolved_model = (

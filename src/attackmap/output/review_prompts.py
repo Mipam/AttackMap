@@ -6,6 +6,7 @@ import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
+from attackmap.ai.evidence_bundle import EvidenceBundle, build_evidence_bundle
 from attackmap.extraction.evidence import (
     surface_evidence_class as _surface_evidence_class,
 )
@@ -21,7 +22,6 @@ from attackmap.output.citations import (
     context_from_payload,
     current_citation_context,
 )
-from attackmap.output.diff import finding_id
 from attackmap.output.security_overlay import SecurityOverlay, build_security_overlay
 from attackmap.reasoning.weaknesses import PROMPT_INJECTION_RE
 
@@ -262,6 +262,7 @@ def _evidence_pack(
     findings: list[Finding],
     attack_paths: list[AttackPath],
     overlay: SecurityOverlay | None = None,
+    bundle: EvidenceBundle | None = None,
 ) -> dict:
     surfaces_payload = [
         {
@@ -284,39 +285,20 @@ def _evidence_pack(
         for idx, surface in enumerate(attack_surfaces[:50])
     ]
 
-    findings_payload = [
-        {
-            "id": f"finding:{idx + 1}",
-            "finding_id": finding_id(finding),
-            "title": finding.title,
-            "rule_id": finding.rule_id,
-            "taxonomy": finding.taxonomy.model_dump() if finding.taxonomy else None,
-            "severity": finding.severity,
-            "confidence": finding.confidence,
-            "score": finding.score,
-            "exploitability": finding.exploitability,
-            "evidence": finding.evidence[:10],
-            "locations": [location.model_dump(mode="json") for location in finding.locations],
-            "mitigation": finding.mitigation,
-        }
-        for idx, finding in enumerate(findings[:30])
-    ]
-
-    attack_paths_payload = [
-        {
-            "id": f"path:{idx + 1}",
-            "name": path.name,
-            "steps": path.steps[:8],
-            "impact": path.impact,
-        }
-        for idx, path in enumerate(attack_paths[:10])
-    ]
+    overlay = overlay or build_security_overlay(scan, attack_surfaces, findings, attack_paths)
+    # The findings/paths/controls/limitations sections are projections of the
+    # versioned EvidenceBundle (AR067) — the AI layer consumes the bundle,
+    # not the raw ScanResult, for everything it cites.
+    bundle = bundle or build_evidence_bundle(
+        scan, attack_surfaces, findings, attack_paths, overlay=overlay
+    )
+    findings_payload = [finding.to_payload() for finding in bundle.findings]
+    attack_paths_payload = [path.to_payload() for path in bundle.paths]
 
     evidence_counts = surface_evidence_counts(attack_surfaces[:50])
 
-    overlay = overlay or build_security_overlay(scan, attack_surfaces, findings, attack_paths)
     assets_payload = [asset.model_dump() for asset in overlay.assets]
-    controls_payload = [control.model_dump() for control in overlay.controls]
+    controls_payload = [control.to_payload() for control in bundle.controls]
     insights_payload = [insight.model_dump() for insight in overlay.insights]
     detection_payload = [opp.model_dump() for opp in overlay.detection_opportunities]
 
@@ -363,6 +345,7 @@ def _evidence_pack(
         "notable_observations": insights_payload,
         "detection_opportunities": detection_payload,
         "attack_techniques_observed": techniques_payload,
+        "limitations": list(bundle.limitations),
     }
 
 
@@ -376,8 +359,10 @@ def render_user_prompt(
     findings: list[Finding],
     attack_paths: list[AttackPath],
     overlay: SecurityOverlay | None = None,
+    bundle: EvidenceBundle | None = None,
 ) -> str:
-    evidence_payload = _evidence_pack(scan, attack_surfaces, findings, attack_paths, overlay=overlay)
+    evidence_payload = _evidence_pack(scan, attack_surfaces, findings, attack_paths,
+                                      overlay=overlay, bundle=bundle)
     evidence_json = json.dumps(evidence_payload, indent=2, sort_keys=True)
     return USER_PROMPT_TEMPLATE.format(repo_context=_repo_context(scan), evidence_json=evidence_json).strip()
 
@@ -425,8 +410,10 @@ def render_review_prompts(
     attack_paths: list[AttackPath],
     overlay: SecurityOverlay | None = None,
     *, max_evidence_chars: int | None = None,
+    bundle: EvidenceBundle | None = None,
 ) -> RenderedReviewPrompt:
-    evidence_payload = _evidence_pack(scan, attack_surfaces, findings, attack_paths, overlay=overlay)
+    evidence_payload = _evidence_pack(scan, attack_surfaces, findings, attack_paths,
+                                      overlay=overlay, bundle=bundle)
     if max_evidence_chars is not None:
         evidence_payload = _bounded_review_evidence(evidence_payload, max_evidence_chars)
     evidence_json = json.dumps(evidence_payload, sort_keys=True) if max_evidence_chars is not None else json.dumps(evidence_payload, indent=2, sort_keys=True)
@@ -442,6 +429,7 @@ def _hunt_evidence_pack(
     attack_surfaces: list[AttackSurface],
     findings: list[Finding],
     attack_paths: list[AttackPath],
+    bundle: EvidenceBundle | None = None,
 ) -> dict:
     """Base evidence pack augmented with the raw signals a hunter reasons over
     directly: taint chains, fused exploitability scores, and anomalies. These
@@ -456,7 +444,7 @@ def _hunt_evidence_pack(
         pack["citation_context"] = captured.metadata()
         return pack
 
-    pack = _evidence_pack(scan, attack_surfaces, findings, attack_paths)
+    pack = _evidence_pack(scan, attack_surfaces, findings, attack_paths, bundle=bundle)
     pack["taint_chains"] = [
         {
             "id": f"taint:{idx + 1}",
@@ -503,10 +491,11 @@ def render_hunt_prompts(
     attack_surfaces: list[AttackSurface],
     findings: list[Finding],
     attack_paths: list[AttackPath],
+    bundle: EvidenceBundle | None = None,
 ) -> RenderedReviewPrompt:
     """Render the red-team vulnerability-hypothesis prompts (#80). Same
     grounding contract as the review â€” every hypothesis must cite evidence IDs."""
-    evidence_payload = _hunt_evidence_pack(scan, attack_surfaces, findings, attack_paths)
+    evidence_payload = _hunt_evidence_pack(scan, attack_surfaces, findings, attack_paths, bundle=bundle)
     evidence_json = json.dumps(evidence_payload, indent=2, sort_keys=True)
     return RenderedReviewPrompt(
         system=HUNT_SYSTEM_PROMPT.strip(),
@@ -598,12 +587,13 @@ def render_hunt_verify_prompts(
     attack_surfaces: list[AttackSurface],
     findings: list[Finding],
     attack_paths: list[AttackPath],
+    bundle: EvidenceBundle | None = None,
 ) -> RenderedReviewPrompt:
     """Hunt evidence pack augmented with actual source at cited locations, for
     an adjudicated (CONFIRMED/REFUTED/NEEDS-REVIEW) hunt pass."""
     captured = current_citation_context() or build_citation_context(scan, attack_surfaces, findings, attack_paths)
     with citation_scope(captured):
-        pack = _hunt_evidence_pack(scan, attack_surfaces, findings, attack_paths)
+        pack = _hunt_evidence_pack(scan, attack_surfaces, findings, attack_paths, bundle=bundle)
         pack["code_excerpts"] = _code_excerpts(scan, findings)
     evidence_json = json.dumps(pack, indent=2, sort_keys=True)
     return RenderedReviewPrompt(
@@ -681,6 +671,7 @@ def render_hunt_generate_prompts(
     lens: str | None = None,
     avoid_titles: list[str] | None = None,
     critic_hint: str | None = None,
+    bundle: EvidenceBundle | None = None,
 ) -> RenderedReviewPrompt:
     """Hunt generation pass for the multi-pass harness (#147a): produces ranked
     hypotheses PLUS a machine-readable `=== HYPOTHESES ===` list the harness
@@ -688,7 +679,7 @@ def render_hunt_generate_prompts(
     ``lens`` (#147b) the pass specialises in one failure mode; with
     ``avoid_titles`` / ``critic_hint`` (#147c) it is told what earlier rounds
     already found and which untried angles to pursue."""
-    evidence_payload = _hunt_evidence_pack(scan, attack_surfaces, findings, attack_paths)
+    evidence_payload = _hunt_evidence_pack(scan, attack_surfaces, findings, attack_paths, bundle=bundle)
     evidence_json = json.dumps(evidence_payload, indent=2, sort_keys=True)
     system = HUNT_GENERATE_SYSTEM_PROMPT.strip()
     preamble = _LENS_PREAMBLE.get(lens or "")
@@ -740,10 +731,11 @@ def render_critic_prompts(
     findings: list[Finding],
     attack_paths: list[AttackPath],
     hypotheses: list[dict],
+    bundle: EvidenceBundle | None = None,
 ) -> RenderedReviewPrompt:
     """Completeness-critic pass (#147c): given the leads found so far, name the
     untried modalities / gaps that should seed the next round."""
-    pack = _hunt_evidence_pack(scan, attack_surfaces, findings, attack_paths)
+    pack = _hunt_evidence_pack(scan, attack_surfaces, findings, attack_paths, bundle=bundle)
     # Keep the cited evidence ids so the critic can tell covered surfaces/chains
     # from genuinely untried ones (#147c).
     pack["hypotheses"] = [
@@ -766,13 +758,14 @@ def render_skeptic_prompts(
     findings: list[Finding],
     attack_paths: list[AttackPath],
     hypotheses: list[dict],
+    bundle: EvidenceBundle | None = None,
 ) -> RenderedReviewPrompt:
     """One independent skeptic pass (#147a): adjudicate a FIXED id-keyed
     hypothesis list against `code_excerpts`. ``hypotheses`` is a list of
     ``{"id": "H1", "title": "â€¦"}`` dicts (kept plain to avoid an import cycle)."""
     captured = current_citation_context() or build_citation_context(scan, attack_surfaces, findings, attack_paths)
     with citation_scope(captured):
-        pack = _hunt_evidence_pack(scan, attack_surfaces, findings, attack_paths)
+        pack = _hunt_evidence_pack(scan, attack_surfaces, findings, attack_paths, bundle=bundle)
         pack["code_excerpts"] = _code_excerpts(scan, findings)
     # Keep the cited evidence ids so each skeptic can locate the exact chain it
     # is adjudicating, not just guess from a terse title (#147a).
@@ -795,6 +788,7 @@ def render_triage_prompts(
     attack_surfaces: list[AttackSurface],
     findings: list[Finding],
     attack_paths: list[AttackPath],
+    bundle: EvidenceBundle | None = None,
 ) -> RenderedReviewPrompt:
     """Render the triage prompts (#145): cluster/dedupe/rank the EXISTING
     findings into a shortlist that cites real finding IDs â€” organization, not
@@ -806,7 +800,13 @@ def render_triage_prompts(
     from attackmap.output.triage import rank_findings
 
     ranked = rank_findings(findings)
-    evidence_payload = _evidence_pack(scan, attack_surfaces, ranked, attack_paths)
+    if bundle is not None:
+        # Re-project from the ranked list so the pack's capped top-N are the
+        # actual top priorities; the run identity is preserved.
+        bundle = build_evidence_bundle(
+            scan, attack_surfaces, ranked, attack_paths, run_id=bundle.run_id
+        )
+    evidence_payload = _evidence_pack(scan, attack_surfaces, ranked, attack_paths, bundle=bundle)
     evidence_json = json.dumps(evidence_payload, indent=2, sort_keys=True)
     return RenderedReviewPrompt(
         system=TRIAGE_SYSTEM_PROMPT.strip(),
@@ -822,10 +822,11 @@ def render_remediation_prompts(
     attack_surfaces: list[AttackSurface],
     findings: list[Finding],
     attack_paths: list[AttackPath],
+    bundle: EvidenceBundle | None = None,
 ) -> RenderedReviewPrompt:
     """Render the remediation prompts (#106): concrete, review-first fixes per
     finding, grounded in evidence IDs / cited file:line."""
-    evidence_payload = _evidence_pack(scan, attack_surfaces, findings, attack_paths)
+    evidence_payload = _evidence_pack(scan, attack_surfaces, findings, attack_paths, bundle=bundle)
     evidence_json = json.dumps(evidence_payload, indent=2, sort_keys=True)
     return RenderedReviewPrompt(
         system=REMEDIATION_SYSTEM_PROMPT.strip(),

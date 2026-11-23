@@ -1,0 +1,42 @@
+# AR084 — performance regression suite (nightly, fixed hardware)
+# Record-only posture: benchmarks always run and append to the trend store;
+# the hard >20% gate runs only on schedule/dispatch (report-only locally).
+name: perf
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+    inputs:
+      fail_on_regression:
+        description: "Exit 1 on >20% regression vs the stored baseline"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install
+        run: pip install -e ".[llm,dev]" pytest pytest-timeout
+      - name: Perf tests (smoke + 20% gate logic)
+        run: python -m pytest -m perf --timeout=300 -q
+      - name: Benchmark + trend store
+        run: |
+          mkdir -p perf-trends
+          python tools/bench_analyzers.py \
+            --json --save perf-trends/$(git rev-parse HEAD).json \
+            ${{ inputs.fail_on_regression && '--fail-on-regression' || '' }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-trend
+          path: perf-trends/
+          retention-days: 90

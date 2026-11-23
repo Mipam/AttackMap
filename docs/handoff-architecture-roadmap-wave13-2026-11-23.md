@@ -104,6 +104,28 @@ AR067; AR080/AR081 need AR061/AR069 (all done); AR088 needs AR031 (done).
 
 ## 3. What landed since the wave-11 handoff (all verified, see commits)
 
+Wave 15 (2 parallel lanes, same protocol; lanes AR067×AR084, lease
+disjointness verified against current code):
+- **AR067** (`ai` lease) — `EvidenceBundle` schema_version=1 (findings/paths/
+  controls/limitations, stable citation ids, caps mirror the evidence pack);
+  prompts build from the bundle; uncited claims rejected via citations
+  validator; `gate_bundle_schema_version` is the AR083 hook. Identity hash
+  unchanged. Contract tier grew 242 → 246 (new
+  `tests/contract/test_evidence_bundle_contract.py`).
+- **AR084** (`perf` lease) — `tools/bench_analyzers.py` (synthetic fixture
+  repos, analyzer/full/incremental wall time + tracemalloc peak memory,
+  per-commit JSON trend store, record-and-warn default,
+  `--fail-on-regression` for nightly) + `tests/perf/` (10 tests: smoke +
+  >20% gate logic, hermetic). `.github/workflows/perf.yml` added by parent
+  (nightly, artifact trend store). Note: incremental-vs-full ratio here
+  compares per-file pass vs end-to-end scan — definitions in the tool
+  docstring.
+- After wave 15: **46/56** cards DONE. Remaining 10: AR012, AR063, AR064,
+  AR065, AR066, AR068, AR070, AR080, AR081, AR082. AR083 now unblocked
+  (needs AR067 ✓); the AR063→{64,65,70} GUI cluster is the next big unlock —
+  GUI work needs a visible preview per M3 steering. AR082 needs external
+  analyzer repos (github.com/mlaify).
+
 Wave 14 (parallel lanes, post-incident protocol — agents never git-mutate;
 parent integrates after gates; 2 lanes max, lease disjointness verified
 against current code before launch):

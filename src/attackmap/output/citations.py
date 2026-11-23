@@ -468,3 +468,50 @@ def citation_scope(context: CitationContext) -> Iterator[None]:
         yield
     finally:
         _context.reset(token)
+
+
+# --- Uncited-claim rejection (AR067/AC-309) ---------------------------------
+#
+# Enforcement for the versioned EvidenceBundle path: substantive claim lines
+# that cite no allowed reference are rejected. This is deliberately
+# conservative — headings, code fences, blockquote notices, tables, markers
+# and short label lines are never claims, so narrative structure is not
+# mistaken for an uncited claim. Reference validity stays the mechanical
+# check from validate_references above; this scan only decides which lines
+# count as claims.
+
+_CLAIM_MIN_WORDS = 5
+# Line-leading constructs that are never claims: headings, blockquote notices,
+# table rows, HTML comments and the prompt-injection fence markers.
+_CLAIM_LINE_IGNORE = re.compile(r"^\s*(?:#|>|\||<!--|<<UNTRUSTED-|<<END-UNTRUSTED-)")
+_CLAIM_LINE_WORD = re.compile(r"[A-Za-z]{3,}")
+_UNCITED_CLAIM_CAP = 40
+
+
+def uncited_claim_lines(text: str, context: CitationContext) -> tuple[str, ...]:
+    """Return the substantive claim lines that cite no reference in ``context``.
+
+    A line is a claim when it is prose of at least ``_CLAIM_MIN_WORDS``
+    alphabetic words outside fences and not a heading/blockquote/table/marker
+    line. A claim is cited when :func:`validate_references` finds at least one
+    valid reference on the line; lines citing only invalid or unknown ids are
+    rejected like uncited lines. Returns at most ``_UNCITED_CLAIM_CAP`` lines,
+    each truncated to 160 characters.
+    """
+    rejected: list[str] = []
+    in_fence = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(("```", "~~~")):
+            in_fence = not in_fence
+            continue
+        if in_fence or not stripped or _CLAIM_LINE_IGNORE.match(stripped):
+            continue
+        if len(_CLAIM_LINE_WORD.findall(stripped)) < _CLAIM_MIN_WORDS:
+            continue
+        if validate_references(stripped, context).valid_references:
+            continue
+        rejected.append(stripped[:160])
+        if len(rejected) >= _UNCITED_CLAIM_CAP:
+            break
+    return tuple(rejected)

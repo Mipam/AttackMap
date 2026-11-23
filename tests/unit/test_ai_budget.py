@@ -186,8 +186,8 @@ def test_provider_dispatch_after_rendered_deadline_does_not_begin(monkeypatch):
     client = FakeOpenAI()
     import attackmap.output.llm_review as module
     render = module.render_review_prompts
-    def slow_render(*args):
-        result = render(*args)
+    def slow_render(*args, **kwargs):
+        result = render(*args, **kwargs)
         now[0] = 6.0
         return result
     monkeypatch.setattr(module, "render_review_prompts", slow_render)

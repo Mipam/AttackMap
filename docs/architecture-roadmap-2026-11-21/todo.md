@@ -906,6 +906,7 @@ when no browser exists.
 ### AR067 · Versioned `EvidenceBundle` for the AI layer
 **Phase** 3 · **Priority** High · **Effort** 3 d · **Depends** AR022, AR049 · **Blocks** AR083
 **Lease** `ai` · **Acceptance** AC-309
+**Status** DONE (wave 15) — BUNDLE_SCHEMA_VERSION=1 EvidenceBundle (findings/paths/controls/limitations, stable citation ids); prompts consume the bundle; uncited claims rejected; compatibility gate in place (AR083 hook)
 
 **Files** new `src/attackmap/ai/evidence_bundle.py`; edits in `llm_review.py`,
 `review_prompts.py`, `citations.py`, `hunt_harness.py`
@@ -1063,6 +1064,7 @@ when no browser exists.
 ### AR084 · Performance regression suite
 **Phase** 4 · **Priority** Medium · **Effort** 3 d · **Depends** AR048 · **Blocks** AC-405
 **Lease** `perf` · **Acceptance** AC-405
+**Status** DONE (wave 15, tooling+tests; CI workflow pending parent) — bench_analyzers.py (analyzer/full/incremental wall time, tracemalloc peak memory, synthetic fixtures, per-commit JSON trend store) + tests/perf (smoke + >20% gate); record-and-warn default, --fail-on-regression for nightly
 
 **Files** `tests/perf/`, `tools/bench_analyzers.py`, `.github/workflows/perf.yml`
 
