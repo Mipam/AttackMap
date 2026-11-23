@@ -36,6 +36,7 @@ from attackmap.orchestration.run_spec import RunSpec
 from attackmap.orchestration.scan_service import ScanRequest, ScanRequestError, execute_scan_request
 from attackmap.output.report import OUTPUT_FORMATS
 from attackmap.output.review_prompts import HUNT_LENSES
+from attackmap.surfaces.eval_cli import eval_app
 from attackmap.surfaces.index_cli import index_app
 from attackmap.surfaces.rules_cli import rules_app
 from attackmap.surfaces.suggest import detect_ecosystems
@@ -45,6 +46,8 @@ app = typer.Typer(help="AttackMap: understand your system and map your attack su
 app.add_typer(rules_app, name="rules")
 # AR061: the derived index (rebuild/status/dump) over published generations.
 app.add_typer(index_app, name="index")
+# AR048: detection-quality evaluation over the labelled reference corpus.
+app.add_typer(eval_app, name="eval")
 
 
 def _select_modules(module: list[str], install_missing: bool) -> list:

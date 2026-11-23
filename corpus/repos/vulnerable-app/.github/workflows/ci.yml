@@ -1,0 +1,19 @@
+name: ci
+
+on:
+  issues:
+    types: [opened]
+
+permissions: write-all
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: echo title
+        run: echo "${{ github.event.issue.title }}"
+      - name: deploy
+        run: |
+          echo "deploying"
+          ./deploy.sh ${{ secrets.DEPLOY_TOKEN }}

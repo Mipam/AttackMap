@@ -1,0 +1,49 @@
+# AR048 detection-quality reference corpus.
+#
+# Format (validated by attackmap.eval.rules.load_cases):
+#   corpus_revision: <string>   # corpus version label, pinned by hand when expectations change
+#   cases:                      # non-empty list of fixture cases
+#     - name: <string>          # unique case label
+#       repo: <path>            # fixture repo, relative to this yaml file
+#       revision: <string>      # fixture revision label
+#       expect:                # labelled detections
+#         - rule_id: <snake_case registry id>   # attackmap rules list
+#           file: <repo-relative path>
+#           line_range: [start, end]            # inclusive; a finding matches when its
+#                                              # rule_id is equal AND any location names the
+#                                              # same file with a line inside the range
+#
+# Measurement runs a real analyze() scan per case (see `attackmap eval rules`
+# and tools/eval_rules.py). Scan-path findings carry the legacy dashed rule
+# ids; the tool maps them onto the stable snake_case registry ids through
+# each registered rule's legacy_rule_ids, so expectations name registry ids
+# even while the cascade is the active producer (AR046 wiring pending).
+# Findings whose legacy id has no registered counterpart (e.g.
+# public-data-route) stay unmapped and count as false positives — honest
+# noise the baseline records rather than hides.
+#
+# demo_weak_default_credentials is expected to be a FALSE NEGATIVE: the seed
+# rule is registered but not yet wired into the scan pipeline. The FN keeps
+# the baseline honest about that gap until the cascade-retirement wiring.
+corpus_revision: "1"
+cases:
+  - name: vulnerable-app
+    repo: repos/vulnerable-app
+    revision: "1"
+    expect:
+      - {rule_id: debug_mode_exposure, file: src/app.py, line_range: [15, 15]}
+      - {rule_id: hardcoded_secret_literals, file: src/app.py, line_range: [17, 17]}
+      - {rule_id: hardcoded_secret_literals, file: src/app.py, line_range: [18, 18]}
+      - {rule_id: hardcoded_secret_literals, file: src/app.py, line_range: [19, 19]}
+      - {rule_id: route_public_webhook, file: src/app.py, line_range: [22, 22]}
+      - {rule_id: taint_flow_sql_execute, file: src/app.py, line_range: [26, 26]}
+      - {rule_id: route_exposed_admin, file: src/app.py, line_range: [30, 30]}
+      - {rule_id: taint_sink_subprocess_shell, file: src/app.py, line_range: [38, 38]}
+      - {rule_id: route_upload_import, file: src/app.py, line_range: [47, 47]}
+      - {rule_id: route_weak_auth_controls, file: src/app.py, line_range: [56, 56]}
+      - {rule_id: secret_env_references, file: src/app.py, line_range: [58, 58]}
+      - {rule_id: workflow_security, file: .github/workflows/ci.yml, line_range: [7, 7]}
+      - {rule_id: workflow_security, file: .github/workflows/ci.yml, line_range: [13, 13]}
+      - {rule_id: workflow_security, file: .github/workflows/ci.yml, line_range: [15, 15]}
+      - {rule_id: workflow_security, file: .github/workflows/ci.yml, line_range: [19, 19]}
+      - {rule_id: demo_weak_default_credentials, file: src/app.py, line_range: [62, 62]}
