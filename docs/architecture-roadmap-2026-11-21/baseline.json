@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "recorded": "2026-11-23",
-  "head": "wave 11 integrated: AR047 (rule test harness) + AR061 (derived SQLite index) + AR062 (public library API) + AR086 (hostile-input hardening)",
+  "head": "wave 13: wiring pass — REGISTRY in the scan pipeline, snake_case rule ids in reports (owner decision 2026-11-23); 41/56 cards DONE",
   "notes": [
     "The baseline may only be TIGHTENED: a metric may move in the improving",
     "direction freely; ratchet_check.py fails when any metric regresses past",
@@ -23,6 +23,15 @@
     "values; modules 183 -> 190 (orchestration/derived_index x4,",
     "surfaces/api, surfaces/index_cli). Wave 12 (AR048+AR087)",
     "added src/attackmap/eval x2, surfaces/eval_cli: modules 190 -> 193.",
+    "Wave 13 (wiring pass, owner decision 2026-11-23, commits 5b53029 +",
+    "e5597c4): REGISTRY wired into the scan pipeline; ported cascade branches",
+    "retired (threat_model.py 2068 -> 1605, generate_findings 788 -> 417);",
+    "ratchet improved mypy 538 -> 537, longest_function 788 -> 750",
+    "(now surfaces/api.py, not engine), modules 193 -> 194",
+    "(reasoning/finding_format). The committed report-identity gate is a",
+    "static empty-fixture corpus: the hash 84c7b18a... did NOT move; the",
+    "machine-local compute_scan_identity output changes with the id cutover",
+    "(vulnerable-app now 5ad12d57...) and needs a re-baseline where consumed.",
     "Parent fix in wave 12: tools/report_identity.py compute_scan_identity",
     "re-pointed from the deleted AnalyzeOptions (broken since AR025) to",
     "ScanRequest/RunSpec/execute_scan_request; identity hash unchanged.",
@@ -44,14 +53,14 @@
   ],
   "metrics": {
     "ruff_total": 649,
-    "mypy_errors": 538,
+    "mypy_errors": 537,
     "mypy_files_with_errors": 69,
     "import_cycles": 0,
     "broad_excepts": 63,
-    "longest_function_lines": 788,
+    "longest_function_lines": 750,
     "functions_over_80_lines": 75,
     "models_fan_in": 60,
-    "modules": 193,
+    "modules": 194,
     "coverage_floor_pct": 21
   }
 }
