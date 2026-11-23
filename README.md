@@ -26,7 +26,7 @@ names and versions to OSV. See [privacy disclosures](docs/privacy.md).
 > **Status: beta (v1.5.1).** Core engine + 15 analyzer plugins, installed straight
 > from GitHub and validated on real codebases. AttackMap is heuristic by
 > design — findings are confidence-tiered evidence, not proof. Current delivery plan:
-> [2026–2028 roadmap](docs/roadmap-2026-2028.md) and [implementation tracker](docs/implementation-todo.md).
+> [architecture roadmap](docs/architecture-roadmap-2026-11-21/roadmap.md) (supersedes the archived 2026–2028 roadmap and implementation tracker).
 
 Full documentation: **[docs.mlaify.io](https://docs.mlaify.io)** ·
 architecture & internals: **[wiki](https://github.com/mlaify/AttackMap/wiki)**.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import secrets
 import subprocess
@@ -51,6 +52,8 @@ from attackmap.surfaces.ui.watch import Watcher
 WEBVIEW2_INSTALL = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 
 _RECENTS_LIMIT = 12
+
+logger = logging.getLogger(__name__)
 
 
 class LoopbackApp:
@@ -644,6 +647,10 @@ def _refresh_missing(app: LoopbackApp) -> None:
             if not s.installed
         ]
     except Exception:
+        # Recorded, not swallowed (AC-012): plugin suggestions are advisory,
+        # but a persistent failure here should leave a trace in the log.
+        logger.warning("Missing-analyzer suggestions failed; continuing without them.",
+                       exc_info=True)
         app.missing = []
 
 
@@ -828,7 +835,10 @@ def _pick_save_path(suggested_name: str) -> str | None:
     try:
         import tkinter as tk
         from tkinter import filedialog
-
+    except ImportError:
+        logger.debug("tkinter is unavailable; save dialog disabled.", exc_info=True)
+        return None
+    try:
         root = tk.Tk()
         root.withdraw()
         root.wm_attributes("-topmost", 1)
@@ -840,7 +850,9 @@ def _pick_save_path(suggested_name: str) -> str | None:
         )
         root.destroy()
         return chosen if chosen else None
-    except Exception:
+    except tk.TclError:
+        # Recorded, not swallowed (AC-012): headless/no-display hosts fail here.
+        logger.debug("tkinter save dialog failed.", exc_info=True)
         return None
 
 
@@ -850,7 +862,10 @@ def _pick_folders(multi: bool = False) -> list[str]:
     try:
         import tkinter as tk
         from tkinter import filedialog
-
+    except ImportError:
+        logger.debug("tkinter is unavailable; folder picker disabled.", exc_info=True)
+        return []
+    try:
         root = tk.Tk()
         root.withdraw()
         root.wm_attributes("-topmost", 1)
@@ -865,7 +880,9 @@ def _pick_folders(multi: bool = False) -> list[str]:
             chosen.append(nxt)
         root.destroy()
         return chosen
-    except Exception:
+    except tk.TclError:
+        # Recorded, not swallowed (AC-012): headless/no-display hosts fail here.
+        logger.debug("tkinter folder picker failed.", exc_info=True)
         return []
 
 

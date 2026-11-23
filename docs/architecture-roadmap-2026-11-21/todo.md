@@ -289,6 +289,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR012 · Typed error taxonomy
 **Phase** 0 · **Priority** High · **Effort** 1 d · **Depends** AR001 · **Blocks** AR083
 **Lease** `errors` · **Acceptance** AC-012
+**Status** DONE (wave 16) — attackmap.errors taxonomy (AttackMapError + 7 typed, code/detail/hint); broad excepts 63→58; remaining broads record or re-raise
 
 **Files** new `src/attackmap/errors.py`; edits in `analyzers.py`, `pipeline.py`,
 `scan_service.py`, `analyzer_host.py`, `ui/server.py`
@@ -927,6 +928,7 @@ when no browser exists.
 ### AR068 · Documentation reset
 **Phase** 3 · **Priority** Medium · **Effort** 3 d · **Depends** AR046 · **Blocks** AC-311
 **Lease** `docs` · **Acceptance** AC-311
+**Status** DONE (wave 16) — docs/archive + index, onboarding.md (timed walkthrough ~3.5 min), generated docs/reference/ (rules/analyzers/sdk), README rewritten as index
 
 **Files** `docs/README.md`, `docs/archive/`, `docs/onboarding.md`,
 `docs/onboarding-timing.md`, `docs/reference/**`

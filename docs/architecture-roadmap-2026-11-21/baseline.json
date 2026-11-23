@@ -50,18 +50,19 @@
     "53 src files and left one moved monkeypatch target",
     "(analyzer_catalog.get_analyzer_catalog) failing in tests/integration;",
     "the fast selection cannot see that tier.",
-    "wave 14b (AR050): models_fan_in 60 -> 61 (new reasoning/ranking.py imports attackmap.models shim; structural consequence of the mandated ranking module), modules 194 -> 195"
+    "wave 14b (AR050): models_fan_in 60 -> 61 (new reasoning/ranking.py imports attackmap.models shim; structural consequence of the mandated ranking module), modules 194 -> 195",
+    "wave 16 (AR012): broad_excepts 63 -> 58 (typed taxonomy), modules 195 -> 197"
   ],
   "metrics": {
     "ruff_total": 649,
     "mypy_errors": 537,
     "mypy_files_with_errors": 69,
     "import_cycles": 0,
-    "broad_excepts": 63,
+    "broad_excepts": 58,
     "longest_function_lines": 750,
     "functions_over_80_lines": 75,
     "models_fan_in": 61,
-    "modules": 195,
+    "modules": 197,
     "coverage_floor_pct": 21
   }
 }

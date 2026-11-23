@@ -104,6 +104,28 @@ AR067; AR080/AR081 need AR061/AR069 (all done); AR088 needs AR031 (done).
 
 ## 3. What landed since the wave-11 handoff (all verified, see commits)
 
+Wave 16 (2 parallel lanes, same protocol; AR012×AR068 chosen because
+AR012 **blocks** AR083 and AR083's trace_id work would have collided with
+AR012's pipeline edits — AR080 deferred to pair with AR083 in wave 17):
+- **AR012** (`errors` lease) — `attackmap.errors` typed taxonomy
+  (AttackMapError + 7 typed errors with code/detail/hint; definitions in
+  `foundation/errors.py`, `attackmap/errors.py` canonical re-export — flipping
+  that direction is a deferred parent decision); broad excepts **63 → 58**;
+  every remaining broad catch records or re-raises (tripwire test). Follow-up:
+  `orchestration/fleet_admission.py` has a local FleetAdmissionError shadowing
+  the taxonomy one.
+- **AR068** (`docs` lease) — `docs/archive/` (byte-identical copies + index;
+  6 originals deleted at integration), `docs/onboarding.md` (timed walkthrough
+  ~3.5 min recorded in `docs/onboarding-timing.md`), generated
+  `docs/reference/` (49 rules / 9 analyzers / 51 SDK exports), `docs/README.md`
+  rewritten as the documentation index. Root README roadmap link updated.
+  "Unsure" docs left in place (see agent report in session).
+- After wave 16: **48/56** cards DONE. Remaining 8: AR063, AR064, AR065,
+  AR066, AR070 (GUI cluster — needs visible preview per M3), AR080 (CAS),
+  AR081 (portfolio), AR082 (SDK v2, external repos). Wave 17 candidate:
+  AR083 (unblocked by AR012) × AR080 — verified disjoint (orchestration/ai/ui
+  vs extraction).
+
 Wave 15 (2 parallel lanes, same protocol; lanes AR067×AR084, lease
 disjointness verified against current code):
 - **AR067** (`ai` lease) — `EvidenceBundle` schema_version=1 (findings/paths/

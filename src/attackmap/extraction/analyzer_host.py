@@ -417,11 +417,13 @@ def _classify(name: str, workdir: Path, observed: dict[str, object], memory_limi
     if not isinstance(payload, dict):
         return _partial(name, HOST_INVALID_OUTPUT, "result was not a JSON object",
                         f"result decoded to {type(payload).__name__}", code_int)
+    from pydantic import ValidationError
+
     from attackmap.models import ScanResult
 
     try:
         result = ScanResult.model_validate(payload)
-    except Exception as exc:
+    except ValidationError as exc:
         return _partial(name, HOST_INVALID_OUTPUT, "result did not validate as a ScanResult",
                         _redacted(f"ValidationError: {exc}"), code_int)
     return IsolatedOutcome(analyzer=name, result=result, exit_code=code_int)

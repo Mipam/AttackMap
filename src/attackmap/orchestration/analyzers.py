@@ -597,7 +597,7 @@ def _load_discovered_analyzer(
             catalog.failed(record, "metadata", exc)
         return None
     # Some analyzers may expose read-only metadata attributes; normalization is still validated.
-    with suppress(Exception):
+    with suppress(AttributeError, TypeError):
         analyzer.metadata = canonical_metadata
     # Remember how this analyzer was discovered so the optional isolated
     # host (analyzer_host) can reload it in a subprocess the same way.
@@ -606,8 +606,11 @@ def _load_discovered_analyzer(
         # Retain the exact discovery origin for a later run ledger without a
         # second discovery/load or inferring provenance from a colliding name.
         analyzer._attackmap_entry_point = analyzer_entry_point
-    except Exception:
-        pass
+    except (AttributeError, TypeError) as exc:
+        # Recorded, not swallowed (AC-012): a slot/frozen analyzer keeps its
+        # own metadata; the isolated host then falls back to module/file specs.
+        logger.debug("Could not retain discovery origin on analyzer '%s' (%s).",
+                     entry_name, _log_exception_type(exc))
 
     if not _is_valid_analyzer(analyzer):
         logger.warning("Skipping entry point '%s': loaded object is not a valid analyzer.", entry_name)
@@ -639,7 +642,10 @@ def _is_valid_analyzer(candidate: object) -> bool:
 
     try:
         metadata = normalize_analyzer_metadata(candidate.metadata)
-    except Exception:
+    except (TypeError, ValueError):
+        # The load path normalized this metadata successfully just above, so a
+        # second normalization can only fail on a hostile/read-only metadata
+        # surface; the caller records a "contract" failure for this candidate.
         return False
     return isinstance(metadata.name, str) and bool(metadata.name.strip())
 
