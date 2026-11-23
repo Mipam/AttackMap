@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "recorded": "2026-11-23",
-  "head": "wave 10 integrated: AR031 slice 2 (full layer enforcement) + AR046 (catalog, rules CLI) on the wave 9 lineage",
+  "head": "wave 11 integrated: AR047 (rule test harness) + AR061 (derived SQLite index) + AR062 (public library API) + AR086 (hostile-input hardening)",
   "notes": [
     "The baseline may only be TIGHTENED: a metric may move in the improving",
     "direction freely; ratchet_check.py fails when any metric regresses past",
@@ -16,6 +16,12 @@
     "modules 180 -> 183 (model/ledger, reasoning/rules/evaluation,",
     "surfaces/rules_cli). The strict island (ci.yml types job) stays",
     "blocking-clean at the post-AR030 native homes.",
+    "wave 11 (AR047+AR061+AR062+AR086): the two lane regressions were",
+    "reverted within the wave (ruff back to 649 via the api.py import-order",
+    "fix; broad_excepts back to 63 via narrowing sqlite.py's BaseException to",
+    "(sqlite3.Error, OSError)), so ruff/mypy/broad_excepts hold at the wave 10",
+    "values; modules 183 -> 190 (orchestration/derived_index x4,",
+    "surfaces/api, surfaces/index_cli).",
     "import_cycles 41 -> 0 and layer violations 27 -> 0 in wave 9 (AR030);",
     "wave 10 (AR031 slice 2) turned enforcement on for __init__ aggregators",
     "too (12 enforced) and retired the flat transition map. Both ratchet",
@@ -41,7 +47,7 @@
     "longest_function_lines": 788,
     "functions_over_80_lines": 75,
     "models_fan_in": 60,
-    "modules": 183,
+    "modules": 190,
     "coverage_floor_pct": 21
   }
 }

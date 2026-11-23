@@ -689,6 +689,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR047 · Per-rule test harness
 **Phase** 2 · **Priority** High · **Effort** 3 d · **Depends** AR040, AR008 · **Blocks** AR048
 **Lease** `rules-tests` · **Acceptance** AC-202
+**Status** DONE (commit 949a324, agent-delivered wave 11, verified by parent) — tests/rules/_harness.py: run_rule/assert_rule_positive/assert_rule_negative + rule_disabled(rule_id) mutation context + focused_tests_by_rule()/untested_rule_ids(); tests register rule ids via the `rule` pytest marker (99 inserted lines across the 5 pre-existing tests/rules/test_*.py, no deletions). AC-202 evidence: 439 tests in tests/rules pass; meta-test proves all 49 registered rule ids have a focused test (negative paths proven: unregistered fails, skipped/unreplayable tests do not cover); mutation check passes per rule. Test-only: no change under src/.
 
 **Files** `tests/rules/conftest.py`, `tests/rules/_harness.py`
 
@@ -789,6 +790,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR061 · Derived SQLite index
 **Phase** 3 · **Priority** High · **Effort** 4 d · **Depends** AR029 · **Blocks** AR070
 **Lease** `index` · **Acceptance** AC-302, AC-303
+**Status** DONE (commit 4ab1a3b, agent-delivered, wave 11) — orchestration/derived_index/{rows,sqlite,rebuild,query}.py + surfaces/index_cli.py (`attackmap index rebuild|status|dump`) + `attackmap trends` (--json) in surfaces/cli.py (verified purely additive). Card paths src/attackmap/index/ predate the layered layout; the orchestration subpackage is the home (a root index/ would escape layer enforcement). sqlite.py BaseException narrowed to (sqlite3.Error, OSError) — ratchet broad_excepts 64→63; the wave-11 placeholder tail in sqlite.py was also fixed (the index was never usable before). AC-302 live: trends --json diff empty across delete+rebuild, byte-identical index. AC-303 live: truncated AND foreign index → analyze EXIT=0 + trends EXIT=0 with fallback warning, payload parity fallback==index. 17 unit tests; architecture 11/11; rows copied from generations only; stdlib sqlite3 only; deterministic rebuild. Follow-ups (AR070+): GUI/desktop readers still read generations directly (ui/server.py, ui/output.py, desktop_actions/worker/capabilities, diagnostics_export, retention, desktop_provider) — could later go through query.load_rows.
 
 **Files** new `src/attackmap/index/sqlite.py`, `src/attackmap/index/rebuild.py`,
 `src/attackmap/cli_index.py`
@@ -809,6 +811,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR062 · Public library API
 **Phase** 3 · **Priority** High · **Effort** 3 d · **Depends** AR024, AR029 · **Blocks** —
 **Lease** `api` · **Acceptance** AC-304
+**Status** DONE (commit 0866916, agent-delivered, wave 11) — surfaces/api.py (card's src/attackmap/api.py became surfaces/ per the layered layout): analyze(spec, progress=None) -> AnalysisResult (findings, attack_paths, limitations, generation_dir, exit_code, repos), RepoResult, AnalysisFailed; PEP 562 lazy exports in attackmap/__init__.py (fresh-subprocess import 0.001 s; no attackmap.surfaces.cli/typer in sys.modules); RunSpec +repos/+output additive. tests/unit/test_public_api.py 7 tests incl. the AC-304 five-line example (1 finding, exit_code 0) and the no-CLI-import isolation. ruff import-order fixed (ratchet ruff_total 650→649). Library≈CLI overhead on the same tiny repo (1.6–1.8 s both). Contract 242 passed. Note: analyze() on a nonexistent/empty path returns a complete 0-analyzer result (exit_code 0), not AnalysisFailed — tests assert what the code guarantees.
 
 **Files** new `src/attackmap/api.py`, `src/attackmap/__init__.py`
 
@@ -1094,6 +1097,7 @@ when no browser exists.
 ### AR086 · Hostile-input hardening
 **Phase** 4 · **Priority** High · **Effort** 5 d · **Depends** AR029 · **Blocks** AC-407
 **Lease** `security` · **Acceptance** AC-407
+**Status** DONE (commit db883eb, agent-delivered, wave 11) — tests/integration/test_hostile_inputs.py: 11 passed + 2 opt-in stress skips (ATTACKMAP_STRESS_TESTS=1; 1 GB single line skipped by the oversized-file gate in 0.0 s, peak 1.9 MB; ~200 MB-logical zip bomb opaque, peak 2.0 MB; 100k-file dir passes under per-test timeout 900 s, ~2.3 ms/file dominated by Windows per-open AV cost, C35 count cap engages exactly at 100k; symlink loop skipped by default, terminates with ATTACKMAP_FOLLOW_SYMLINKS=1 — host can create symlinks). Committed fixtures 567 bytes; heavy inputs generated at runtime in tmp_path. 3000-iteration seeded fuzz over regex-heavy parsers — clean. PROVEN DEFECT + FIX (failing test first; report identity 84c7b18a… unchanged): yaml.safe_load* catching only yaml.YAMLError lets a pathologically deep YAML document escape as RecursionError and crash any scan; minimal except (yaml.YAMLError, RecursionError) at three independently-reachable extraction sites — config_scanner.py, workflow_scanner.py (both sites), lockfiles.py — lease said one module, three sites of the identical crash each proven by a failing test. Follow-up (outside lease): same latent gap at ai/supply_chain.py:152, output/suppress.py:464, surfaces/ui/suppress_write.py:101.
 
 **Files** `tests/fixtures/hostile/**`, `tests/integration/test_hostile_inputs.py`
 
@@ -1195,11 +1199,11 @@ flowchart LR
 
 | Phase | Tasks | Done | Remaining |
 | --- | --- | --- | --- |
-| 0 | AR001–AR012 (12) | 0 | 12 |
-| 1 | AR020–AR032 (13) | 0 | 13 |
-| 2 | AR040–AR050 (11) | 0 | 11 |
-| 3 | AR060–AR070 (11) | 0 | 11 |
-| 4 | AR080–AR088 (9) | 0 | 9 |
-| **Total** | **56** | **0** | **56** |
+| 0 | AR001–AR012 (12) | 12 | 0 |
+| 1 | AR020–AR032 (13) | 13 | 0 |
+| 2 | AR040–AR050 (11) | 8 | 3 |
+| 3 | AR060–AR070 (11) | 4 | 7 |
+| 4 | AR080–AR088 (9) | 2 | 7 |
+| **Total** | **56** | **39** | **17** |
 
 Update this table only by counting the card statuses above; do not add prose.
