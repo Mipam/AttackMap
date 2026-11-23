@@ -726,6 +726,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR049 · Explainability: rationale and evidence chains
 **Phase** 2 · **Priority** High · **Effort** 3 d · **Depends** AR041–AR045 · **Blocks** AC-207
 **Lease** `reasoning-output` · **Acceptance** AC-207
+**Status** OPEN — unblocked by owner decision (2026-11-23, section 5.1 of the 2026-11-23 handoff): reports switch to the registry's snake_case rule ids; suppressions (`output/suppress.py::_rule_ok`) and SARIF accept both old and new ids via every rule's `legacy_rule_ids`. Run together with the cascade-retirement/wiring pass so findings carry registry ids before the rationale fields land.
 
 **Files** `src/attackmap/model/findings.py`, `src/attackmap/report.py`,
 `src/attackmap/defensive_review.py`
@@ -745,6 +746,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR050 · Single ranking and dedupe module
 **Phase** 2 · **Priority** High · **Effort** 3 d · **Depends** AR004, AR040 · **Blocks** AC-208
 **Lease** `reasoning-output` · **Acceptance** AC-208
+**Status** OPEN — unblocked by owner decision (2026-11-23, section 5.1 of the 2026-11-23 handoff): reports switch to the registry's snake_case rule ids; suppressions and SARIF accept both old and new ids via `legacy_rule_ids`. Shares the `reasoning-output` lease with AR049 — run sequentially after the registry is wired into the scan pipeline.
 
 **Files** new `src/attackmap/reasoning/ranking.py`; edits in `threat_model.py`,
 `exploitability.py`, `defensive_review.py`, `diff.py`, `triage.py`

@@ -2,6 +2,12 @@
 
 ## Documentation authority — 2026-10-20
 
+By owner decision (2026-11-23) the active implementation plan for engine,
+architecture, reasoning and product-surface work is
+`docs/architecture-roadmap-2026-11-21/` (`roadmap.md`, `criteria.md`, `todo.md`,
+`backlog.json`). The Windows parity roadmap remains authoritative for the
+Windows native surface and Windows M3 acceptance.
+
 For planning and agent execution, start with [the current documentation index](docs/README.md).
 The only active implementation plan is:
 
