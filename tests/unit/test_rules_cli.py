@@ -1,5 +1,6 @@
 """AR046 rules-CLI tests: `attackmap rules list/show` backed by the kernel
-REGISTRY (the sub-app that replaced the old cascade-catalog flat command)."""
+REGISTRY. The flat `attackmap rules` form (cascade catalog) has its own test in
+tests/unit/test_rule_ids.py."""
 
 from __future__ import annotations
 

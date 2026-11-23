@@ -797,7 +797,7 @@
       "phase": 1,
       "priority": "High",
       "effort_days": 2.0,
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "depends_on": [
         "AR030"
       ],
@@ -814,7 +814,8 @@
       ],
       "owner": null,
       "evidence": [
-        "slice 1 commit e4fd43d (agent-delivered, parallel with AR029): tests/architecture/layer_map.py (strict stack surfaces>orchestration>reasoning>extraction>model>foundation, sdk island, output+ai lateral band, ~120 flat-name transition map), test_layer_boundaries.py (6 tests incl. AC-110 negative path via synthetic planted edge), tools/layer_report.py (--json per-pair counts); rules enforce only modules already in target subpackages (transition-tolerant), violation_total 0 at capture; slice 2 owed: activate full enforcement once AR029 lands + ratchet violations to zero"
+        "slice 1 commit e4fd43d (agent-delivered, parallel with AR029): tests/architecture/layer_map.py (strict stack surfaces>orchestration>reasoning>extraction>model>foundation, sdk island, output+ai lateral band, ~120 flat-name transition map), test_layer_boundaries.py (6 tests incl. AC-110 negative path via synthetic planted edge), tools/layer_report.py (--json per-pair counts); rules enforce only modules already in target subpackages (transition-tolerant), violation_total 0 at capture; slice 2 owed: activate full enforcement once AR029 lands + ratchet violations to zero",
+        "slice 2 commits d02d64e/e0c91c7/c3acbd7/54a83a2 (agent-delivered, wave 10): full enforcement including __init__ aggregators (12 enforced), flat transition map retired (layer = physical location only), layer_report schema 2 with shrink-only --record; violation_total 0, architecture 11 passed. Enforcement revealed 5 edges, fixed in-series: run-ledger records -> new model/ledger.py (extraction/ledger.py is a one-release re-export shim), sdk contract names -> PEP 562 lazy __getattr__ (import attackmap.sdk loads no reasoning/extraction module, pinned __all__ untouched). AC-110 negative path retained. Follow-ups: retire the sdk lazy shim at AR082; repoint remaining attackmap.extraction.ledger import sites at attackmap.model.ledger with the installer retarget"
       ]
     },
     {
@@ -1021,7 +1022,7 @@
       "phase": 2,
       "priority": "Medium",
       "effort_days": 2.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR041",
         "AR042",
@@ -1039,10 +1040,13 @@
       ],
       "files": [
         "tools/gen_rule_docs.py",
-        "docs/reference/rules/"
+        "docs/reference/rules/",
+        "src/attackmap/surfaces/rules_cli.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit a9bb8c1 (agent-delivered, wave 10; corrected by parent at integration): Finding.rule_id == meta.id (snake_case) for all 49 registry rules - AR044 flipped off legacy ids, AR041/AR043 carry-over helpers removed; 42 new RULE_TAXONOMY keys alias the legacy entry objects (no data drift), 7 aggregates deliberately unregistered and pinned by test; reasoning/rules/evaluation.py::evaluate_rules applies the score (drift-locked to compute_finding_score); attackmap rules list --json / rules show <id> (AC-201 literal verify: 49 entries, exit 0); tools/gen_rule_docs.py -> 49 pages + index, --check blocking in CI (AC-205; negative path proven: tampered or orphan page exits 1 and is named). PARENT CORRECTION: the agent replaced the flat attackmap rules / rules --json (cascade catalog); reverted via the sub-app callback (invoke_without_command=True) and the contract test test_rules_command_lists_catalog restored - reports still carry the 102 cascade ids (0 overlap with the registry's 49) and the flat command documents the ids rule: suppressions match. Card deviations: AM-ROUTE-001 is not a valid RuleMeta id; legacy mappings come from legacy_rule_ids attributes. Not in scope (cascade-retirement task): wire REGISTRY into the pipeline, exploitability fusion, retire the flat cascade catalog once reports emit registry ids. Found pre-existing: cascade id limited-surface has no RULE_TAXONOMY entry although the taxonomy docstring requires one for every catalog id"
+      ]
     },
     {
       "id": "AR047",

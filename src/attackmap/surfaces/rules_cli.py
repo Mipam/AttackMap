@@ -2,10 +2,17 @@
 
 Backed by the kernel registry (``attackmap.reasoning.rules.REGISTRY``): the
 stable, suppressible rule ids this engine's reasoning rules carry, with the
-metadata needed to write suppressions and read findings. The sub-app replaces
-the old flat ``rules`` command, which listed the legacy cascade catalog; the
-cascade stays the report producer until its retirement, and this catalog is
-the registry-side contract that wiring lands on.
+metadata needed to write suppressions and read findings.
+
+Two surfaces, on purpose (AGENTS.md: preserve CLI behavior):
+
+* ``attackmap rules`` / ``attackmap rules --json`` — the flat form, unchanged.
+  It lists the report producer's rule ids: the values ``rule:`` suppressions
+  match today. The cascade in ``threat_model`` stays the producer until the
+  registry is wired into the pipeline.
+* ``attackmap rules list [--json]`` / ``attackmap rules show <id>`` — the
+  registered reasoning rules (AR046). Their ids are not in reports yet; they
+  become the report ruleIds when the registry takes over.
 """
 
 from __future__ import annotations
@@ -16,8 +23,28 @@ import json
 import typer
 
 rules_app = typer.Typer(
-    help="List and inspect the registered reasoning rules (stable ids for SARIF ruleId and `rule:` suppressions).",
+    help="List rule ids: plain `attackmap rules` prints the ids reports carry; `list`/`show` cover the registered reasoning rules.",
 )
+
+
+@rules_app.callback(invoke_without_command=True)
+def rules(
+    ctx: typer.Context,
+    as_json: bool = typer.Option(False, "--json", help="Emit the rule catalog as JSON."),
+) -> None:
+    """List every core detector's stable rule id (#223) — the SARIF ruleId and
+    the value for `rule:` suppressions and `attackmap:ignore[...]`."""
+    if ctx.invoked_subcommand is not None:
+        return
+    from attackmap.reasoning.threat_model import rule_catalog
+
+    catalog = rule_catalog()
+    if as_json:
+        typer.echo(json.dumps([{"rule_id": r, "title": t, "severity": sev} for r, t, sev in catalog], indent=2))
+        return
+    width = max(len(r) for r, _, _ in catalog)
+    for rule_id, title, severity in catalog:
+        typer.echo(f"{rule_id.ljust(width)}  {severity:<7}  {title}")
 
 
 def _registry():
@@ -54,7 +81,11 @@ def list_rules(
         "Intended for tool / GUI front-ends.",
     ),
 ) -> None:
-    """List every registered rule's stable id, title and severity."""
+    """List every registered rule's stable id, title and severity.
+
+    These are the kernel reasoning rules (AR040+). Until the registry is wired
+    into the scan pipeline, reports still carry the ids printed by plain
+    `attackmap rules`."""
     registry = _registry()
     if as_json:
         typer.echo(json.dumps(_catalog_payload(registry), indent=2))

@@ -87,9 +87,21 @@ def test_documented_examples_use_real_rule_ids() -> None:
     assert documented and documented <= RULE_IDS
 
 
+def test_rules_command_lists_catalog() -> None:
+    """The flat `attackmap rules` / `rules --json` still list the report
+    producer's ids — the values `rule:` suppressions match. Kept when AR046
+    added the `list`/`show` subcommands (AGENTS.md: preserve CLI behavior)."""
+    result = runner.invoke(app, ["rules", "--json"])
+    assert result.exit_code == 0, result.output
+    assert {r["rule_id"] for r in json.loads(result.output)} == RULE_IDS
+    plain = runner.invoke(app, ["rules"])
+    assert plain.exit_code == 0, plain.output
+    assert "hardcoded-secret" in plain.output and "insecure-tls" in plain.output
+
+
 def test_rules_command_lists_the_registry_catalog() -> None:
-    """AR046: `attackmap rules` is the REGISTRY-backed sub-app (`list`/`show`);
-    the legacy cascade catalog above keeps its own tests."""
+    """AR046: `attackmap rules list` is the REGISTRY-backed sub-app (`list`/
+    `show`); the flat command above keeps listing the cascade catalog."""
     from attackmap.reasoning.rules import REGISTRY
 
     result = runner.invoke(app, ["rules", "list", "--json"])

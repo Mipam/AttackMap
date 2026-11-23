@@ -57,7 +57,9 @@ def test_cli_and_action_share_capabilities_and_module_inventory(monkeypatch):
 
 
 def test_catalog_cli_and_capabilities_share_engine_bound_discovery(monkeypatch):
-    import attackmap.orchestration.analyzer_catalog as catalog_module
+    # AR030: get_analyzer_catalog lives in orchestration.analyzers (its cycle
+    # with analyzer_catalog is gone); CLI and capabilities import it at call time.
+    import attackmap.orchestration.analyzers as catalog_module
     discover = catalog_module.get_analyzer_catalog
     calls = []
 
