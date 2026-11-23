@@ -154,20 +154,20 @@ def compute_fixture_identity(work: Path) -> dict:
 
 def compute_scan_identity(repo: Path, work: Path) -> dict:
     """Identity of a real pipeline scan over ``repo`` (machine-local gate)."""
-    from attackmap.orchestration.pipeline import AnalyzeOptions, run_scan
+    from attackmap.orchestration.run_spec import RunSpec
+    from attackmap.orchestration.scan_service import ScanRequest, execute_scan_request
 
     repo = Path(repo).resolve()
     output = work / "output"
-    options = AnalyzeOptions(
-        repo_path=repo,
+    summary = execute_scan_request(ScanRequest(
+        repo_paths=[repo],
         output=output,
-        no_progress=True,
+        spec=RunSpec(repos=(repo,), output=output, run_id="identity"),
         run_id="identity",
         echo=lambda *args, **kwargs: None,
-    )
-    state = run_scan(options)
-    if state.exit_code != 0:
-        raise RuntimeError(f"identity scan of {repo} failed with exit code {state.exit_code}")
+    ))
+    if summary.exit_code != 0:
+        raise RuntimeError(f"identity scan of {repo} failed with exit code {summary.exit_code}")
     return identity_doc(output / "identity", tmp_root=work, corpus_root=repo)
 
 

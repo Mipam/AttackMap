@@ -708,6 +708,7 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 ### AR048 · Detection quality harness
 **Phase** 2 · **Priority** High · **Effort** 5 d · **Depends** AR047 · **Blocks** AR084
 **Lease** `eval` · **Acceptance** AC-206
+**Status** DONE (commit 74d2915, agent-delivered, wave 12) — labelled corpus `corpus/reference.yaml` (case vulnerable-app rev 1, 2 files, 16 expectations across 11 rules; format: repo, revision, expected (rule_id, file, line_range); matching = rule_id equal AND same file AND line inside inclusive range). src/attackmap/eval/ = stdlib-only pure comparison (Expectation/LocatedFinding/compare/report_dict; scan orchestration stays out of the low layer). tools/eval_rules.py + `attackmap eval rules --corpus ... --json` (AC-206 literal verify passes; one import + one add_typer line in surfaces/cli.py, verified additive; the CLI delegates into surfaces/eval_cli.py, not vice versa — the console script cannot import tools/). Versioned JSON report: tool_version 1.5.1, corpus_revision, corpus_commit, generated_at injectable (byte-identical reruns, test-pinned). Measured baseline published in docs/reference/detection-quality.md: 13 rules, tp 15 / fp 2 / fn 1, precision 0.882, recall 0.938 — 10 registry rules at 1.00/1.00; FN = demo_weak_default_credentials (seed rule registered, not yet wired into the pipeline); FPs = insecure-upload + public-data-route (legacy cascade ids with no registry counterpart — honest noise until the cascade retires). Report identity unchanged (84c7b18a…). 14 unit tests; architecture 11/11; ratchet PASS. Parent fix during integration: tools/report_identity.py compute_scan_identity still imported deleted AnalyzeOptions (broken since AR025) — re-pointed at ScanRequest/RunSpec/execute_scan_request; default identity hash unchanged.
 
 **Files** `src/attackmap/eval/rules.py`, `corpus/reference.yaml`, `tools/eval_rules.py`
 
@@ -1119,6 +1120,7 @@ when no browser exists.
 ### AR087 · Rule authoring guide and template
 **Phase** 4 · **Priority** Low · **Effort** 2 d · **Depends** AR046 · **Blocks** AC-408
 **Lease** `docs` · **Acceptance** AC-408
+**Status** DONE (commit ec8697d, agent-delivered, wave 12) — docs/contributing/rules.md 30-minute walkthrough (signal/context-slice table, RuleMeta fields, taxonomy-entry requirement, evaluate() contract, fixtures + AR047 harness helpers, coverage/mutation meta-tests, doc regeneration, retire/demo rules, pitfalls checklist); tools/new_rule.py (stdlib-only scaffold: validates snake_case + REGISTRY duplicates, ships evaluate() as NotImplementedError with registration commented out so a scaffold cannot silently register; --id AM-DEMO-001 rejected as designed); tests/rules/_template.py (named outside test_*.py + module-level skip — two independent defenses, both documented). Walkthrough validated once, timed, in scratch (focused pytest 2 passed 0.58 s; full command sequence 3 s; doc gen produced a page proving the taxonomy-gap warning live); scratch deleted, nothing demo committed. tests/rules still 439 passed; gen_rule_docs --check clean; ratchet PASS.
 
 **Files** `docs/contributing/rules.md`, `tools/new_rule.py`, `tests/rules/_template.py`
 
@@ -1203,9 +1205,9 @@ flowchart LR
 | --- | --- | --- | --- |
 | 0 | AR001–AR012 (12) | 12 | 0 |
 | 1 | AR020–AR032 (13) | 13 | 0 |
-| 2 | AR040–AR050 (11) | 8 | 3 |
+| 2 | AR040–AR050 (11) | 9 | 2 |
 | 3 | AR060–AR070 (11) | 4 | 7 |
-| 4 | AR080–AR088 (9) | 2 | 7 |
-| **Total** | **56** | **39** | **17** |
+| 4 | AR080–AR088 (9) | 3 | 6 |
+| **Total** | **56** | **41** | **15** |
 
 Update this table only by counting the card statuses above; do not add prose.

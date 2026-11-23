@@ -1081,7 +1081,7 @@
       "phase": 2,
       "priority": "High",
       "effort_days": 5.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR047"
       ],
@@ -1098,7 +1098,9 @@
         "tools/eval_rules.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit 74d2915 (agent-delivered, wave 12): labelled corpus corpus/reference.yaml (case vulnerable-app rev 1, 16 expectations across 11 rules; matching = rule_id + same file + line inside inclusive line_range); src/attackmap/eval/ = stdlib-only pure comparison, scan orchestration kept out of the low layer; tools/eval_rules.py + 'attackmap eval rules --corpus ... --json' (AC-206 literal verify passes; cli.py +1 import +1 add_typer, additive) - the CLI delegates into surfaces/eval_cli.py because the console script cannot import tools/. Versioned JSON report (tool_version 1.5.1, corpus_revision, corpus_commit, injectable generated_at -> byte-identical reruns). Baseline published in docs/reference/detection-quality.md: 13 rules, tp 15 fp 2 fn 1, precision 0.882, recall 0.938; 10 registry rules at 1.00/1.00; FN = demo_weak_default_credentials (registered, not yet wired into the pipeline); FPs = insecure-upload + public-data-route (legacy cascade ids, no registry counterpart - noise until the cascade retires). Report identity unchanged. 14 unit tests; architecture 11/11; ratchet PASS. Parent fix in integration: tools/report_identity.py compute_scan_identity re-pointed from deleted AnalyzeOptions (broken since AR025) to ScanRequest/RunSpec/execute_scan_request; identity hash unchanged."
+      ]
     },
     {
       "id": "AR049",
@@ -1600,7 +1602,7 @@
       "phase": 4,
       "priority": "Low",
       "effort_days": 2.0,
-      "status": "OPEN",
+      "status": "DONE",
       "depends_on": [
         "AR046"
       ],
@@ -1615,7 +1617,9 @@
         "tests/rules/_template.py"
       ],
       "owner": null,
-      "evidence": []
+      "evidence": [
+        "commit ec8697d (agent-delivered, wave 12): docs/contributing/rules.md 30-minute walkthrough (signal/context-slice table, RuleMeta fields incl. taxonomy-entry requirement, evaluate() contract, fixtures + AR047 harness helpers, coverage/mutation meta-tests, doc regeneration, pitfalls); tools/new_rule.py stdlib-only scaffold (validates snake_case + REGISTRY duplicates, ships evaluate() as NotImplementedError with registration commented out; --id AM-DEMO-001 correctly rejected); tests/rules/_template.py double-defended (name outside test_* glob + module-level skip). Walkthrough validated once, timed, entirely in scratch (focused pytest 2 passed in 0.58s; measured command sequence 3s; doc-gen run live-proved the taxonomy-gap warning); scratch deleted, no demo committed. tests/rules unchanged at 439 passed; gen_rule_docs --check clean; ratchet PASS."
+      ]
     },
     {
       "id": "AR088",

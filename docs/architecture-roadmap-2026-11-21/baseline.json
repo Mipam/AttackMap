@@ -21,7 +21,11 @@
     "fix; broad_excepts back to 63 via narrowing sqlite.py's BaseException to",
     "(sqlite3.Error, OSError)), so ruff/mypy/broad_excepts hold at the wave 10",
     "values; modules 183 -> 190 (orchestration/derived_index x4,",
-    "surfaces/api, surfaces/index_cli).",
+    "surfaces/api, surfaces/index_cli). Wave 12 (AR048+AR087)",
+    "added src/attackmap/eval x2, surfaces/eval_cli: modules 190 -> 193.",
+    "Parent fix in wave 12: tools/report_identity.py compute_scan_identity",
+    "re-pointed from the deleted AnalyzeOptions (broken since AR025) to",
+    "ScanRequest/RunSpec/execute_scan_request; identity hash unchanged.",
     "import_cycles 41 -> 0 and layer violations 27 -> 0 in wave 9 (AR030);",
     "wave 10 (AR031 slice 2) turned enforcement on for __init__ aggregators",
     "too (12 enforced) and retired the flat transition map. Both ratchet",
@@ -47,7 +51,7 @@
     "longest_function_lines": 788,
     "functions_over_80_lines": 75,
     "models_fan_in": 60,
-    "modules": 190,
+    "modules": 193,
     "coverage_floor_pct": 21
   }
 }
