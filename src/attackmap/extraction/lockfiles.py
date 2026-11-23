@@ -323,7 +323,10 @@ def _parse_pnpm_lock(path: Path, text: str | None = None) -> _Graph | None:
             for doc in yaml.safe_load_all(_lockfile_text(path, text))
             if isinstance(doc, dict)
         ]
-    except yaml.YAMLError:
+    except (yaml.YAMLError, RecursionError):
+        # RecursionError: a pathologically deep lockfile overflows the YAML
+        # composer's recursion before a YAMLError exists (AR086) — hostile
+        # input, treated exactly like an unreadable lockfile.
         return None
     if not documents:
         return None

@@ -247,7 +247,10 @@ def _load_yaml(path: Path, yaml, sources: PassSources):  # type: ignore[no-untyp
         if text is None:
             return None, None
         data = yaml.safe_load(text)
-    except (OSError, yaml.YAMLError):  # type: ignore[attr-defined]
+    except (OSError, yaml.YAMLError, RecursionError):  # type: ignore[attr-defined]
+        # RecursionError: a pathologically deep document overflows the YAML
+        # composer's recursion before a YAMLError exists (AR086) — hostile
+        # input, treated exactly like an unparsable file.
         return None, None
     return (data, text) if isinstance(data, dict) else (None, None)
 
@@ -289,7 +292,9 @@ def scan_workflows(root: str | Path, index: RepoIndex | None = None) -> list[Wor
             continue
         try:
             data = yaml.safe_load(text)
-        except yaml.YAMLError:  # type: ignore[attr-defined]
+        except (yaml.YAMLError, RecursionError):  # type: ignore[attr-defined]
+            # RecursionError: pathologically deep hostile YAML (AR086) —
+            # skipped exactly like a malformed workflow.
             continue
         if not isinstance(data, dict):
             continue

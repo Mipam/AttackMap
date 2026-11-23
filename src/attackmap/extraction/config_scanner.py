@@ -1149,8 +1149,11 @@ def extract_deployment_aliases(repo_roots: list[Path]) -> tuple[DeploymentAliase
                 continue  # cheap pre-filter: ordinary YAML is not a k8s manifest
             try:
                 docs = [d for d in yaml.safe_load_all(text) if isinstance(d, dict)]
-            except yaml.YAMLError:
-                notes.append(f"skipped {provenance}: malformed YAML; no declarations taken")
+            except (yaml.YAMLError, RecursionError):
+                # A pathologically deep document overflows the composer's
+                # recursion before any YAMLError can be raised (AR086): it is
+                # hostile input, so skip it with a note like a malformed file.
+                notes.append(f"skipped {provenance}: malformed or excessively nested YAML; no declarations taken")
                 continue
             if kind == "compose":
                 if docs:
