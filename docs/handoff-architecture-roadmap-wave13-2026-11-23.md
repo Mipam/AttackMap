@@ -30,6 +30,24 @@ access) need an elevated shell.
   equivalent `attackmap = ["reasoning/taint_sinks.yaml", "surfaces/ui/web/**/*",
   "surfaces/ui/fixtures/*.json"]` (committed in `91422cb`). Pin `setuptools<80`
   in the venv when reinstalling.
+- **EOL rebuild trap (cost 19 false "regressions")**: the destroyed local git
+  config was `core.autocrlf=input` (checkout = verbatim blob bytes, no
+  conversion). The first rebuilt config used `autocrlf=false`, which — together
+  with `.gitattributes` explicit `text` rules — still converts LF→CRLF on
+  checkout for `*.json/*.yaml/*.md/…` (core.eol native). Hash-audited evidence
+  fixtures then failed: `fixtures/desktop-workflows` expected hashes,
+  `tests/unit/test_evaluation_increment.py` (WP030 provenance sha256),
+  `test_wp043_live_capture` + `test_ui_supervision` (timing/content knock-ons).
+  Fix applied: `git rm --cached -r . && git reset --hard` with
+  `core.autocrlf=input` (no `core.eol`). **15 files must additionally carry
+  CRLF working-tree bytes** (manifest hashes were recorded over CRLF bytes):
+  `fixtures/desktop-workflows/{suppressed.json,suppressions.yaml}` and 13 files
+  under `fixtures/evaluation/increment-20261031/repos/{dvwa,clean-catalog}/…`.
+  They intentionally show as ` M` in `git status` (blob stays LF — do NOT
+  `git add` them; staging would renormalize to LF and re-break the hashes).
+- **Pillow was missing** in the rebuilt venv (it is not declared in
+  `pyproject.toml`; the old venv had it manually). Installed Pillow 13.0.0;
+  WP043 live-capture tests need it. Reinstall after every venv rebuild.
 
 Lessons: (1) this repo currently exists ONLY on this machine and was one locked
 file away from total loss — push to a remote or mirror the objects after the next
@@ -250,6 +268,12 @@ Flask blueprint prefix, path normalization),
    does not exist (stale verify command in todo.md's common-verification block).
 10. demo_weak_default_credentials fires on juice-shop (+2 high/high findings)
     — expected since the wiring pass.
+11. After any worktree/.git rebuild: `core.autocrlf=input` (NOT `false` — with
+    the repo's explicit `text` attributes, `false` still CRLF-converts on
+    checkout via native core.eol), no `core.eol`. Then restore the 15 CRLF-byte
+    files listed in §0 (they show as ` M` — leave them uncommitted).
+12. Pillow is required for WP043 capture tests but undeclared — reinstall into
+    every fresh venv.
 11. **Recovered .git needs `core.longpaths=true`** or checkout dies on the deep
     `docs/verification/windows-parity/` paths (Filename too long).
 12. Forensics for the incident (if the owner wants the culprit): from an
