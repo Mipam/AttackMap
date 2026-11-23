@@ -34,6 +34,12 @@ from attackmap.reasoning.threat_model import generate_findings
 
 pytestmark = [pytest.mark.unit]
 
+# Every taint rule id (AR047): the tests below that assert on the whole
+# family's output are focused on all of them.
+ALL_TAINT_RULE_IDS = tuple(
+    rule.meta.id for rule in (*TAINT_SINK_RULES, *FLOW_SINK_RULES, *SPECULATIVE_RULES)
+)
+
 # --- fixtures ----------------------------------------------------------------
 
 
@@ -144,6 +150,7 @@ def _assert_matches_legacy(scan: ScanResult) -> None:
 # --- fixtures per sink kind (todo card step 3) --------------------------------
 
 
+@pytest.mark.rule("taint_flow_sql_execute")
 def test_sql_sink_traced_flow_matches_legacy():
     # SQL reach alone is not a finding: the chain needs a traced
     # request-derived source flowing into the query argument (#239).
@@ -167,6 +174,7 @@ def test_sql_sink_traced_flow_matches_legacy():
     _assert_matches_legacy(scan)
 
 
+@pytest.mark.rule("taint_sink_subprocess_shell")
 def test_command_sink_finding_matches_legacy():
     chain = _chain(
         route_path="/run",
@@ -191,6 +199,7 @@ def test_command_sink_finding_matches_legacy():
     _assert_matches_legacy(scan)
 
 
+@pytest.mark.rule("taint_sink_ssti")
 def test_template_sink_finding_matches_legacy():
     chain = _chain(
         route_path="/render",
@@ -210,6 +219,7 @@ def test_template_sink_finding_matches_legacy():
     _assert_matches_legacy(scan)
 
 
+@pytest.mark.rule("taint_flow_path_traversal")
 def test_path_sink_finding_matches_legacy():
     # `dynamic_open` is the schema alias of `path_traversal` (#200): both raw
     # kinds aggregate into one path-traversal finding. The traced dynamic
@@ -251,6 +261,7 @@ def test_path_sink_finding_matches_legacy():
     _assert_matches_legacy(scan)
 
 
+@pytest.mark.rule("taint_flow_sql_execute")
 def test_untraced_sql_chain_raises_no_finding():
     # The negative half of the SQL fixture: reachability without a traced
     # flow is over-linking for the trace-gated kinds, on both sides.
@@ -263,10 +274,12 @@ def test_untraced_sql_chain_raises_no_finding():
 # --- negative and source-quality cases ----------------------------------------
 
 
+@pytest.mark.rule(*ALL_TAINT_RULE_IDS)
 def test_no_chains_produce_no_findings():
     assert _rule_findings(_scan([])) == {}
 
 
+@pytest.mark.rule(*ALL_TAINT_RULE_IDS)
 def test_low_quality_sources_are_down_ranked():
     # The legacy cascade never surfaces chains rooted under tests/,
     # fixtures/, examples/ — its scan-time index skips them — so the rules
@@ -282,6 +295,7 @@ def test_low_quality_sources_are_down_ranked():
     assert set(_rule_findings(_scan([_chain(route_file="src/search.py")]))) == {"taint_sink_eval"}
 
 
+@pytest.mark.rule(*ALL_TAINT_RULE_IDS)
 def test_sanitized_chain_is_never_raised():
     # #137: a neutralized path isn't a probable exploit — evidence stays in
     # the scan, no rule raises (legacy `sanitized` gate).
@@ -295,6 +309,7 @@ def test_sanitized_chain_is_never_raised():
 # --- speculative recall chains (#148a) -----------------------------------------
 
 
+@pytest.mark.rule(*ALL_TAINT_RULE_IDS)
 def test_speculative_chain_only_produces_the_speculative_finding():
     chain = _chain(sink_kind="exec", speculative=True, confidence=0.3)
     scan = _scan([chain])
@@ -308,6 +323,7 @@ def test_speculative_chain_only_produces_the_speculative_finding():
     _assert_matches_legacy(scan)
 
 
+@pytest.mark.rule(*ALL_TAINT_RULE_IDS)
 def test_speculative_flow_kind_chain_produces_nothing():
     # Legacy bucketing: a speculative flow-kind chain hits the flow gate's
     # `continue` before the speculative bucket — no finding at all.
@@ -320,6 +336,7 @@ def test_speculative_flow_kind_chain_produces_nothing():
 # --- aggregation ----------------------------------------------------------------
 
 
+@pytest.mark.rule(*ALL_TAINT_RULE_IDS)
 def test_multiple_routes_aggregate_into_one_finding_per_kind():
     farther = _chain(
         route_path="/api/run",
@@ -350,6 +367,7 @@ def test_multiple_routes_aggregate_into_one_finding_per_kind():
 # --- hop-count / confidence equivalence (todo card step 2) ----------------------
 
 
+@pytest.mark.rule("taint_flow_sql_execute")
 @pytest.mark.parametrize("hops", [0, 1, 2, 3, 4])
 def test_hop_confidence_bands_match_the_legacy_mapping(hops: int):
     # The unchanged walk derives chain confidence from the hop count via
@@ -413,6 +431,7 @@ def test_all_taint_rules_are_registered_with_stable_ids():
         assert 0.0 <= rule.meta.confidence <= 1.0
 
 
+@pytest.mark.rule(*ALL_TAINT_RULE_IDS)
 def test_registry_evaluate_all_matches_per_rule_evaluation():
     chains = [
         _chain(sink_kind="subprocess_shell", confidence=0.6),

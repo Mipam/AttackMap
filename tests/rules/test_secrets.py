@@ -119,6 +119,7 @@ def _assert_identical(actual, legacy) -> None:
 # --- equivalence with the legacy cascade ---------------------------------------
 
 
+@pytest.mark.rule("hardcoded_secret_literals")
 def test_hardcoded_literals_rule_matches_legacy_cascade():
     scan = _mixed_secret_scan()
     actual = HardcodedSecretLiteralsRule().evaluate(ReasoningContext.from_scan(scan))
@@ -131,6 +132,7 @@ def test_hardcoded_literals_rule_matches_legacy_cascade():
     ]
 
 
+@pytest.mark.rule("secret_env_references")
 def test_env_references_rule_matches_legacy_cascade():
     scan = _mixed_secret_scan()
     actual = SecretEnvReferencesRule().evaluate(ReasoningContext.from_scan(scan))
@@ -142,6 +144,7 @@ def test_env_references_rule_matches_legacy_cascade():
     ]
 
 
+@pytest.mark.rule("debug_mode_exposure")
 def test_debug_exposure_rule_matches_legacy_cascade():
     scan = _mixed_secret_scan()
     actual = DebugModeExposureRule().evaluate(ReasoningContext.from_scan(scan))
@@ -156,6 +159,7 @@ def test_debug_exposure_rule_matches_legacy_cascade():
     ]
 
 
+@pytest.mark.rule("hardcoded_secret_literals")
 def test_hardcoded_confidence_tiers_down_on_weak_signals_only():
     # Keyword-proximity assignments (#252) alone are the weaker signal: the
     # legacy branch tiers the band to medium when no hint reaches 0.6.
@@ -174,6 +178,7 @@ def test_hardcoded_confidence_tiers_down_on_weak_signals_only():
 # --- negative fixtures (ride the real extraction pass) -------------------------
 
 
+@pytest.mark.rule("hardcoded_secret_literals", "secret_env_references")
 def test_placeholders_and_templates_never_become_literal_hints():
     placeholder_content = "\n".join(
         [
@@ -203,6 +208,7 @@ def test_placeholders_and_templates_never_become_literal_hints():
     _assert_identical(env_findings[0], _legacy_finding(scan, "secret-env-reference"))
 
 
+@pytest.mark.rule("hardcoded_secret_literals", "secret_env_references", "debug_mode_exposure")
 def test_high_entropy_hashes_and_integrity_digests_do_not_fire():
     sha384_body = base64.b64encode(bytes(range(48))).decode()
     sha512_body = base64.b64encode(bytes(range(64))).decode()
@@ -224,6 +230,7 @@ def test_high_entropy_hashes_and_integrity_digests_do_not_fire():
     assert not [f for f in generate_findings(scan, attack_surfaces=[]) if f.rule_id == "hardcoded-secret"]
 
 
+@pytest.mark.rule("hardcoded_secret_literals", "secret_env_references", "debug_mode_exposure")
 def test_clean_scan_emits_no_findings():
     ctx = ReasoningContext()
     assert HardcodedSecretLiteralsRule().evaluate(ctx) == []
@@ -234,6 +241,7 @@ def test_clean_scan_emits_no_findings():
 # --- low-quality-source behavior ------------------------------------------------
 
 
+@pytest.mark.rule("hardcoded_secret_literals")
 def test_low_quality_source_hints_follow_cascade_behavior():
     # The branch itself does not quality-gate: hints from test/vendored paths
     # that survived extraction (provider shapes still fire there) are reported
@@ -258,6 +266,7 @@ def test_low_quality_source_hints_follow_cascade_behavior():
 # --- evidence cap / locations semantics -----------------------------------------
 
 
+@pytest.mark.rule("hardcoded_secret_literals")
 def test_evidence_is_capped_but_locations_list_every_hint():
     scan = ScanResult(
         root="",
@@ -274,6 +283,7 @@ def test_evidence_is_capped_but_locations_list_every_hint():
     assert len(actual[0].locations) == 12  # locations are never capped (#214)
 
 
+@pytest.mark.rule("debug_mode_exposure")
 def test_debug_evidence_overflow_line_matches_cascade():
     scan = ScanResult(
         root="",
@@ -295,6 +305,7 @@ def test_debug_evidence_overflow_line_matches_cascade():
 # --- redaction gate (hard requirement) ------------------------------------------
 
 
+@pytest.mark.rule("hardcoded_secret_literals", "secret_env_references", "debug_mode_exposure")
 def test_no_raw_secret_material_leaks_into_findings():
     # Build the hint evidence the way a scanned file would look BEFORE
     # redaction; SecretHint's model validator must mask it at construction.
@@ -343,6 +354,7 @@ def test_no_raw_secret_material_leaks_into_findings():
 # --- registry contract -----------------------------------------------------------
 
 
+@pytest.mark.rule("hardcoded_secret_literals", "secret_env_references", "debug_mode_exposure")
 def test_ar043_rules_register_with_stable_ids_and_attribution():
     expected = {rule.meta.id for rule in (HardcodedSecretLiteralsRule(), SecretEnvReferencesRule(), DebugModeExposureRule())}
     assert expected == {"hardcoded_secret_literals", "secret_env_references", "debug_mode_exposure"}

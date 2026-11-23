@@ -79,6 +79,7 @@ def test_all_four_edge_rules_are_registered() -> None:
         assert "ownership-unknown" in rule.meta.tags
 
 
+@pytest.mark.rule("same_file_datastore_edge")
 def test_registry_evaluates_edges_without_errors() -> None:
     scan = _scan(
         routes=[Route(path="/orders", method="POST", file="app/orders.py")],
@@ -92,6 +93,7 @@ def test_registry_evaluates_edges_without_errors() -> None:
 # --- same-file datastore edge -------------------------------------------------
 
 
+@pytest.mark.rule("same_file_datastore_edge")
 def test_same_file_datastore_fires_and_matches_cascade_decision() -> None:
     scan = _scan(
         routes=[Route(path="/orders", method="POST", file="app/orders.py", line=3)],
@@ -115,6 +117,7 @@ def test_same_file_datastore_fires_and_matches_cascade_decision() -> None:
     assert finding.tags[-1] == "observed"
 
 
+@pytest.mark.rule("same_file_datastore_edge")
 def test_same_file_datastore_is_silent_for_cross_file_and_declared_elsewhere() -> None:
     scan = _scan(
         routes=[Route(path="/api", method="GET", file="app/api.py")],
@@ -123,6 +126,7 @@ def test_same_file_datastore_is_silent_for_cross_file_and_declared_elsewhere() -
     assert SameFileDatastoreEdgeRule().evaluate(_ctx(scan)) == []
 
 
+@pytest.mark.rule("same_file_datastore_edge")
 def test_same_file_declared_datastore_is_tagged_declared_only() -> None:
     scan = _scan(
         routes=[Route(path="/deploy", method="POST", file="infra/serverless.yml")],
@@ -134,6 +138,7 @@ def test_same_file_declared_datastore_is_tagged_declared_only() -> None:
     assert "observed" not in findings[0].tags
 
 
+@pytest.mark.rule("same_file_datastore_edge")
 def test_same_file_datastore_cites_at_most_ten_records_then_summary() -> None:
     file = "app/orders.py"
     scan = _scan(
@@ -152,6 +157,7 @@ def test_same_file_datastore_cites_at_most_ten_records_then_summary() -> None:
 # --- same-file external-call edge ---------------------------------------------
 
 
+@pytest.mark.rule("same_file_external_edge", "same_file_datastore_edge")
 def test_same_file_external_fires_and_matches_cascade_decision() -> None:
     scan = _scan(
         routes=[Route(path="/proxy", method="GET", file="app/proxy.py")],
@@ -173,6 +179,7 @@ def test_same_file_external_fires_and_matches_cascade_decision() -> None:
 # --- cross-file, same-module datastore edge ------------------------------------
 
 
+@pytest.mark.rule("same_module_datastore_edge", "same_file_datastore_edge")
 def test_cross_file_same_module_datastore_matches_cascade_branch() -> None:
     scan = _scan(
         routes=[Route(path="/api", method="GET", file="app/api.py")],
@@ -196,6 +203,7 @@ def test_cross_file_same_module_datastore_matches_cascade_branch() -> None:
     assert SameFileDatastoreEdgeRule().evaluate(_ctx(scan)) == []
 
 
+@pytest.mark.rule("same_module_datastore_edge")
 def test_module_match_is_first_wins_over_scan_order_like_the_cascade() -> None:
     scan = _scan(
         routes=[Route(path="/api", method="GET", file="app/api.py")],
@@ -209,6 +217,7 @@ def test_module_match_is_first_wins_over_scan_order_like_the_cascade() -> None:
     assert findings[0].evidence[-1] == "database hint in same module: redis (app/cache.py)"
 
 
+@pytest.mark.rule("same_module_datastore_edge")
 def test_declared_config_datastore_in_module_is_tagged_declared_only() -> None:
     scan = _scan(
         routes=[Route(path="/api", method="GET", file="app/api.py")],
@@ -223,6 +232,7 @@ def test_declared_config_datastore_in_module_is_tagged_declared_only() -> None:
 # --- same-module external edge and cascade elif priority -----------------------
 
 
+@pytest.mark.rule("same_module_external_edge", "same_module_datastore_edge")
 def test_same_module_external_fires_when_no_datastore_answers() -> None:
     scan = _scan(
         routes=[Route(path="/api", method="GET", file="app/api.py")],
@@ -239,6 +249,7 @@ def test_same_module_external_fires_when_no_datastore_answers() -> None:
     assert SameModuleDatastoreEdgeRule().evaluate(_ctx(scan)) == []
 
 
+@pytest.mark.rule("same_module_datastore_edge", "same_module_external_edge")
 def test_external_edge_stays_quiet_where_datastore_branch_answers() -> None:
     # The cascade's `elif external_by_module` never runs once a same-module
     # datastore answered; the ported rule pair must keep that priority.
@@ -254,6 +265,7 @@ def test_external_edge_stays_quiet_where_datastore_branch_answers() -> None:
     assert SameModuleExternalEdgeRule().evaluate(_ctx(scan)) == []
 
 
+@pytest.mark.rule("same_module_external_edge")
 def test_external_edge_silent_for_other_module_and_cascade_calls_it_elsewhere() -> None:
     scan = _scan(
         routes=[Route(path="/api", method="GET", file="app/api.py")],
@@ -267,6 +279,12 @@ def test_external_edge_silent_for_other_module_and_cascade_calls_it_elsewhere() 
 # --- declared-only without any co-location: context, never an edge -------------
 
 
+@pytest.mark.rule(
+    "same_file_datastore_edge",
+    "same_file_external_edge",
+    "same_module_datastore_edge",
+    "same_module_external_edge",
+)
 def test_declared_only_datastore_without_co_location_produces_no_edge() -> None:
     scan = _scan(
         routes=[Route(path="/api", method="GET", file="app/api.py")],
@@ -292,6 +310,12 @@ def test_declared_only_datastore_without_co_location_produces_no_edge() -> None:
 # --- negative ------------------------------------------------------------------
 
 
+@pytest.mark.rule(
+    "same_file_datastore_edge",
+    "same_file_external_edge",
+    "same_module_datastore_edge",
+    "same_module_external_edge",
+)
 def test_no_records_no_findings() -> None:
     scan = _scan(routes=[Route(path="/health", method="GET", file="app/health.py")])
     for rule in (
@@ -303,6 +327,12 @@ def test_no_records_no_findings() -> None:
         assert rule.evaluate(_ctx(scan)) == [], rule.meta.id
 
 
+@pytest.mark.rule(
+    "same_file_datastore_edge",
+    "same_file_external_edge",
+    "same_module_datastore_edge",
+    "same_module_external_edge",
+)
 def test_datastore_without_any_route_is_not_an_edge() -> None:
     scan = _scan(databases=[DatabaseHint(kind="sqlite", file="worker/store.py")])
     for rule in (
@@ -317,6 +347,12 @@ def test_datastore_without_any_route_is_not_an_edge() -> None:
 # --- low-quality sources are down-ranked like the cascade ----------------------
 
 
+@pytest.mark.rule(
+    "same_file_datastore_edge",
+    "same_file_external_edge",
+    "same_module_datastore_edge",
+    "same_module_external_edge",
+)
 def test_low_quality_route_sources_are_down_ranked() -> None:
     scan = _scan(
         routes=[
@@ -339,6 +375,11 @@ def test_low_quality_route_sources_are_down_ranked() -> None:
     assert _build_probable_chains(scan) == []
 
 
+@pytest.mark.rule(
+    "same_file_datastore_edge",
+    "same_module_datastore_edge",
+    "same_module_external_edge",
+)
 def test_low_quality_records_are_not_cited_for_runtime_routes() -> None:
     # A production route whose module also contains a tests/ datastore: the
     # module keys differ ("app" vs "tests"), so nothing fires — and the
@@ -360,6 +401,7 @@ def test_low_quality_records_are_not_cited_for_runtime_routes() -> None:
 # --- determinism -----------------------------------------------------------------
 
 
+@pytest.mark.rule("same_module_datastore_edge", "same_file_datastore_edge")
 def test_findings_are_deterministic_regardless_of_route_input_order() -> None:
     routes = [
         Route(path="/b", method="POST", file="app/beta.py"),

@@ -107,6 +107,7 @@ def _webhook_scan(**route_kwargs) -> ScanResult:
     )
 
 
+@pytest.mark.rule("route_public_webhook")
 def test_public_webhook_positive_and_equivalent():
     scan = _webhook_scan()
     findings = RoutePublicWebhookRule().evaluate(_ctx(scan))
@@ -125,12 +126,14 @@ def test_public_webhook_positive_and_equivalent():
     _assert_equivalent(RoutePublicWebhookRule(), scan, "public-webhook")
 
 
+@pytest.mark.rule("route_public_webhook")
 def test_public_webhook_negative_plugin_declared_auth():
     scan = _webhook_scan(auth="required", guards=["requireSignature"])
     assert RoutePublicWebhookRule().evaluate(_ctx(scan)) == []
     assert _legacy_findings(scan, "public-webhook") == []
 
 
+@pytest.mark.rule("route_public_webhook")
 def test_public_webhook_negative_strong_auth_signal_nearby():
     scan = _webhook_scan()
     scan.auth_hints.append(AuthHint(hint="authorization", file="api.py", line=1))
@@ -138,6 +141,7 @@ def test_public_webhook_negative_strong_auth_signal_nearby():
     assert _legacy_findings(scan, "public-webhook") == []
 
 
+@pytest.mark.rule("route_public_webhook")
 def test_public_webhook_ignores_low_quality_sources():
     scan = ScanResult(
         root=".",
@@ -170,6 +174,7 @@ def _admin_scan() -> ScanResult:
     )
 
 
+@pytest.mark.rule("route_exposed_admin")
 def test_exposed_admin_positive_and_equivalent():
     scan = _admin_scan()
     findings = RouteExposedAdminRule().evaluate(_ctx(scan))
@@ -184,12 +189,14 @@ def test_exposed_admin_positive_and_equivalent():
     _assert_equivalent(RouteExposedAdminRule(), scan, "exposed-admin-route")
 
 
+@pytest.mark.rule("route_exposed_admin")
 def test_exposed_admin_negative_non_admin_routes():
     scan = ScanResult(root=".", routes=[Route(path="/api/users", method="GET", file="app/api.py")])
     assert RouteExposedAdminRule().evaluate(_ctx(scan)) == []
     assert _legacy_findings(scan, "exposed-admin-route") == []
 
 
+@pytest.mark.rule("route_exposed_admin")
 def test_exposed_admin_ignores_low_quality_sources():
     scan = ScanResult(root=".", routes=[Route(path="/admin/users", method="ANY", file="tests/admin_routes.py")])
     assert RouteExposedAdminRule().evaluate(_ctx(scan)) == []
@@ -199,6 +206,7 @@ def test_exposed_admin_ignores_low_quality_sources():
 # --- AM-ROUTE-003 / route_upload_import (cascade: upload-route) -----------------
 
 
+@pytest.mark.rule("route_upload_import")
 def test_upload_import_positive_and_equivalent():
     scan = ScanResult(root=".", routes=[Route(path="/upload", method="POST", file="app/upload.py", line=5)])
     findings = RouteUploadImportRule().evaluate(_ctx(scan))
@@ -214,12 +222,14 @@ def test_upload_import_positive_and_equivalent():
     _assert_equivalent(RouteUploadImportRule(), scan, "upload-route")
 
 
+@pytest.mark.rule("route_upload_import")
 def test_upload_import_negative_other_categories():
     scan = ScanResult(root=".", routes=[Route(path="/health", method="GET", file="app/health.py")])
     assert RouteUploadImportRule().evaluate(_ctx(scan)) == []
     assert _legacy_findings(scan, "upload-route") == []
 
 
+@pytest.mark.rule("route_upload_import")
 def test_upload_import_ignores_low_quality_sources():
     scan = ScanResult(root=".", routes=[Route(path="/import/data", method="POST", file="examples/upload_demo.py")])
     assert RouteUploadImportRule().evaluate(_ctx(scan)) == []
@@ -236,6 +246,7 @@ def _auth_scan(**route_kwargs) -> ScanResult:
     )
 
 
+@pytest.mark.rule("route_weak_auth_controls")
 def test_weak_auth_positive_and_equivalent():
     scan = _auth_scan()
     findings = RouteWeakAuthControlsRule().evaluate(_ctx(scan))
@@ -252,6 +263,7 @@ def test_weak_auth_positive_and_equivalent():
     _assert_equivalent(RouteWeakAuthControlsRule(), scan, "weak-auth-route")
 
 
+@pytest.mark.rule("route_weak_auth_controls")
 def test_weak_auth_negative_auth_hint_within_window():
     scan = _auth_scan()
     scan.auth_hints.append(AuthHint(hint="jwt", file="app/web.py", line=35))
@@ -259,12 +271,14 @@ def test_weak_auth_negative_auth_hint_within_window():
     assert _legacy_findings(scan, "weak-auth-route") == []
 
 
+@pytest.mark.rule("route_weak_auth_controls")
 def test_weak_auth_negative_plugin_declared_auth():
     scan = _auth_scan(auth="required")
     assert RouteWeakAuthControlsRule().evaluate(_ctx(scan)) == []
     assert _legacy_findings(scan, "weak-auth-route") == []
 
 
+@pytest.mark.rule("route_weak_auth_controls")
 def test_weak_auth_hint_outside_window_still_flags():
     # Hints exist in the file but outside the +/-40-line attribution window:
     # the legacy classifier attributes no signal to the route, so it fires.
@@ -275,6 +289,7 @@ def test_weak_auth_hint_outside_window_still_flags():
     _assert_equivalent(RouteWeakAuthControlsRule(), scan, "weak-auth-route")
 
 
+@pytest.mark.rule("route_weak_auth_controls")
 def test_weak_auth_ignores_low_quality_sources():
     scan = ScanResult(root=".", routes=[Route(path="/login", method="POST", file="__tests__/login_flow.ts")])
     assert RouteWeakAuthControlsRule().evaluate(_ctx(scan)) == []
@@ -284,6 +299,7 @@ def test_weak_auth_ignores_low_quality_sources():
 # --- kernel integration ---------------------------------------------------------
 
 
+@pytest.mark.rule("route_exposed_admin", "route_weak_auth_controls")
 def test_route_rules_flow_through_registry_evaluation():
     scan = _admin_scan()
     scan.routes.append(Route(path="/login", method="POST", file="app/web.py"))

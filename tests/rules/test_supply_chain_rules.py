@@ -250,6 +250,7 @@ def test_context_widening_carries_supply_chain_slices():
 # --- CVE-on-path (#60) --------------------------------------------------------
 
 
+@pytest.mark.rule("vulnerable_dependency")
 def test_cve_on_path_equivalence():
     scan = _cve_scan()
     old = _old_by_title([f for f in _legacy_findings(scan) if f.rule_id == "vulnerable-dependency"])
@@ -260,6 +261,7 @@ def test_cve_on_path_equivalence():
         _assert_finding_equivalent(finding, old[finding.title])
 
 
+@pytest.mark.rule("vulnerable_dependency")
 def test_cve_finding_groups_advisories_and_cites_transitive_path():
     findings = {f.title: f for f in VulnerableDependencyRule().evaluate(ReasoningContext.from_scan(_cve_scan()))}
     lodash = findings["Vulnerable dependency: lodash@4.17.20 (npm)"]
@@ -274,6 +276,7 @@ def test_cve_finding_groups_advisories_and_cites_transitive_path():
     assert qs.confidence == "high"
 
 
+@pytest.mark.rule("vulnerable_dependency")
 def test_entity_id_matches_canonical_identity():
     """The ported entity key stays byte-identical to the canonical helper."""
     assert _dependency_entity_id("npm", "lodash", "4.17.20") == dependency_entity_id("npm", "lodash", "4.17.20")
@@ -287,6 +290,7 @@ def test_entity_id_matches_canonical_identity():
 # --- GitHub workflows (#142/#246) ---------------------------------------------
 
 
+@pytest.mark.rule("workflow_security")
 def test_workflow_findings_equivalence():
     scan = _workflow_scan()
     old_by_title = _old_by_title(_legacy_findings(scan))
@@ -301,6 +305,7 @@ def test_workflow_findings_equivalence():
         _assert_finding_equivalent(finding, old)
 
 
+@pytest.mark.rule("workflow_security")
 def test_workflow_evidence_structure_is_intact():
     """Evidence lines keep the legacy ``file:line [job/step] — detail`` shape."""
     findings = {f.title: f for f in WorkflowSecurityRule().evaluate(ReasoningContext.from_scan(_workflow_scan()))}
@@ -324,6 +329,7 @@ def test_workflow_evidence_structure_is_intact():
     assert curl.locations[0].line == 14
 
 
+@pytest.mark.rule("workflow_security")
 def test_workflow_evidence_cap_and_location_dedupe():
     issues = [
         WorkflowIssue(
@@ -348,6 +354,7 @@ def test_workflow_evidence_cap_and_location_dedupe():
 # --- dependency supply-chain (#247) -------------------------------------------
 
 
+@pytest.mark.rule("supply_chain_risk")
 def test_dependency_findings_equivalence():
     scan = _supply_chain_scan()
     old_by_title = _old_by_title(_legacy_findings(scan))
@@ -362,6 +369,7 @@ def test_dependency_findings_equivalence():
         _assert_finding_equivalent(finding, old)
 
 
+@pytest.mark.rule("supply_chain_risk")
 def test_typosquat_keeps_medium_confidence_band():
     findings = {
         f.title: f
@@ -380,6 +388,7 @@ def test_typosquat_keeps_medium_confidence_band():
 # --- negative case -------------------------------------------------------------
 
 
+@pytest.mark.rule("vulnerable_dependency", "workflow_security", "supply_chain_risk")
 def test_clean_scan_produces_no_supply_chain_findings():
     ctx = ReasoningContext.from_scan(_clean_scan())
     assert VulnerableDependencyRule().evaluate(ctx) == []
@@ -393,6 +402,7 @@ def test_clean_scan_produces_no_supply_chain_findings():
 # --- kernel end-to-end ----------------------------------------------------------
 
 
+@pytest.mark.rule("vulnerable_dependency", "workflow_security", "supply_chain_risk")
 def test_registry_evaluate_all_runs_the_family():
     scan = _workflow_scan()
     scan.vulnerabilities = _cve_scan().vulnerabilities
