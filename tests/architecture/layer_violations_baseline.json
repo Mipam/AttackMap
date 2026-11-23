@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "note": "AR030 worklist baseline: pre-existing flat-tree layer edges inherited at the AR029 restructure. Shrink toward zero; the test fails only on NEW layer pairs.",
+  "note": "AR031 slice 2 ratchet baseline: full per-layer enforcement incl. package __init__.py aggregators. Must stay empty; tools/layer_report --record shrinks only.",
   "violation_total": 0,
   "violations": []
 }
