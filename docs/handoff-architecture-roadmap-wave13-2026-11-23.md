@@ -39,9 +39,9 @@ access) need an elevated shell.
   `tests/unit/test_evaluation_increment.py` (WP030 provenance sha256),
   `test_wp043_live_capture` + `test_ui_supervision` (timing/content knock-ons).
   Fix applied: `git rm --cached -r . && git reset --hard` with
-  `core.autocrlf=input` (no `core.eol`). **15 files must additionally carry
+  `core.autocrlf=input` (no `core.eol`). **17 files must additionally carry
   CRLF working-tree bytes** (manifest hashes were recorded over CRLF bytes):
-  `fixtures/desktop-workflows/{suppressed.json,suppressions.yaml}` and 13 files
+  `fixtures/desktop-workflows/{suppressed.json,suppressions.yaml}`, `tests/fixtures/desktop-options-v12/{request-defaults.json,request-sentinels.json}` and 13 files
   under `fixtures/evaluation/increment-20261031/repos/{dvwa,clean-catalog}/…`.
   They intentionally show as ` M` in `git status` (blob stays LF — do NOT
   `git add` them; staging would renormalize to LF and re-break the hashes).
@@ -270,7 +270,7 @@ Flask blueprint prefix, path normalization),
     — expected since the wiring pass.
 11. After any worktree/.git rebuild: `core.autocrlf=input` (NOT `false` — with
     the repo's explicit `text` attributes, `false` still CRLF-converts on
-    checkout via native core.eol), no `core.eol`. Then restore the 15 CRLF-byte
+    checkout via native core.eol), no `core.eol`. Then restore the 17 CRLF-byte
     files listed in §0 (they show as ` M` — leave them uncommitted).
 12. Pillow is required for WP043 capture tests but undeclared — reinstall into
     every fresh venv.
