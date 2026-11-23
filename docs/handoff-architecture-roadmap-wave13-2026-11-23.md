@@ -243,7 +243,10 @@ broad excepts 63, longest function 750, 75 functions >80 lines, models fan-in
 Flask blueprint prefix, path normalization),
 `tests/unit/test_local_provider_timeouts.py` (2),
 `tests/unit/test_regex_budget.py::test_pattern_scales_linearly` for
-`python_django_routes._MODULE` (1). Anything else failing is new.
+`python_django_routes._MODULE` (1). Also load-flaky under `-n auto`:
+`tests/integration/test_resource_budgets.py::test_time_budget_check_overhead_is_negligible`
+(timing assertion; passes solo and in small groups — re-run before treating as
+regression). Anything else failing is new.
 
 ## 10. Pitfalls (accumulated, incl. new this session)
 
