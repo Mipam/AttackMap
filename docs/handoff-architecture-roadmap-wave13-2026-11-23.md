@@ -14,6 +14,22 @@ found), not disk errors (System log clean). Cause UNKNOWN — no deleting proces
 found running afterwards; the remaining forensics (USN journal, Security log object
 access) need an elevated shell.
 
+**Forensic addendum (2026-11-23 ~20:40, full session-log review):**
+- Every Bash command of all three wave-14 agents (agent-7/8/9, 88 commands total)
+  and of the main agent was extracted from the runtime wire logs. **No agent
+  issued any delete/clean/format command.** Tools used: Read/Grep/Edit/Write/
+  Bash only — no Skill, no worktree, no background tasks.
+- Bracketed timeline: 19:46:41 agents launched; 19:51:37 `sed secrets.py` still
+  worked; 19:51:41–19:51:50 agents' `ls`/`git` began failing (files vanishing
+  under them, .venv pyvenv.cfg gone); 19:52:41 main agent noticed; 19:52:50
+  TaskStop ×2; deletion stable by 19:53:33. So the deleter ran ~19:51:38–19:53:3x
+  and stopped within a minute of the TaskStops.
+- Conclusion: no agent command caused it. Either the swarm/parallel-agent
+  runtime layer (invisible from inside; cleanup bug while 3 agents shared one
+  tree) or an external process. USN journal / Sysmon would be needed to name
+  the process (needs admin). Until then: **do not run 3 parallel writers in one
+  tree again; prefer sequential agents or proven disjoint leases.**
+
 **Recovery performed (same day ~20:00–20:30):**
 - `.git/objects` backed up first to `C:\tmp\attackmap-scratch\git-rescue\objects`
   (123 MB — KEEP IT until the next stable checkpoint is verified).
