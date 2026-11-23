@@ -36,12 +36,15 @@ from attackmap.orchestration.run_spec import RunSpec
 from attackmap.orchestration.scan_service import ScanRequest, ScanRequestError, execute_scan_request
 from attackmap.output.report import OUTPUT_FORMATS
 from attackmap.output.review_prompts import HUNT_LENSES
+from attackmap.surfaces.index_cli import index_app
 from attackmap.surfaces.rules_cli import rules_app
 from attackmap.surfaces.suggest import detect_ecosystems
 
 app = typer.Typer(help="AttackMap: understand your system and map your attack surface.")
 # AR046: the rule catalog lives in its own sub-app, backed by the kernel REGISTRY.
 app.add_typer(rules_app, name="rules")
+# AR061: the derived index (rebuild/status/dump) over published generations.
+app.add_typer(index_app, name="index")
 
 
 def _select_modules(module: list[str], install_missing: bool) -> list:
@@ -761,6 +764,47 @@ def analyze(
 
 
 
+
+
+@app.command("trends")
+def trends(
+    output: str = typer.Option(
+        "reports", "--output", "-o",
+        help="AttackMap output base containing report generations.",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit the trends payload as JSON (deterministic; diff before/after "
+        "`attackmap index rebuild` to verify the index is reconstructible, AC-302).",
+    ),
+) -> None:
+    """Cross-run trends over the generations published under an output base (AR061).
+
+    Reads through the derived index when it is usable and falls back to the
+    generations with a warning when it is missing, corrupt, or stale (AC-303).
+    """
+    from attackmap.orchestration.derived_index.query import load_rows, trends_payload
+
+    base = Path(output)
+    if not base.is_dir():
+        typer.echo(f"Error: not an AttackMap output base (directory does not exist): {base}", err=True)
+        raise typer.Exit(code=2)
+    loaded = load_rows(base)
+    if loaded.source == "filesystem":
+        typer.echo(f"warning: index unusable ({loaded.reason}); read from generations", err=True)
+    payload = trends_payload(loaded.rows, source=loaded.source, reason=loaded.reason)
+    if as_json:
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    totals = payload["totals"]
+    sev = totals["by_severity"]
+    typer.echo(f"runs: {totals['runs']}  findings: {totals['findings']} "
+               f"(high {sev['high']}, medium {sev['medium']}, low {sev['low']})  "
+               f"suppressed: {totals['suppressed']}  routes: {totals['routes']}")
+    for run in payload["runs"]:
+        typer.echo(f"- {run['run_id']} [{run['repo_name']}] {run['status']}: "
+                   f"{run['findings']} findings, {run['suppressed']} suppressed, {run['routes']} routes")
 
 
 @app.command("capabilities")
