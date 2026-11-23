@@ -11,10 +11,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-# AR030: pydantic resolves this annotation at model-build time. The ledger
-# record module has no upward imports, so the edge stays cycle-free (package
-# __init__ aggregators remain exempt in AR031 slice 1).
-from ..extraction.ledger import AnalyzerRunLedger
+# AR031 slice 2: the run-ledger record models live here in model/ (moved
+# down from extraction/ so this annotation carries no upward edge);
+# attackmap.extraction.ledger is a one-release re-export shim.
+from .ledger import AnalyzerRunLedger
 from .evidence import (  # noqa: F401
     _EVIDENCE_LIST_FIELDS,
     _EVIDENCE_TEXT_FIELDS,
