@@ -1,7 +1,7 @@
 """AR041 route/auth rule tests: positive/negative/low-quality fixtures per
-rule plus field-for-field equivalence against the legacy cascade branches
-(``threat_model.generate_findings``), which stay the active producer until
-the cascade-retirement wiring.
+rule plus field-for-field equivalence against the scan pipeline
+(``threat_model.generate_findings``), which is the registry producer now
+that the cascade-retirement wiring landed (owner decision 2026-11-23).
 
 Self-contained by design: scans and contexts are built in-memory here; no
 shared harness. ``unit`` tier: pure functions, no filesystem or network.
@@ -25,13 +25,12 @@ from attackmap.reasoning.threat_model import compute_finding_score, generate_fin
 
 pytestmark = [pytest.mark.unit]
 
-# Legacy cascade rule_id -> kernel rule id (AR041 mapping under test).
-LEGACY_TO_RULE = {
-    "public-webhook": RoutePublicWebhookRule,
-    "exposed-admin-route": RouteExposedAdminRule,
-    "upload-route": RouteUploadImportRule,
-    "weak-auth-route": RouteWeakAuthControlsRule,
-}
+ROUTE_RULE_CLASSES = (
+    RoutePublicWebhookRule,
+    RouteExposedAdminRule,
+    RouteUploadImportRule,
+    RouteWeakAuthControlsRule,
+)
 
 ROUTE_ID_RE = re.compile(r"[a-z][a-z0-9_]*")
 
@@ -43,18 +42,19 @@ def _ctx(scan: ScanResult) -> ReasoningContext:
     return ReasoningContext.from_scan(scan)
 
 
-def _legacy_findings(scan: ScanResult, legacy_rule_id: str):
-    """The old cascade's findings for one legacy rule id on the same scan."""
-    return [f for f in generate_findings(scan) if f.rule_id == legacy_rule_id]
+def _pipeline_findings(scan: ScanResult, rule_id: str):
+    """The pipeline's findings for one rule id on the same scan."""
+    return [f for f in generate_findings(scan) if f.rule_id == rule_id]
 
 
-def _assert_equivalent(rule, scan: ScanResult, legacy_rule_id: str) -> None:
-    """Every Finding field the cascade sets must match, except the two
-    intentional deltas: ``rule_id`` (kernel contract: ``meta.id``) and
-    ``score`` (assigned by the pipeline, derived from severity/confidence).
+def _assert_equivalent(rule, scan: ScanResult, rule_id: str) -> None:
+    """Every Finding field the rule sets must match the pipeline's, except the
+    two pipeline-owned fields: ``rule_id`` (identical on both sides now — the
+    registry emits ``meta.id``) and ``score`` (assigned by the pipeline,
+    derived from severity/confidence).
     """
     new = rule.evaluate(_ctx(scan))
-    old = _legacy_findings(scan, legacy_rule_id)
+    old = _pipeline_findings(scan, rule_id)
     assert len(new) == len(old)
     for new_finding, old_finding in zip(new, old, strict=True):
         new_dump = new_finding.model_dump()
@@ -70,7 +70,7 @@ def _assert_equivalent(rule, scan: ScanResult, legacy_rule_id: str) -> None:
 
 
 def test_all_route_rules_are_registered():
-    for rule_cls in LEGACY_TO_RULE.values():
+    for rule_cls in ROUTE_RULE_CLASSES:
         rule = REGISTRY.get(rule_cls.meta.id)
         assert isinstance(rule, rule_cls)
         assert rule.meta.id == rule_cls.meta.id
@@ -123,14 +123,14 @@ def test_public_webhook_positive_and_equivalent():
     # identical to the legacy entry's data.
     assert finding.taxonomy is not None and finding.taxonomy.cwe == ["CWE-345"]
     assert [t.technique_id for t in finding.attack_techniques] == ["T1190", "T1199"]
-    _assert_equivalent(RoutePublicWebhookRule(), scan, "public-webhook")
+    _assert_equivalent(RoutePublicWebhookRule(), scan, "route_public_webhook")
 
 
 @pytest.mark.rule("route_public_webhook")
 def test_public_webhook_negative_plugin_declared_auth():
     scan = _webhook_scan(auth="required", guards=["requireSignature"])
     assert RoutePublicWebhookRule().evaluate(_ctx(scan)) == []
-    assert _legacy_findings(scan, "public-webhook") == []
+    assert _pipeline_findings(scan, "route_public_webhook") == []
 
 
 @pytest.mark.rule("route_public_webhook")
@@ -138,7 +138,7 @@ def test_public_webhook_negative_strong_auth_signal_nearby():
     scan = _webhook_scan()
     scan.auth_hints.append(AuthHint(hint="authorization", file="api.py", line=1))
     assert RoutePublicWebhookRule().evaluate(_ctx(scan)) == []
-    assert _legacy_findings(scan, "public-webhook") == []
+    assert _pipeline_findings(scan, "route_public_webhook") == []
 
 
 @pytest.mark.rule("route_public_webhook")
@@ -158,7 +158,7 @@ def test_public_webhook_ignores_low_quality_sources():
         ],
     )
     assert RoutePublicWebhookRule().evaluate(_ctx(scan)) == []
-    assert _legacy_findings(scan, "public-webhook") == []
+    assert _pipeline_findings(scan, "route_public_webhook") == []
 
 
 # --- AM-ROUTE-002 / route_exposed_admin (cascade: exposed-admin-route) ----------
@@ -186,21 +186,21 @@ def test_exposed_admin_positive_and_equivalent():
     assert finding.tags == ["exposed-endpoint", "auth-missing", "privileged"]
     assert [loc.file for loc in finding.locations] == ["app/admin.py", "app/admin_extra.py"]
     assert finding.taxonomy is not None and finding.taxonomy.cwe == ["CWE-285"]
-    _assert_equivalent(RouteExposedAdminRule(), scan, "exposed-admin-route")
+    _assert_equivalent(RouteExposedAdminRule(), scan, "route_exposed_admin")
 
 
 @pytest.mark.rule("route_exposed_admin")
 def test_exposed_admin_negative_non_admin_routes():
     scan = ScanResult(root=".", routes=[Route(path="/api/users", method="GET", file="app/api.py")])
     assert RouteExposedAdminRule().evaluate(_ctx(scan)) == []
-    assert _legacy_findings(scan, "exposed-admin-route") == []
+    assert _pipeline_findings(scan, "route_exposed_admin") == []
 
 
 @pytest.mark.rule("route_exposed_admin")
 def test_exposed_admin_ignores_low_quality_sources():
     scan = ScanResult(root=".", routes=[Route(path="/admin/users", method="ANY", file="tests/admin_routes.py")])
     assert RouteExposedAdminRule().evaluate(_ctx(scan)) == []
-    assert _legacy_findings(scan, "exposed-admin-route") == []
+    assert _pipeline_findings(scan, "route_exposed_admin") == []
 
 
 # --- AM-ROUTE-003 / route_upload_import (cascade: upload-route) -----------------
@@ -219,21 +219,21 @@ def test_upload_import_positive_and_equivalent():
     assert finding.locations[0].file == "app/upload.py"
     assert finding.locations[0].line == 5
     assert finding.taxonomy is not None and finding.taxonomy.cwe == ["CWE-434"]
-    _assert_equivalent(RouteUploadImportRule(), scan, "upload-route")
+    _assert_equivalent(RouteUploadImportRule(), scan, "route_upload_import")
 
 
 @pytest.mark.rule("route_upload_import")
 def test_upload_import_negative_other_categories():
     scan = ScanResult(root=".", routes=[Route(path="/health", method="GET", file="app/health.py")])
     assert RouteUploadImportRule().evaluate(_ctx(scan)) == []
-    assert _legacy_findings(scan, "upload-route") == []
+    assert _pipeline_findings(scan, "route_upload_import") == []
 
 
 @pytest.mark.rule("route_upload_import")
 def test_upload_import_ignores_low_quality_sources():
     scan = ScanResult(root=".", routes=[Route(path="/import/data", method="POST", file="examples/upload_demo.py")])
     assert RouteUploadImportRule().evaluate(_ctx(scan)) == []
-    assert _legacy_findings(scan, "upload-route") == []
+    assert _pipeline_findings(scan, "route_upload_import") == []
 
 
 # --- AM-ROUTE-004 / route_weak_auth_controls (cascade: weak-auth-route) ---------
@@ -260,7 +260,7 @@ def test_weak_auth_positive_and_equivalent():
     assert finding.locations[0].line == 30
     assert finding.taxonomy is not None
     assert finding.taxonomy.cwe == ["CWE-287", "CWE-307"]
-    _assert_equivalent(RouteWeakAuthControlsRule(), scan, "weak-auth-route")
+    _assert_equivalent(RouteWeakAuthControlsRule(), scan, "route_weak_auth_controls")
 
 
 @pytest.mark.rule("route_weak_auth_controls")
@@ -268,14 +268,14 @@ def test_weak_auth_negative_auth_hint_within_window():
     scan = _auth_scan()
     scan.auth_hints.append(AuthHint(hint="jwt", file="app/web.py", line=35))
     assert RouteWeakAuthControlsRule().evaluate(_ctx(scan)) == []
-    assert _legacy_findings(scan, "weak-auth-route") == []
+    assert _pipeline_findings(scan, "route_weak_auth_controls") == []
 
 
 @pytest.mark.rule("route_weak_auth_controls")
 def test_weak_auth_negative_plugin_declared_auth():
     scan = _auth_scan(auth="required")
     assert RouteWeakAuthControlsRule().evaluate(_ctx(scan)) == []
-    assert _legacy_findings(scan, "weak-auth-route") == []
+    assert _pipeline_findings(scan, "route_weak_auth_controls") == []
 
 
 @pytest.mark.rule("route_weak_auth_controls")
@@ -286,14 +286,14 @@ def test_weak_auth_hint_outside_window_still_flags():
     scan.auth_hints.append(AuthHint(hint="jwt", file="app/web.py", line=300))
     findings = RouteWeakAuthControlsRule().evaluate(_ctx(scan))
     assert len(findings) == 1
-    _assert_equivalent(RouteWeakAuthControlsRule(), scan, "weak-auth-route")
+    _assert_equivalent(RouteWeakAuthControlsRule(), scan, "route_weak_auth_controls")
 
 
 @pytest.mark.rule("route_weak_auth_controls")
 def test_weak_auth_ignores_low_quality_sources():
     scan = ScanResult(root=".", routes=[Route(path="/login", method="POST", file="__tests__/login_flow.ts")])
     assert RouteWeakAuthControlsRule().evaluate(_ctx(scan)) == []
-    assert _legacy_findings(scan, "weak-auth-route") == []
+    assert _pipeline_findings(scan, "route_weak_auth_controls") == []
 
 
 # --- kernel integration ---------------------------------------------------------

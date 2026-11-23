@@ -1,18 +1,17 @@
 """AR044 taint/flow rule tests: per-sink-kind fixtures plus field-for-field
-equivalence against the legacy cascade (``threat_model.generate_findings``).
+equivalence against the scan pipeline (``threat_model.generate_findings``).
 
-The legacy cascade stays the active producer, so every positive fixture is
-checked both ways: the ported rules must emit findings whose ported fields
-(title, severity, confidence, mitigation, evidence, locations, tags,
-ATT&CK techniques, SARIF codeFlows, taxonomy) are exactly what the legacy
-block emits for the same chains. The exploitability fusion is deliberately
-not ported (it needs full-scan slices outside ``ReasoningContext``), so it
-is excluded from the comparison and asserted absent on rule findings.
+The registry is the active producer now (owner decision 2026-11-23), so every
+positive fixture is checked both ways: the rules must emit findings whose
+fields (title, severity, confidence, mitigation, evidence, locations, tags,
+ATT&CK techniques, SARIF codeFlows, taxonomy) are exactly what the pipeline
+emits for the same chains. The exploitability fusion is deliberately not
+ported (it needs full-scan slices outside ``ReasoningContext``), so it is
+excluded from the comparison and asserted absent on rule findings.
 
 AR046 unified the emitted rule id: findings carry ``rule_id=meta.id`` (the
-kernel contract), the legacy cascade still emits the dashed detector ids,
-and the equivalence helpers below compare the two sides through each rule's
-recorded ``legacy_rule_ids`` mapping.
+kernel contract); the pipeline emits the same stable ids the rules emit, and
+the equivalence helpers below key both sides by that stable id.
 
 Self-contained: no conftest, no shared harness — fixtures are constructed
 in-code.
@@ -90,8 +89,8 @@ def _rule_findings(scan: ScanResult) -> dict[str, Finding]:
     return out
 
 
-def _legacy_taint_findings(scan: ScanResult) -> dict[str, Finding]:
-    """The legacy cascade's taint-family findings keyed by rule id."""
+def _pipeline_taint_findings(scan: ScanResult) -> dict[str, Finding]:
+    """The pipeline's taint-family findings keyed by the stable rule id."""
     return {
         finding.rule_id: finding
         for finding in generate_findings(scan)
@@ -99,19 +98,11 @@ def _legacy_taint_findings(scan: ScanResult) -> dict[str, Finding]:
     }
 
 
-def _legacy_to_stable_id() -> dict[str, str]:
-    """legacy detector id -> stable meta.id, from the rules' own mapping."""
-    mapping: dict[str, str] = {}
-    for rule in (*TAINT_SINK_RULES, *FLOW_SINK_RULES, *SPECULATIVE_RULES):
-        for legacy_id in rule.legacy_rule_ids:
-            mapping[legacy_id] = rule.meta.id
-    return mapping
-
-
 def _assert_equivalent(new: Finding, old: Finding, stable_id: str) -> None:
-    """Field-for-field equivalence on every ported field. The one intentional
-    delta is ``rule_id``: the rule emits the stable meta.id while the legacy
-    cascade keeps the dashed detector id (mapping recorded on the rule)."""
+    """Field-for-field equivalence on every ported field. Both sides carry
+    the stable ``rule_id`` (the kernel contract ``rule_id == meta.id``); the
+    pipeline finding differs only by the shared post-passes (score attach,
+    exploitability fusion) that the comparison deliberately excludes."""
     assert new.title == old.title
     assert new.severity == old.severity
     assert new.confidence == old.confidence
@@ -132,14 +123,13 @@ def _assert_equivalent(new: Finding, old: Finding, stable_id: str) -> None:
 
 
 def _assert_matches_legacy(scan: ScanResult) -> None:
-    """Every legacy taint finding has an identical rule finding, and the
-    rules emit nothing the legacy block doesn't."""
-    legacy = _legacy_taint_findings(scan)
+    """Every pipeline taint finding has an identical rule finding, and the
+    rules emit nothing the pipeline doesn't."""
+    pipeline = _pipeline_taint_findings(scan)
     ported = _rule_findings(scan)
-    legacy_to_stable = _legacy_to_stable_id()
-    assert set(ported) == {legacy_to_stable[rid] for rid in legacy}, (sorted(ported), sorted(legacy))
-    for rule_id in legacy:
-        _assert_equivalent(ported[legacy_to_stable[rule_id]], legacy[rule_id], legacy_to_stable[rule_id])
+    assert set(ported) == set(pipeline), (sorted(ported), sorted(pipeline))
+    for rule_id in pipeline:
+        _assert_equivalent(ported[rule_id], pipeline[rule_id], rule_id)
     for finding in ported.values():
         # The exploitability fusion (score_exploitability + attack surfaces)
         # needs full-scan slices outside ReasoningContext — deliberately not
@@ -268,7 +258,7 @@ def test_untraced_sql_chain_raises_no_finding():
     chain = _chain(sink_kind="sql_execute", confidence=0.65)
     scan = _scan([chain])
     assert _rule_findings(scan) == {}
-    assert _legacy_taint_findings(scan) == {}
+    assert _pipeline_taint_findings(scan) == {}
 
 
 # --- negative and source-quality cases ----------------------------------------
@@ -302,7 +292,7 @@ def test_sanitized_chain_is_never_raised():
     chain = _chain(sanitized=True, sanitizer_evidence="markupsafe.escape")
     scan = _scan([chain])
     assert _rule_findings(scan) == {}
-    assert _legacy_taint_findings(scan) == {}
+    assert _pipeline_taint_findings(scan) == {}
     assert ReasoningContext.from_scan(scan).taint_chains == (chain,)  # kept as evidence
 
 
@@ -330,7 +320,7 @@ def test_speculative_flow_kind_chain_produces_nothing():
     chain = _chain(sink_kind="sql_execute", speculative=True, source_kind="query")
     scan = _scan([chain])
     assert _rule_findings(scan) == {}
-    assert _legacy_taint_findings(scan) == {}
+    assert _pipeline_taint_findings(scan) == {}
 
 
 # --- aggregation ----------------------------------------------------------------
@@ -391,14 +381,14 @@ def test_hop_confidence_bands_match_the_legacy_mapping(hops: int):
     finding = _rule_findings(scan)["taint_flow_sql_execute"]
     expected_band = "high" if traced_confidence >= 0.75 else "medium"
     assert finding.confidence == expected_band
-    assert finding.confidence == _legacy_taint_findings(scan)["sql-injection"].confidence
+    assert finding.confidence == _pipeline_taint_findings(scan)["taint_flow_sql_execute"].confidence
     # Pure reach confidence (no traced-flow lift) never clears the HIGH bar
     # on either side — the mapping's taper is preserved end-to-end.
     pure = _chain(sink_kind="sql_execute", hops=hops, confidence=base, source_kind="query")
     pure_scan = _scan([pure])
     pure_finding = _rule_findings(pure_scan)["taint_flow_sql_execute"]
     assert pure_finding.confidence == "medium"
-    assert pure_finding.confidence == _legacy_taint_findings(pure_scan)["sql-injection"].confidence
+    assert pure_finding.confidence == _pipeline_taint_findings(pure_scan)["taint_flow_sql_execute"].confidence
 
 
 def test_confidence_for_hops_mapping_is_unchanged():

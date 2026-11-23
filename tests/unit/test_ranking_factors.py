@@ -105,10 +105,10 @@ def _webhook_scan(route_file: str) -> ScanResult:
 def test_only_source_role_varies_low_quality_is_excluded_from_ranked_findings() -> None:
     production = generate_findings(_webhook_scan("src/app.py"))
     test_code = generate_findings(_webhook_scan("tests/app.py"))
-    assert any(f.rule_id == "public-webhook" for f in production)
+    assert any(f.rule_id == "route_public_webhook" for f in production)
     # Same route, same chain, same surface shape — only the source role varies.
     # The documented down-weight is exclusion from surface-driven findings.
-    assert not any(f.rule_id == "public-webhook" for f in test_code)
+    assert not any(f.rule_id == "route_public_webhook" for f in test_code)
     # The exclusion is a source-quality policy, not a claim the route is safe.
     assert identify_attack_surfaces(_webhook_scan("tests/app.py")), "surface modeling still observes the route"
 

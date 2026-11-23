@@ -105,7 +105,7 @@ def test_every_core_finding_carries_cwe_and_owasp(tmp_path: Path) -> None:
             continue
         assert f.taxonomy is not None, f.rule_id
         assert f.taxonomy.cwe and f.taxonomy.owasp
-    secret = next(f for f in findings if f.rule_id == "hardcoded-secret")
+    secret = next(f for f in findings if f.rule_id == "hardcoded_secret_literals")
     assert secret.taxonomy.cwe == ["CWE-798"]
     assert [t.technique_id for t in secret.attack_techniques] == ["T1552.001"]
 
@@ -223,7 +223,7 @@ def test_defensive_review_json_carries_taxonomy(tmp_path: Path) -> None:
     result = translate_recon(scan)
     payload = build_defensive_review_json(scan, result.attack_surfaces, result.findings, result.attack_paths)
     jsonschema.Draft202012Validator(REVIEW_SCHEMA).validate(payload)
-    weakness = next(w for w in payload["weaknesses_risk_hotspots"]["weaknesses"] if w["rule_id"] == "hardcoded-secret")
+    weakness = next(w for w in payload["weaknesses_risk_hotspots"]["weaknesses"] if w["rule_id"] == "hardcoded_secret_literals")
     assert weakness["taxonomy"]["cwe"] == ["CWE-798"]
 
 
@@ -247,7 +247,8 @@ def test_workflow_cwe_tags_come_from_the_registry_once() -> None:
         root="/",
         workflow_issues=[WorkflowIssue(kind="script_injection", file=".github/workflows/ci.yml", line=3, severity="high")],
     )
-    finding = next(f for f in generate_findings(scan) if f.rule_id == "script-injection")
+    # The workflow family aggregates one finding per kind under the registry id.
+    finding = next(f for f in generate_findings(scan) if f.rule_id == "workflow_security")
     assert [t for t in finding.tags if t.startswith("external/cwe/")] == ["external/cwe/cwe-078", "external/cwe/cwe-094"]
     rule = build_sarif([finding], [])["runs"][0]["tool"]["driver"]["rules"][0]
     cwe_tags = [t for t in rule["properties"]["tags"] if t.startswith("external/cwe/")]

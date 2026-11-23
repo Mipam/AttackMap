@@ -17,6 +17,12 @@ import pytest
 from attackmap.model.taxonomy import taxonomy_for
 from attackmap.models import Route, ScanResult, TaintChain
 from attackmap.reasoning import taint_sinks
+from attackmap.reasoning.rule_specs import (
+    FLOW_FINDING_SPEC as _FLOW_FINDING_SPEC,
+)
+from attackmap.reasoning.rule_specs import (
+    TAINT_FINDING_SPEC as _TAINT_FINDING_SPEC,
+)
 from attackmap.reasoning.taint import analyze_taint
 from attackmap.reasoning.taint_sinks import (
     KINDS,
@@ -27,8 +33,6 @@ from attackmap.reasoning.taint_sinks import (
     validate_sink_entry,
 )
 from attackmap.reasoning.threat_model import (
-    _FLOW_FINDING_SPEC,
-    _TAINT_FINDING_SPEC,
     generate_findings,
 )
 

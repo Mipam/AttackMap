@@ -10,7 +10,10 @@ from attackmap.reasoning.threat_model import rule_catalog
 
 def test_registry_matches_rule_catalog() -> None:
     catalog = {rid: (title, sev) for rid, title, sev in rule_catalog()}
-    assert set(registry()) == set(catalog)
+    # The spec-backed table covers the legacy catalog; the union catalog also
+    # lists the registry's stable ids (their specs live in the rule metadata,
+    # see test_rules_command_lists_the_registry_catalog).
+    assert set(registry()) <= set(catalog)
     for rid, rule in RULES.items():
         title, sev = catalog[rid]
         assert rule.title == title

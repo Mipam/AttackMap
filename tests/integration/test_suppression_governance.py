@@ -68,7 +68,7 @@ def test_pr_cannot_suppress_its_own_finding(tmp_path: Path) -> None:
     pr = tmp_path / "o" / "pr-comment.md"
     result, report = _run(repo, tmp_path / "o", "--suppress-from-ref", "base", "--pr-comment", str(pr))
     assert result.exit_code == 0, result.output
-    assert "hardcoded-secret" in _rules(report)
+    assert "hardcoded_secret_literals" in _rules(report)
     assert "added since base — NOT applied" in _flat(result.output)
     comment = pr.read_text(encoding="utf-8")
     assert "### Suppressions" in comment and "not applied" in comment
@@ -99,7 +99,7 @@ def test_inline_directive_added_by_the_pr_is_pending(tmp_path: Path) -> None:
         f'TOKEN = "{SECRET}"  # attackmap:ignore[hardcoded-secret] fine\n', encoding="utf-8"
     )
     result, report = _run(repo, tmp_path / "o", "--suppress-from-ref", "base")
-    assert "hardcoded-secret" in _rules(report)
+    assert "hardcoded_secret_literals" in _rules(report)
     assert "NOT applied" in _flat(result.output)
 
 
@@ -120,10 +120,10 @@ def test_path_suppression_is_per_instance_not_per_aggregate(tmp_path: Path) -> N
     (repo / "app").mkdir()
     (repo / "app" / "settings.py").write_text(f'K = "{SECRET}"\n', encoding="utf-8")
     (repo / ".attackmap-suppress.yaml").write_text(
-        "suppress:\n  - rule: hardcoded-secret\n    reason: fixtures\n    paths: ['tests/fixtures/**']\n", encoding="utf-8"
+        "suppress:\n  - rule: hardcoded_secret_literals\n    reason: fixtures\n    paths: ['tests/fixtures/**']\n", encoding="utf-8"
     )
     _, report = _run(repo, tmp_path / "o")
-    finding = next(f for f in report["findings"] if f["rule_id"] == "hardcoded-secret")
+    finding = next(f for f in report["findings"] if f["rule_id"] == "hardcoded_secret_literals")
     assert {loc["file"] for loc in finding["locations"]} == {"app/settings.py"}
 
 
@@ -136,7 +136,7 @@ def test_expired_entries_warn_and_are_not_applied(tmp_path: Path) -> None:
     )
     result, report = _run(tmp_path, tmp_path / "o")
     assert result.exit_code == 0
-    assert "hardcoded-secret" in _rules(report)
+    assert "hardcoded_secret_literals" in _rules(report)
     assert f"expired on {past} (owner: alice)" in _flat(result.output)
     strict, _ = _run(tmp_path, tmp_path / "o2", "--strict-suppressions")
     assert strict.exit_code == 2

@@ -71,5 +71,5 @@ def test_env_template_secret_is_not_a_hardcoded_literal() -> None:
         secret_hints=[SecretHint(name="DATABASE_PASSWORD", file=".env.example", line=3, kind="env_template")],
     )
     findings = {f.rule_id: f for f in to_findings(scan)}
-    assert "hardcoded-secret" not in findings
-    assert "secret-env-reference" in findings
+    assert "hardcoded_secret_literals" not in findings
+    assert "secret_env_references" in findings

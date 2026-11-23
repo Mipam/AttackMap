@@ -1,11 +1,12 @@
 """AR043 secret/config rule tests.
 
-The rules in ``attackmap.reasoning.rules.secrets`` are a port of the legacy
-cascade branches (``hardcoded-secret``, ``secret-env-reference`` and the
-``debug_enabled`` config-exposure family). The cascade is still the active
-producer, so every equivalence test here builds one fixture scan and compares
-the rule's findings field-by-field against ``generate_findings`` output for
-the legacy rule id. The negative fixtures ride the real extraction pass
+The rules in ``attackmap.reasoning.rules.secrets`` are a port of the retired
+legacy cascade branches (``hardcoded-secret``, ``secret-env-reference`` and
+the ``debug_enabled`` config-exposure family). The registry is now the active
+producer (owner decision 2026-11-23: snake_case rule ids in reports), so the
+equivalence tests here build one fixture scan and compare the rule's findings
+field-by-field against the pipeline's ``generate_findings`` output for the
+same rule id. The negative fixtures ride the real extraction pass
 (``iter_secret_matches``) to prove placeholders, high-entropy hashes and
 integrity digests never become literal-secret hints in the first place.
 
@@ -86,45 +87,46 @@ def _mixed_secret_scan() -> ScanResult:
     )
 
 
-def _legacy_finding(scan: ScanResult, legacy_rule_id: str):
-    """The cascade's single finding for a legacy rule id on this scan."""
-    matches = [f for f in generate_findings(scan, attack_surfaces=[]) if f.rule_id == legacy_rule_id]
-    assert len(matches) == 1, f"legacy cascade produced {len(matches)} {legacy_rule_id!r} findings"
+def _pipeline_finding(scan: ScanResult, rule_id: str):
+    """The pipeline's single finding for a rule id on this scan."""
+    matches = [f for f in generate_findings(scan, attack_surfaces=[]) if f.rule_id == rule_id]
+    assert len(matches) == 1, f"pipeline produced {len(matches)} {rule_id!r} findings"
     return matches[0]
 
 
-def _assert_identical(actual, legacy) -> None:
-    """Every branch-owned field must match the cascade output exactly.
+def _assert_identical(actual, pipeline) -> None:
+    """Every branch-owned field must match the pipeline output exactly.
 
-    ``rule_id`` differs by design (stable snake_case id, mapping documented in
-    the module docstring) and ``score`` is attached by the cascade's shared
-    post-pass over all findings, not by the ported branch — both are asserted
-    separately, not silently skipped.
+    The rule's direct evaluation and the pipeline both emit the stable
+    snake_case ``rule_id`` now (the registry is the producer; the retired
+    cascade's dashed ids are gone from reports). ``score`` is attached by the
+    pipeline's shared post-pass over all findings, not by the rule itself, so
+    the direct evaluation stays ``None`` — asserted separately, not skipped.
     """
-    assert actual.title == legacy.title
-    assert actual.severity == legacy.severity
-    assert actual.confidence == legacy.confidence
-    assert actual.evidence == legacy.evidence
-    assert actual.mitigation == legacy.mitigation
-    assert actual.tags == legacy.tags
-    assert [(loc.file, loc.line) for loc in actual.locations] == [(loc.file, loc.line) for loc in legacy.locations]
-    assert actual.taxonomy == legacy.taxonomy
+    assert actual.title == pipeline.title
+    assert actual.severity == pipeline.severity
+    assert actual.confidence == pipeline.confidence
+    assert actual.evidence == pipeline.evidence
+    assert actual.mitigation == pipeline.mitigation
+    assert actual.tags == pipeline.tags
+    assert [(loc.file, loc.line) for loc in actual.locations] == [(loc.file, loc.line) for loc in pipeline.locations]
+    assert actual.taxonomy == pipeline.taxonomy
     assert [(t.technique_id, t.name, t.tactic, t.url) for t in actual.attack_techniques] == [
-        (t.technique_id, t.name, t.tactic, t.url) for t in legacy.attack_techniques
+        (t.technique_id, t.name, t.tactic, t.url) for t in pipeline.attack_techniques
     ]
     assert actual.score is None  # scoring stays with the pipeline wiring
-    assert actual.rule_id != legacy.rule_id  # new stable id; legacy id stays in the taxonomy registry
+    assert actual.rule_id == pipeline.rule_id  # both carry the registry's stable id
 
 
 # --- equivalence with the legacy cascade ---------------------------------------
 
 
 @pytest.mark.rule("hardcoded_secret_literals")
-def test_hardcoded_literals_rule_matches_legacy_cascade():
+def test_hardcoded_literals_rule_matches_pipeline():
     scan = _mixed_secret_scan()
     actual = HardcodedSecretLiteralsRule().evaluate(ReasoningContext.from_scan(scan))
     assert len(actual) == 1
-    _assert_identical(actual[0], _legacy_finding(scan, "hardcoded-secret"))
+    _assert_identical(actual[0], _pipeline_finding(scan, "hardcoded_secret_literals"))
     # The literal finding carries only literal-kind hints.
     assert actual[0].evidence == [
         "[credential_assignment] exam… in app/settings.py",
@@ -133,11 +135,11 @@ def test_hardcoded_literals_rule_matches_legacy_cascade():
 
 
 @pytest.mark.rule("secret_env_references")
-def test_env_references_rule_matches_legacy_cascade():
+def test_env_references_rule_matches_pipeline():
     scan = _mixed_secret_scan()
     actual = SecretEnvReferencesRule().evaluate(ReasoningContext.from_scan(scan))
     assert len(actual) == 1
-    _assert_identical(actual[0], _legacy_finding(scan, "secret-env-reference"))
+    _assert_identical(actual[0], _pipeline_finding(scan, "secret_env_references"))
     assert actual[0].evidence == [
         "API_KEY in app/client.py",
         "JWT_SECRET in .env.example",
@@ -145,11 +147,11 @@ def test_env_references_rule_matches_legacy_cascade():
 
 
 @pytest.mark.rule("debug_mode_exposure")
-def test_debug_exposure_rule_matches_legacy_cascade():
+def test_debug_exposure_rule_matches_pipeline():
     scan = _mixed_secret_scan()
     actual = DebugModeExposureRule().evaluate(ReasoningContext.from_scan(scan))
     assert len(actual) == 1
-    _assert_identical(actual[0], _legacy_finding(scan, "debug-enabled"))
+    _assert_identical(actual[0], _pipeline_finding(scan, "debug_mode_exposure"))
     # Aggregated severity is the strongest debug issue (high), and the
     # unrelated weak_csp issue is not part of this family's finding.
     assert actual[0].severity == "high"
@@ -171,7 +173,7 @@ def test_hardcoded_confidence_tiers_down_on_weak_signals_only():
     )
     actual = HardcodedSecretLiteralsRule().evaluate(ReasoningContext.from_scan(scan))
     assert len(actual) == 1
-    _assert_identical(actual[0], _legacy_finding(scan, "hardcoded-secret"))
+    _assert_identical(actual[0], _pipeline_finding(scan, "hardcoded_secret_literals"))
     assert actual[0].confidence == "medium"
 
 
@@ -205,7 +207,7 @@ def test_placeholders_and_templates_never_become_literal_hints():
     assert HardcodedSecretLiteralsRule().evaluate(ctx) == []
     env_findings = SecretEnvReferencesRule().evaluate(ctx)
     assert len(env_findings) == 1
-    _assert_identical(env_findings[0], _legacy_finding(scan, "secret-env-reference"))
+    _assert_identical(env_findings[0], _pipeline_finding(scan, "secret_env_references"))
 
 
 @pytest.mark.rule("hardcoded_secret_literals", "secret_env_references", "debug_mode_exposure")
@@ -242,8 +244,8 @@ def test_clean_scan_emits_no_findings():
 
 
 @pytest.mark.rule("hardcoded_secret_literals")
-def test_low_quality_source_hints_follow_cascade_behavior():
-    # The branch itself does not quality-gate: hints from test/vendored paths
+def test_low_quality_source_hints_follow_pipeline_behavior():
+    # The rule itself does not quality-gate: hints from test/vendored paths
     # that survived extraction (provider shapes still fire there) are reported
     # exactly like first-party ones. The fixture path must genuinely classify
     # as a test file so the case models a low-quality source.
@@ -259,7 +261,7 @@ def test_low_quality_source_hints_follow_cascade_behavior():
     )
     actual = HardcodedSecretLiteralsRule().evaluate(ReasoningContext.from_scan(scan))
     assert len(actual) == 1
-    _assert_identical(actual[0], _legacy_finding(scan, "hardcoded-secret"))
+    _assert_identical(actual[0], _pipeline_finding(scan, "hardcoded_secret_literals"))
     assert [(loc.file, loc.line) for loc in actual[0].locations] == [(test_path, 5)]
 
 
@@ -278,13 +280,13 @@ def test_evidence_is_capped_but_locations_list_every_hint():
     )
     actual = HardcodedSecretLiteralsRule().evaluate(ReasoningContext.from_scan(scan))
     assert len(actual) == 1
-    _assert_identical(actual[0], _legacy_finding(scan, "hardcoded-secret"))
+    _assert_identical(actual[0], _pipeline_finding(scan, "hardcoded_secret_literals"))
     assert len(actual[0].evidence) == 10  # evidence capped, like every cascade branch
     assert len(actual[0].locations) == 12  # locations are never capped (#214)
 
 
 @pytest.mark.rule("debug_mode_exposure")
-def test_debug_evidence_overflow_line_matches_cascade():
+def test_debug_evidence_overflow_line_matches_pipeline():
     scan = ScanResult(
         root="",
         web_hardening_issues=[
@@ -296,7 +298,7 @@ def test_debug_evidence_overflow_line_matches_cascade():
     )
     actual = DebugModeExposureRule().evaluate(ReasoningContext.from_scan(scan))
     assert len(actual) == 1
-    _assert_identical(actual[0], _legacy_finding(scan, "debug-enabled"))
+    _assert_identical(actual[0], _pipeline_finding(scan, "debug_mode_exposure"))
     assert actual[0].evidence[-1] == "+2 more occurrence(s)"
     assert len(actual[0].evidence) == 11
     assert len(actual[0].locations) == 12

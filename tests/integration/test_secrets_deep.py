@@ -145,7 +145,7 @@ def test_acceptance_npmrc_and_short_password_are_redacted_hints(tmp_path: Path) 
 
 def test_keyword_rule_alone_gives_a_medium_confidence_finding(tmp_path: Path) -> None:
     _write(tmp_path, {"src/login.py": POSITIVE["src/login.py"]})
-    finding = next(f for f in translate_recon(scan_repo(tmp_path)).findings if f.rule_id == "hardcoded-secret")
+    finding = next(f for f in translate_recon(scan_repo(tmp_path)).findings if f.rule_id == "hardcoded_secret_literals")
     assert finding.confidence == "medium"
 
 
@@ -159,7 +159,7 @@ def test_raw_values_never_reach_any_report_artifact(tmp_path: Path) -> None:
         "sarif" in p.name for p in produced
     )
     report = json.loads((out / "attackmap-report.json").read_text(encoding="utf-8"))
-    assert any(f.get("rule_id") == "hardcoded-secret" for f in report["findings"])
+    assert any(f.get("rule_id") == "hardcoded_secret_literals" for f in report["findings"])
     for path in produced:
         text = path.read_text(encoding="utf-8", errors="replace")
         for raw in RAW + [NPM_AUTH, ENV_PASS + "\n"]:

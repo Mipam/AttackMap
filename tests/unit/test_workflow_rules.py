@@ -79,7 +79,7 @@ def test_workflow_run_artifact_execution_is_high_cwe_829(tmp_path: Path) -> None
     assert [i.severity for i in issues] == ["high"]
     finding = next(
         f for f in translate_recon(scan_repo(repo)).findings
-        if f.rule_id == "workflow-run-artifact-poisoning"
+        if f.rule_id == "workflow_security"
     )
     assert finding.severity == "high"
     assert "external/cwe/cwe-829" in finding.tags

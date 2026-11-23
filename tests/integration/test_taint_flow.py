@@ -333,7 +333,7 @@ def test_js_destructuring_and_go_decode_targets_propagate(tmp_path: Path) -> Non
 
 def test_orders_demo_sql_injection_finding_cites_every_traced_route() -> None:
     scan = scan_repo(REPO_ROOT / "examples" / "orders-api-demo")
-    sqli = [f for f in generate_findings(scan) if f.rule_id == "sql-injection"]
+    sqli = [f for f in generate_findings(scan) if f.rule_id == "taint_flow_sql_execute"]
     assert len(sqli) == 1
     flows = [e for e in sqli[0].evidence if e.startswith("flow: ")]
     assert any("POST /orders " in e and "app.py:16" in e and "app.py:23" in e for e in flows)
@@ -345,7 +345,7 @@ def test_orders_demo_sql_injection_finding_cites_every_traced_route() -> None:
 
 def test_traced_flow_is_emitted_as_a_sarif_code_flow() -> None:
     scan = scan_repo(REPO_ROOT / "examples" / "orders-api-demo")
-    findings = [f for f in generate_findings(scan) if f.rule_id == "sql-injection"]
+    findings = [f for f in generate_findings(scan) if f.rule_id == "taint_flow_sql_execute"]
     results = build_sarif(findings)["runs"][0]["results"]
     with_flows = [r for r in results if "codeFlows" in r]
     assert with_flows

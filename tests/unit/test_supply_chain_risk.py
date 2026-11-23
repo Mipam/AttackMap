@@ -217,10 +217,13 @@ def test_findings_are_catalogued_and_synthesized(tmp_path: Path) -> None:
     assert {k.replace("_", "-") for k in kinds} <= catalog
     _write(tmp_path, {"requirements.txt": "--index-url http://pypi.corp.example/simple\nreqeusts==2.31\n"})
     findings = translate_recon(scan_repo(tmp_path)).findings
-    by_rule = {f.rule_id: f for f in findings}
-    assert by_rule["insecure-registry"].severity == "high"
-    assert "typosquat-candidate" in by_rule
-    assert all("supply-chain" in by_rule[r].tags for r in ("insecure-registry", "typosquat-candidate"))
+    # The family aggregates one registry finding per kind present.
+    family = [f for f in findings if f.rule_id == "supply_chain_risk"]
+    by_title = {f.title: f for f in family}
+    registry = by_title["Package registry reached over plain HTTP or without TLS verification"]
+    assert registry.severity == "high"
+    typosquat = by_title["Possible typosquatted dependency (one edit from a popular package)"]
+    assert all("supply-chain" in f.tags for f in (registry, typosquat))
 
 
 def test_risky_dependency_on_taint_path_amplifies_exploitability(tmp_path: Path) -> None:

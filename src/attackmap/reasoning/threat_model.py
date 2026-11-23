@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from attackmap.foundation.srcpaths import evidence_locations
-from attackmap.model.taxonomy import cwe_tag, taxonomy_for
+from attackmap.model.taxonomy import taxonomy_for as _taxonomy_for
 from attackmap.models import (
     AttackPath,
     AttackSurface,
@@ -15,14 +15,17 @@ from attackmap.models import (
     Route,
     ScanResult,
     TaintChain,
-    TaintFlowStep,
 )
-from attackmap.policy import LOW_QUALITY_SEGMENTS
 from attackmap.policy import SEVERITY_ORDER as _SEVERITY_ORDER
 from attackmap.policy import WEBHOOK_MUTATING_METHODS as _CSRF_MUTATING_METHODS
 from attackmap.reasoning.analyzer import identify_attack_surfaces
+from attackmap.reasoning.context import ReasoningContext
 from attackmap.reasoning.exploitability import best_by_sink_kind, score_exploitability
-from attackmap.reasoning.finding_identity import dependency_entity_id
+from attackmap.reasoning.finding_format import (
+    _finding_evidence,
+    _is_low_quality_source,
+    _locs,
+)
 from attackmap.reasoning.route_auth_fusion import synthesize_unauthenticated_routes
 from attackmap.reasoning.rule_specs import (
     ANOMALY_FINDING_SPEC as _ANOMALY_FINDING_SPEC,
@@ -34,27 +37,16 @@ from attackmap.reasoning.rule_specs import (
     CRYPTO_FINDING_SPEC as _CRYPTO_FINDING_SPEC,
 )
 from attackmap.reasoning.rule_specs import (
-    FLOW_FINDING_SPEC as _FLOW_FINDING_SPEC,
-)
-from attackmap.reasoning.rule_specs import (
-    SUPPLY_CHAIN_FINDING_SPEC as _SUPPLY_CHAIN_FINDING_SPEC,
-)
-from attackmap.reasoning.rule_specs import (
-    TAINT_FINDING_SPEC as _TAINT_FINDING_SPEC,
-)
-from attackmap.reasoning.rule_specs import (
     TAINT_SINK_LABEL as _TAINT_SINK_LABEL,
 )
 from attackmap.reasoning.rule_specs import (
     WEB_HARDENING_FINDING_SPEC as _WEB_HARDENING_FINDING_SPEC,
 )
 from attackmap.reasoning.rule_specs import (
-    WORKFLOW_FINDING_SPEC as _WORKFLOW_FINDING_SPEC,
-)
-from attackmap.reasoning.rule_specs import (
     rule_catalog as _registry_catalog,
 )
-from attackmap.reasoning.taint_sinks import canonical_kind
+from attackmap.reasoning.rules import REGISTRY as _REGISTRY
+from attackmap.reasoning.rules import evaluate_rules
 
 # Cap on the number of basic-archetype attack paths emitted per scan.
 # Lifted from 1 in #24; capped here to keep reports focused — anything
@@ -68,10 +60,6 @@ MAX_ATTACK_PATHS = 5
 # to their own datastore), emit one path per file up to this many.
 # Keeps the multi-vector story visible without exploding into noise.
 MAX_PER_ARCHETYPE_FANOUT = 3
-
-
-def _surface_label(surface: AttackSurface) -> str:
-    return f"{surface.method} {surface.route} in {surface.file}"
 
 
 def _severity_rank(value: str) -> int:
@@ -102,40 +90,11 @@ def _rule_slug_kind(kind: str) -> str:
     return kind.replace("_", "-")
 
 
-def _locs(items, file_attr: str = "file", line_attr: str = "line") -> list[FindingLocation]:
-    """Structured locations for every item behind a finding (#214)."""
-    out: list[FindingLocation] = []
-    seen: set[tuple[str, int | None]] = set()
-    for item in items:
-        file = getattr(item, file_attr, None)
-        if not file:
-            continue
-        line = getattr(item, line_attr, None)
-        key = (file, line)
-        if key not in seen:
-            seen.add(key)
-            out.append(FindingLocation(file=file, line=line))
-    return out
-
-
 def _fill_missing_locations(findings: list[Finding]) -> None:
     """Findings without structured locations fall back to evidence parsing."""
     for finding in findings:
         if not finding.locations:
             finding.locations = [FindingLocation(file=f, line=ln) for f, ln in evidence_locations(finding.evidence)]
-
-
-def _finding_evidence(surface: AttackSurface) -> str:
-    details: list[str] = [_surface_label(surface)]
-    if surface.auth_signals:
-        details.append(f"auth signals: {', '.join(surface.auth_signals)}")
-    else:
-        details.append("no auth signals observed")
-    if surface.data_store_interaction:
-        details.append("inferred datastore relationship")
-    if surface.outbound_integration:
-        details.append("inferred outbound relationship")
-    return "; ".join(details)
 
 
 def _distinct_by_file(
@@ -244,10 +203,6 @@ class AtprotoChain:
     env_risk: str | None = None
 
 
-# SecretHint kinds that name a secret without containing its value.
-NON_LITERAL_SECRET_KINDS = frozenset({"env_reference", "env_template"})
-
-
 def _extract_prefixed_hints(scan: ScanResult, prefix: str) -> list[tuple[str, str]]:
     grouped_hints: list[tuple[str, str]] = []
     for hint in scan.auth_hints:
@@ -308,11 +263,6 @@ def _cited(label: str, value: str, provenance: dict[str, str], hint_key: str) ->
     source = provenance.get(hint_key)
     base = f"{label}: {value}"
     return f"{base} [via {source}]" if source else base
-
-
-def _is_low_quality_source(path_or_text: str) -> bool:
-    normalized = path_or_text.replace("\\", "/").lower()
-    return any(segment in f"/{normalized}/" for segment in LOW_QUALITY_SEGMENTS)
 
 
 def _runtime_routes(scan: ScanResult) -> list[Route]:
@@ -649,76 +599,6 @@ def confidence_bucket(value: float) -> str:
     return "low"
 
 
-
-# Cap on per-route flow lines cited in one aggregated taint finding, and on
-# the SARIF codeFlows it carries.
-_MAX_FLOW_EVIDENCE = 10
-_MAX_CODE_FLOWS = 20
-
-
-def _flow_evidence(chains: list[TaintChain]) -> list[str]:
-    """One `flow:` evidence line per distinct route with a traced source (#239)."""
-    lines: list[str] = []
-    seen: set[tuple[str, str, str, int | None]] = set()
-    traced = [c for c in chains if c.source_kind]
-    for c in sorted(traced, key=lambda c: (c.hops, c.route_file, c.sink_line or 0, c.route_path)):
-        key = (c.route_method, c.route_path, c.sink_file, c.sink_line)
-        if key in seen:
-            continue
-        seen.add(key)
-        if len(lines) == _MAX_FLOW_EVIDENCE:
-            lines.append(f"+{len(traced) - _MAX_FLOW_EVIDENCE} more traced flow(s)")
-            break
-        lines.append(
-            f"flow: {c.route_method} {c.route_path} — {c.source_kind} source at "
-            f"{c.sink_file}:{c.source_line} → sink at {c.sink_file}:{c.sink_line}"
-        )
-    return lines
-
-
-def _code_flows(chains: list[TaintChain]) -> list[list[TaintFlowStep]]:
-    """Distinct traced flows (by sink + source) for SARIF codeFlows."""
-    out: list[list[TaintFlowStep]] = []
-    seen: set[tuple[str, int | None, int | None]] = set()
-    for c in chains:
-        if not c.flow:
-            continue
-        key = (c.sink_file, c.sink_line, c.source_line)
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(list(c.flow))
-        if len(out) == _MAX_CODE_FLOWS:
-            break
-    return out
-
-
-
-
-
-
-
-
-
-
-
-
-
-def _cwe_tags(kind: str) -> list[str]:
-    """`external/cwe/cwe-NNN` finding tags from the taxonomy registry."""
-    entry = taxonomy_for(_rule_slug_kind(kind))
-    return [cwe_tag(c) for c in entry.cwe] if entry else []
-
-
-
-
-
-
-
-
-
-
-
 def _numeric_to_confidence(value: float) -> str:
     """Map an anomaly's numeric confidence onto the Finding scale."""
     if value >= 0.75:
@@ -907,6 +787,19 @@ def _build_probable_chains(scan: ScanResult) -> list[ProbableChain]:
     return chains
 
 
+# Registry rules with no cascade counterpart (AR042 ports decisions the
+# cascade used only for attack-path narrative and surface context signals).
+# Their findings are a new report surface the owner has not enabled, so the
+# wiring keeps them registry-only: they run under `attackmap rules list` and
+# the eval harness but do not merge into scan reports.
+_REGISTRY_ONLY_RULE_IDS = frozenset({
+    "same_file_datastore_edge",
+    "same_file_external_edge",
+    "same_module_datastore_edge",
+    "same_module_external_edge",
+})
+
+
 def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | None = None) -> list[Finding]:
     surfaces = attack_surfaces if attack_surfaces is not None else identify_attack_surfaces(scan)
     runtime_surfaces = [surface for surface in surfaces if not _is_low_quality_source(surface.file)]
@@ -923,19 +816,6 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
         if _is_framework_mvc_scan(scan)
         else []
     )
-    webhook_surfaces = [
-        surface
-        for surface in runtime_surfaces
-        if surface.category == "webhook"
-        and surface.exposure == "public"
-        and surface.method in {"POST", "PUT", "PATCH", "DELETE", "ANY"}
-        and (surface.data_store_interaction or surface.outbound_integration)
-        and surface.auth != "required"
-        and not any(signal in {"jwt", "oauth", "authorization", "service_auth"} for signal in surface.auth_signals)
-    ]
-    admin_surfaces = [surface for surface in runtime_surfaces if surface.category == "admin"]
-    upload_surfaces = [surface for surface in runtime_surfaces if surface.category == "upload"]
-    auth_surfaces = [surface for surface in runtime_surfaces if surface.category == "auth"]
     public_data_surfaces = [
         surface
         for surface in runtime_surfaces
@@ -949,66 +829,25 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
         and not any(signal in {"jwt", "oauth", "bearer", "token"} for signal in surface.auth_signals)
     ]
 
-    if webhook_surfaces:
-        findings.append(
-            Finding(
-                title="Public webhook endpoint may trust attacker-controlled events",
-                rule_id="public-webhook",
-                severity="high",
-                evidence=[_finding_evidence(surface) for surface in webhook_surfaces[:10]],
-                locations=_locs(webhook_surfaces),
-                mitigation="Require signature verification before processing webhook payloads, reject replays, and keep any downstream state change behind strict validation.",
-                confidence="high",
-                tags=["exposed-endpoint", "auth-missing"],
-            )
-        )
-
-    if admin_surfaces:
-        findings.append(
-            Finding(
-                title="Administrative routes appear reachable from the main application surface",
-                rule_id="exposed-admin-route",
-                severity="high",
-                evidence=[_finding_evidence(surface) for surface in admin_surfaces[:10]],
-                locations=_locs(admin_surfaces),
-                mitigation="Require strong authentication and explicit server-side authorization on every admin action, and move admin routes behind a narrower exposure boundary where possible.",
-                confidence="high",
-                tags=["exposed-endpoint", "auth-missing", "privileged"],
-            )
-        )
-
-    if upload_surfaces:
-        findings.append(
-            Finding(
-                title="Upload or import routes expand attacker-controlled input handling",
-                rule_id="upload-route",
-                severity="high",
-                evidence=[_finding_evidence(surface) for surface in upload_surfaces[:10]],
-                locations=_locs(upload_surfaces),
-                mitigation="Constrain accepted formats, isolate parsers, scan uploaded content, and treat imported files as untrusted all the way through storage and processing.",
-                confidence="medium",
-                tags=["exposed-endpoint", "input-handling"],
-            )
-        )
-
-    if auth_surfaces and not any(surface.auth_signals for surface in auth_surfaces):
-        findings.append(
-            Finding(
-                title="Authentication routes were detected without strong nearby auth controls",
-                rule_id="weak-auth-route",
-                severity="medium",
-                evidence=[_finding_evidence(surface) for surface in auth_surfaces[:10]],
-                locations=_locs(auth_surfaces),
-                mitigation="Review these routes for rate limiting, credential validation, token or session handling, and the exact point where trust is established server-side.",
-                confidence="medium",
-                tags=["exposed-endpoint", "auth-missing"],
-            )
-        )
+    # Registry wiring (owner decision 2026-11-23, commit 11ed09d): the ported
+    # cascade branches (route/auth categories, secrets, debug exposure, taint /
+    # flow, speculative recall, CI workflow, dependency supply-chain, CVE-on-
+    # path) are retired — the registry rules now produce those findings, with
+    # snake_case rule ids. The four AR042 edge rules have no cascade
+    # counterpart: their findings are a new report surface the owner has not
+    # enabled, so they stay registry-only (`attackmap rules`, the eval harness)
+    # and are not merged into scan reports yet.
+    registry_findings = evaluate_rules(ReasoningContext.from_scan(scan))
+    findings.extend(
+        finding
+        for finding in registry_findings
+        if finding.rule_id not in _REGISTRY_ONLY_RULE_IDS
+    )
 
     # Fuse per-route middleware/guard chains + auth_hints into precise
     # "unauthenticated state-changing route" findings (#140). Complements the
-    # category-specific findings above (webhook/admin/upload/auth) by covering
-    # the general public_api mutating-route case with per-route chain resolution.
+    # category-specific registry findings above by covering the general
+    # public_api mutating-route case with per-route chain resolution.
     findings.extend(synthesize_unauthenticated_routes(scan, runtime_surfaces))
 
     if public_integration_surfaces:
@@ -1022,40 +861,6 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 mitigation="Check how outbound requests are authenticated, signed, and authorized, and confirm that untrusted route input cannot directly steer third-party actions.",
                 confidence="medium",
                 tags=["integration-risk", "auth-missing"],
-            )
-        )
-
-    # Split secret findings by kind (#39). Hard-coded literals get HIGH
-    # severity — exposure is broader than env references (visible to
-    # anyone with repo read access, not just runtime access) — and their
-    # own tags so downstream triage and reporting can distinguish them.
-    # `env_template` is a variable *declared* in a template such as
-    # `.env.example` (iac plugin): a name, not a value, so it belongs with the
-    # env references rather than the HIGH hard-coded-literal finding.
-    hardcoded_secrets = [h for h in scan.secret_hints if h.kind not in NON_LITERAL_SECRET_KINDS]
-    env_reference_secrets = [h for h in scan.secret_hints if h.kind in NON_LITERAL_SECRET_KINDS]
-
-    if hardcoded_secrets:
-        # Group by kind for evidence line density; still cap at 10 total.
-        evidence_lines = [
-            f"[{hint.kind}] {hint.name} in {hint.file}"
-            for hint in hardcoded_secrets[:10]
-        ]
-        findings.append(
-            Finding(
-                title="Hard-coded secret literals were found in source or config",
-                rule_id="hardcoded-secret",
-                severity="high",
-                evidence=evidence_lines,
-                locations=_locs(hardcoded_secrets),
-                mitigation=(
-                    "Rotate every detected credential immediately, purge it from git history, "
-                    "and move to environment-injected or vault-managed values. Anyone with read "
-                    "access to the repository already has these secrets."
-                ),
-                # Keyword-proximity assignments alone (#252) are a weaker signal.
-                confidence="high" if any(h.confidence >= 0.6 for h in hardcoded_secrets) else "medium",
-                tags=["secret-exposure", "data-risk", "hardcoded-literal"],
             )
         )
 
@@ -1083,20 +888,6 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 ),
                 confidence="high",
                 tags=["secret-exposure", "data-risk", "git-history"],
-            )
-        )
-
-    if env_reference_secrets:
-        findings.append(
-            Finding(
-                title="Secret-bearing environment variables are referenced in executable paths",
-                rule_id="secret-env-reference",
-                severity="medium",
-                evidence=[f"{hint.name} in {hint.file}" for hint in env_reference_secrets[:10]],
-                locations=_locs(env_reference_secrets),
-                mitigation="Confirm these secrets are injected securely, never logged or returned, rotated regularly, and scoped only to the privileges each route actually needs.",
-                confidence="high",
-                tags=["secret-exposure"],
             )
         )
 
@@ -1162,62 +953,6 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 ),
                 confidence="high" if top_chain.confidence >= 0.7 else "medium",
                 tags=["framework-chain", "data-risk"],
-            )
-        )
-
-    # #60 — CVE hits on SBOM entries. One Finding per vulnerable dep,
-    # aggregating every advisory affecting it in the evidence list.
-    vulns_by_pkg: dict[tuple[str, str, str], list] = {}
-    for vuln in scan.vulnerabilities:
-        vulns_by_pkg.setdefault(
-            (vuln.ecosystem, vuln.package_name, vuln.package_version), []
-        ).append(vuln)
-    for (eco, name, version), pkg_vulns in vulns_by_pkg.items():
-        top_severity = min(
-            (_severity_rank(v.severity) for v in pkg_vulns), default=_severity_rank("medium")
-        )
-        title_severity_word = {0: "critical", 1: "moderate", 2: "low"}.get(top_severity, "moderate")
-        evidence_lines: list[str] = []
-        for v in sorted(pkg_vulns, key=lambda x: (_severity_rank(x.severity), x.id)):
-            summary_snip = (v.summary[:120] + "…") if len(v.summary) > 120 else v.summary
-            aliases = f" (aka {', '.join(v.aliases[:3])})" if v.aliases else ""
-            score = f" CVSS {v.cvss_score:.1f}" if v.cvss_score is not None else ""
-            ref = v.references[0] if v.references else ""
-            ref_part = f" — {ref}" if ref else ""
-            evidence_lines.append(
-                f"{v.id}{aliases} [{v.severity}{score}]: {summary_snip}{ref_part}"
-            )
-        finding_severity = "high" if top_severity == 0 else ("medium" if top_severity == 1 else "low")
-        # Transitive-dependency provenance (#143): cite the resolution path so a
-        # reviewer can see the vulnerable package was pulled in indirectly.
-        transitive = next((v for v in pkg_vulns if not v.direct), None)
-        provenance_lines: list[str] = []
-        if transitive is not None:
-            if transitive.resolution_path:
-                provenance_lines.append(
-                    f"Transitive dependency — resolution path: {transitive.resolution_path}"
-                )
-            else:
-                provenance_lines.append("Transitive (indirect) dependency")
-        findings.append(
-            Finding(
-                title=f"Vulnerable dependency: {name}@{version} ({eco})",
-                rule_id="vulnerable-dependency",
-                entity_id=dependency_entity_id(eco, name, version),
-                severity=finding_severity,  # type: ignore[arg-type]
-                evidence=[
-                    f"{len(pkg_vulns)} known advisor{'y' if len(pkg_vulns) == 1 else 'ies'} for "
-                    f"{title_severity_word}-severity impact",
-                    *provenance_lines,
-                    *evidence_lines[:10],
-                ],
-                mitigation=(
-                    f"Upgrade `{name}` beyond the affected range shown, verify no direct"
-                    " or transitive callers depend on removed symbols, and re-run"
-                    " `attackmap analyze --cve` to confirm the finding clears."
-                ),
-                confidence="high",
-                tags=["cve", "dependency", eco],
             )
         )
 
@@ -1321,6 +1056,8 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
     for issue in scan.web_hardening_issues:
         web_by_kind.setdefault(issue.kind, []).append(issue)
     for kind, spec in _WEB_HARDENING_FINDING_SPEC.items():
+        if kind == "debug_enabled":
+            continue  # ported to the registry (debug_mode_exposure rule, AR043)
         items = web_by_kind.get(kind)
         if not items:
             continue
@@ -1391,83 +1128,6 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
             )
         )
 
-    # CI workflow security (#142). One aggregated finding per issue kind; the
-    # finding severity is the max over that kind's issues (some kinds tier per
-    # instance — semver-tag vs. branch unpinned action, PR vs. PR-target runner).
-    workflow_by_kind: dict[str, list] = {}
-    for issue in scan.workflow_issues:
-        workflow_by_kind.setdefault(issue.kind, []).append(issue)
-    for kind, spec in _WORKFLOW_FINDING_SPEC.items():
-        items = workflow_by_kind.get(kind)
-        if not items:
-            continue
-        severity = max((i.severity for i in items), key=_SEVERITY_ORDER.__getitem__)
-        evidence = []
-        for i in items[:10]:
-            loc = f"{i.file}:{i.line}" if i.line else i.file
-            detail = f" — {i.evidence_text}" if i.evidence_text else ""
-            ctx = f" [{i.context}]" if i.context else ""
-            evidence.append(f"{loc}{ctx}{detail}")
-        if len(items) > 10:
-            evidence.append(f"+{len(items) - 10} more occurrence(s)")
-        findings.append(
-            Finding(
-                title=spec["title"],
-                rule_id=_rule_slug_kind(kind),
-                severity=severity,  # type: ignore[arg-type]
-                evidence=evidence,
-                locations=_locs(items),
-                mitigation=spec["mitigation"],
-                confidence="high",
-                tags=["ci-security", "supply-chain", *_cwe_tags(kind)],
-                attack_techniques=[
-                    AttackTechnique(
-                        technique_id=spec["technique_id"],
-                        name=spec["technique_name"],
-                        tactic=spec["tactic"],
-                        url=f"https://attack.mitre.org/techniques/{spec['technique_id'].replace('.', '/')}/",
-                    )
-                ],
-            )
-        )
-
-    # Dependency supply-chain risk (#247). One aggregated finding per kind,
-    # severity the max over that kind's issues.
-    supply_by_kind: dict[str, list] = {}
-    for issue in scan.supply_chain_issues:
-        supply_by_kind.setdefault(issue.kind, []).append(issue)
-    for kind, spec in _SUPPLY_CHAIN_FINDING_SPEC.items():
-        items = supply_by_kind.get(kind)
-        if not items:
-            continue
-        severity = max((i.severity for i in items), key=_SEVERITY_ORDER.__getitem__)
-        evidence = []
-        for i in items[:10]:
-            loc = f"{i.file}:{i.line}" if i.line else i.file
-            evidence.append(f"{loc} — {i.evidence_text}" if i.evidence_text else loc)
-        if len(items) > 10:
-            evidence.append(f"+{len(items) - 10} more occurrence(s)")
-        findings.append(
-            Finding(
-                title=spec["title"],
-                rule_id=_rule_slug_kind(kind),
-                severity=severity,  # type: ignore[arg-type]
-                evidence=evidence,
-                locations=_locs(items),
-                mitigation=spec["mitigation"],
-                confidence="medium" if kind == "typosquat_candidate" else "high",
-                tags=["supply-chain", "dependency-risk", *_cwe_tags(kind)],
-                attack_techniques=[
-                    AttackTechnique(
-                        technique_id=spec["technique_id"],
-                        name=spec["technique_name"],
-                        tactic=spec["tactic"],
-                        url=f"https://attack.mitre.org/techniques/{spec['technique_id'].replace('.', '/')}/",
-                    )
-                ],
-            )
-        )
-
     # Anomaly / outlier findings (#78). One aggregated finding per kind,
     # each evidence line naming the peer group and the deviation. The
     # finding's confidence tracks the strongest (most consistent) cohort.
@@ -1512,112 +1172,18 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
             )
         )
 
-    # Dangerous taint sinks each get a dedicated, sink-specific finding
-    # (#68) — surfaced even outside the framework-MVC gate that `chains`
-    # sits behind. One aggregated finding per sink kind reachable from a
-    # route, ordered by the spec's declaration.
-    taint_by_kind: dict[str, list] = {}
-    speculative_by_kind: dict[str, list] = {}
-    flow_by_kind: dict[str, list] = {}
-    for chain in scan.taint_chains:
-        # Sanitized chains (#137) are neutralized before the sink — keep them
-        # as evidence in scan.taint_chains but don't raise a finding for them.
-        if chain.sanitized:
-            continue
-        flow_kind = canonical_kind(chain.sink_kind)
-        if flow_kind in _FLOW_FINDING_SPEC:
-            # Reach alone isn't a finding for SQL / generic file opens — only a
-            # traced flow (#239). The #240 path sinks (send_file, sendFile,
-            # include…) are request-gated already, so their chains count.
-            confirmed = chain.source_kind or chain.sink_kind not in ("sql_execute", "dynamic_open")
-            if confirmed and not chain.speculative:
-                flow_by_kind.setdefault(flow_kind, []).append(chain)
-            continue
-        if chain.sink_kind not in _TAINT_FINDING_SPEC:
-            continue
-        # Speculative recall chains (#148a) are segregated into their own
-        # clearly-marked, low-severity finding below — so the confirmed finding
-        # (and default behavior) is untouched and they can't trip fail-on-new-high.
-        if chain.speculative:
-            speculative_by_kind.setdefault(chain.sink_kind, []).append(chain)
-        else:
-            taint_by_kind.setdefault(chain.sink_kind, []).append(chain)
+    # Exploitability fusion (#79): the AR044 taint port deliberately leaves
+    # this pipeline-side. Attach the best 'exploitable now' score for each
+    # sink kind to its registry-produced aggregated taint finding, exactly as
+    # the retired cascade block did — keyed by sink kind, speculative recall
+    # findings excluded.
     taint_findings_by_kind: dict[str, Finding] = {}
-    for kind, spec in _TAINT_FINDING_SPEC.items():
-        kind_chains = taint_by_kind.get(kind)
-        if not kind_chains:
-            continue
-        top = min(kind_chains, key=lambda c: (c.hops, -c.confidence))
-        evidence = [
-            f"route {top.route_method} {top.route_path} in {top.route_file}",
-            f"sink at {top.sink_file}:{top.sink_line} ({_TAINT_SINK_LABEL.get(kind, kind)})",
-            f"import path: {' → '.join([*top.files])} ({top.hops} hop(s))",
-        ]
-        if len(kind_chains) > 1:
-            evidence.append(
-                f"+{len(kind_chains) - 1} more route(s) reach a {_TAINT_SINK_LABEL.get(kind, kind)} sink"
-            )
-        evidence += _flow_evidence(kind_chains)
-        taint_finding = Finding(
-            title=spec["title"],
-            rule_id=_rule_slug_kind(kind),
-            severity=spec["severity"],  # type: ignore[arg-type]
-            evidence=evidence,
-            locations=_locs(kind_chains, "sink_file", "sink_line") + _locs(kind_chains, "route_file", "route_line"),
-            mitigation=spec["mitigation"],
-            confidence="medium",
-            tags=["taint-chain", "input-handling", "data-risk"],
-            attack_techniques=[
-                AttackTechnique(
-                    technique_id=spec["technique_id"],
-                    name=spec["technique_name"],
-                    tactic=spec["tactic"],
-                    url=f"https://attack.mitre.org/techniques/{spec['technique_id'].replace('.', '/')}/",
-                )
-            ],
-        )
-        taint_finding.code_flows = _code_flows(kind_chains)
-        taint_findings_by_kind[kind] = taint_finding
-        findings.append(taint_finding)
-
-    # Flow-confirmed SQL injection / path traversal (#239): one aggregated
-    # finding per kind, citing each traced route→source→sink.
-    for kind, spec in _FLOW_FINDING_SPEC.items():
-        kind_chains = flow_by_kind.get(kind)
-        if not kind_chains:
-            continue
-        top = min(kind_chains, key=lambda c: (c.hops, -c.confidence))
-        evidence = [
-            f"route {top.route_method} {top.route_path} in {top.route_file}",
-            f"sink at {top.sink_file}:{top.sink_line} ({_TAINT_SINK_LABEL.get(kind, kind)})",
-            f"import path: {' → '.join(top.files)} ({top.hops} hop(s))",
-            *_flow_evidence(kind_chains),
-        ]
-        flow_finding = Finding(
-            title=spec["title"],
-            rule_id=spec["rule_id"],
-            severity=spec["severity"],  # type: ignore[arg-type]
-            evidence=evidence,
-            locations=_locs(kind_chains, "sink_file", "sink_line") + _locs(kind_chains, "route_file", "route_line"),
-            mitigation=spec["mitigation"],
-            confidence="high" if any(c.confidence >= 0.75 for c in kind_chains) else "medium",
-            tags=["taint-chain", "taint-flow", "input-handling", "data-risk"],
-            attack_techniques=[
-                AttackTechnique(
-                    technique_id=spec["technique_id"],
-                    name=spec["technique_name"],
-                    tactic=spec["tactic"],
-                    url=f"https://attack.mitre.org/techniques/{spec['technique_id'].replace('.', '/')}/",
-                )
-            ],
-            code_flows=_code_flows(kind_chains),
-        )
-        taint_findings_by_kind[kind] = flow_finding
-        findings.append(flow_finding)
-
-    # Exploitability fusion (#79): attach the best 'exploitable now' score for
-    # each sink kind to its aggregated taint finding, so triage can lead with
-    # the public + no-auth + dangerous-sink combinations.
+    for finding in registry_findings:
+        rule_id = finding.rule_id
+        if rule_id.startswith("taint_sink_"):
+            taint_findings_by_kind[rule_id.removeprefix("taint_sink_")] = finding
+        elif rule_id.startswith("taint_flow_"):
+            taint_findings_by_kind[rule_id.removeprefix("taint_flow_")] = finding
     if taint_findings_by_kind:
         best = best_by_sink_kind(score_exploitability(scan, attack_surfaces))
         for kind, finding in taint_findings_by_kind.items():
@@ -1626,50 +1192,6 @@ def generate_findings(scan: ScanResult, attack_surfaces: list[AttackSurface] | N
                 finding.exploitability = scored.score
                 finding.exploitability_tier = scored.tier
                 finding.exploitability_reference = scored.producer_reference
-
-    # Speculative recall findings (#148a). One low-severity, clearly-marked
-    # finding per sink kind reached only via a widened recall knob (deeper hop
-    # or a relaxed gate). Kept at LOW severity so they stay out of the
-    # `--fail-on-new-high` gate — they're leads for `--hunt --verify` to
-    # adjudicate, not asserted flows. Only ever present in `--recall` scans.
-    for kind, spec in _TAINT_FINDING_SPEC.items():
-        kind_chains = speculative_by_kind.get(kind)
-        if not kind_chains:
-            continue
-        top = min(kind_chains, key=lambda c: (c.hops, -c.confidence))
-        label = _TAINT_SINK_LABEL.get(kind, kind)
-        evidence = [
-            "SPECULATIVE (recall mode): surfaced by widened discovery, not confirmed — "
-            "adjudicate with --hunt --verify",
-            f"route {top.route_method} {top.route_path} in {top.route_file}",
-            f"sink at {top.sink_file}:{top.sink_line} ({label}), {top.hops} hop(s)",
-        ]
-        if len(kind_chains) > 1:
-            evidence.append(f"+{len(kind_chains) - 1} more speculative route(s) reach a {label} sink")
-        findings.append(
-            Finding(
-                title=f"Speculative reach to a {label} sink (recall mode)",
-                rule_id=f"speculative-{_rule_slug_kind(kind)}",
-                severity="low",
-                evidence=evidence,
-                locations=_locs(kind_chains, "sink_file", "sink_line") + _locs(kind_chains, "route_file", "route_line"),
-                mitigation=(
-                    "Recall mode widened taint discovery to surface this reach; provenance "
-                    "is unconfirmed. Verify whether untrusted input actually reaches the sink "
-                    f"(run `--hunt --verify`). If it does, treat it as a {spec['title'].lower()}."
-                ),
-                confidence="low",
-                tags=["taint-chain", "speculative", "recall"],
-                attack_techniques=[
-                    AttackTechnique(
-                        technique_id=spec["technique_id"],
-                        name=spec["technique_name"],
-                        tactic=spec["tactic"],
-                        url=f"https://attack.mitre.org/techniques/{spec['technique_id'].replace('.', '/')}/",
-                    )
-                ],
-            )
-        )
 
     if not findings:
         findings.append(
@@ -2064,5 +1586,20 @@ def generate_attack_paths(scan: ScanResult, attack_surfaces: list[AttackSurface]
 
 def rule_catalog() -> list[tuple[str, str, str]]:
     """Every core rule id with its finding title and severity (#223), for
-    `attackmap rules` and the docs. Family specs are expanded per kind."""
-    return _registry_catalog()
+    `attackmap rules` and the docs. Family specs are expanded per kind.
+
+    Post-wiring (owner decision 2026-11-23) the catalog lists both id forms:
+    the retired dashed ids of the ported cascade families (still accepted by
+    suppressions through ``rule_id_aliases`` and still keyed in
+    ``RULE_TAXONOMY``) and the registry's stable snake_case ids reports now
+    emit. Registry rules without a taxonomy entry of their own (the
+    workflow/supply-chain aggregates, the demo rule, the registry-only edge
+    rules) are not catalogued here — tests/rules covers them directly.
+    """
+    rules = list(_registry_catalog())
+    rules.extend(
+        (rule.meta.id, rule.meta.title, rule.meta.severity)
+        for rule in _REGISTRY.all_rules()
+        if _taxonomy_for(rule.meta.id) is not None
+    )
+    return sorted(rules)

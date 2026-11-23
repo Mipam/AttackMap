@@ -63,13 +63,15 @@ from typing import TYPE_CHECKING, Literal
 
 from ...foundation.srcpaths import evidence_locations
 from ...model import (
+    AttackTechnique,
     Finding,
     FindingLocation,
+    FindingTaxonomy,
     SupplyChainIssue,
     Vulnerability,
     WorkflowIssue,
 )
-from ...model.taxonomy import cwe_tag, taxonomy_for
+from ...model.taxonomy import ATTACK_TECHNIQUES, attack_url, cwe_tag, taxonomy_for
 from ...policy import SEVERITY_ORDER, SEVERITY_RANK
 from ..rule_specs import SUPPLY_CHAIN_FINDING_SPEC, WORKFLOW_FINDING_SPEC
 from .base import RuleMeta, confidence_band
@@ -146,6 +148,39 @@ def _issue_evidence_line(issue: WorkflowIssue | SupplyChainIssue, *, with_contex
     return f"{loc}{ctx}{detail}"
 
 
+def _legacy_enrichment(kind: str) -> tuple[FindingTaxonomy | None, list[AttackTechnique] | None]:
+    """The ``(taxonomy, attack_techniques)`` the legacy cascade branch's
+    finding carried after the ``Finding`` model validator processed its
+    dashed per-kind rule id: the taxonomy object always attaches from the
+    legacy entry, and ATT&CK is replaced by the registry rendering whenever
+    the entry lists attack ids (otherwise the spec-built techniques the
+    cascade passed explicitly survive).
+
+    Replicated here field-for-field because the two aggregate rule ids are
+    deliberately unregistered in the taxonomy, so the model validator is a
+    no-op for them — without this the wiring would silently drop the CWE /
+    OWASP / ASVS / ATT&CK enrichment the cascade attached via the per-kind
+    dashed ids.
+    """
+    entry = taxonomy_for(_legacy_rule_id(kind))
+    if entry is None:
+        return None, None
+    taxonomy = FindingTaxonomy(
+        cwe=entry.cwe_ids,
+        owasp=list(entry.owasp),
+        asvs=list(entry.asvs),
+        attack=list(entry.attack),
+    )
+    if not entry.attack:
+        return taxonomy, None
+    techniques = [
+        AttackTechnique(technique_id=tid, name=name, tactic=tactic, url=attack_url(tid))
+        for tid in entry.attack
+        for name, tactic in [ATTACK_TECHNIQUES[tid]]
+    ]
+    return taxonomy, techniques
+
+
 def _aggregate_kind_findings(
     issues: tuple[WorkflowIssue | SupplyChainIssue, ...],
     spec_table: dict[str, dict[str, str]],
@@ -172,6 +207,7 @@ def _aggregate_kind_findings(
         evidence = [_issue_evidence_line(i, with_context=with_context) for i in items[:_EVIDENCE_CAP]]
         if len(items) > _EVIDENCE_CAP:
             evidence.append(f"+{len(items) - _EVIDENCE_CAP} more occurrence(s)")
+        taxonomy, techniques = _legacy_enrichment(kind)
         findings.append(
             Finding(
                 title=spec["title"],
@@ -182,6 +218,21 @@ def _aggregate_kind_findings(
                 mitigation=spec["mitigation"],
                 confidence=confidence_by_kind[kind],
                 tags=[*base_tags, *_cwe_tags(kind)],
+                taxonomy=taxonomy,
+                # Unregistered aggregate ids get no validator enrichment, so
+                # carry the legacy per-kind enrichment explicitly: the
+                # registry rendering when the entry lists attack ids, else
+                # the spec-built technique the cascade passed explicitly.
+                attack_techniques=techniques
+                if techniques is not None
+                else [
+                    AttackTechnique(
+                        technique_id=spec["technique_id"],
+                        name=spec["technique_name"],
+                        tactic=spec["tactic"],
+                        url=f"https://attack.mitre.org/techniques/{spec['technique_id'].replace('.', '/')}/",
+                    )
+                ],
             )
         )
     return findings

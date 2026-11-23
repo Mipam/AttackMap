@@ -39,14 +39,14 @@ def _findings(tmp_path: Path) -> list[Finding]:
 def test_catalog_ids_are_unique_and_slug_shaped() -> None:
     ids = [r for r, _, _ in rule_catalog()]
     assert len(ids) == len(set(ids))
-    assert all(re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", r) for r in ids)
+    assert all(re.fullmatch(r"[a-z0-9]+(?:[-_][a-z0-9]+)*", r) for r in ids)
 
 
 def test_every_core_finding_has_a_catalogued_rule_id(tmp_path: Path) -> None:
     findings = _findings(tmp_path)
     assert findings and all(f.rule_id for f in findings)
     assert {f.rule_id for f in findings} <= RULE_IDS
-    assert {"hardcoded-secret", "insecure-tls", "weak-password-hash"} <= {f.rule_id for f in findings}
+    assert {"hardcoded_secret_literals", "insecure-tls", "weak-password-hash"} <= {f.rule_id for f in findings}
 
 
 def test_sarif_rule_id_is_the_stable_id(tmp_path: Path) -> None:
@@ -64,14 +64,14 @@ def test_rule_id_survives_a_title_rewording() -> None:
 
 
 def test_suppress_by_rule_id_and_legacy_title_slug_with_warning(tmp_path: Path) -> None:
-    finding = next(f for f in _findings(tmp_path) if f.rule_id == "hardcoded-secret")
+    finding = next(f for f in _findings(tmp_path) if f.rule_id == "hardcoded_secret_literals")
     by_id = apply_suppressions([finding], SuppressionSet([Suppression(reason="r", rule="hardcoded-secret")]))
     assert by_id.suppressed and not by_id.notices
 
     legacy = title_slug(finding.title)
     by_slug = apply_suppressions([finding], SuppressionSet([Suppression(reason="r", rule=legacy)]))
     assert by_slug.suppressed
-    assert any("legacy" in n and "hardcoded-secret" in n for n in by_slug.notices)
+    assert any("legacy" in n and "hardcoded_secret_literals" in n for n in by_slug.notices)
 
 
 def test_unused_entries_are_reported(tmp_path: Path) -> None:

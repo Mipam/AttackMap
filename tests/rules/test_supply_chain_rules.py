@@ -1,13 +1,14 @@
 """AR045 tests: supply-chain/workflow rule port and the context widening.
 
 The rules in ``attackmap.reasoning.rules.supply_chain`` re-emit exactly the
-findings the legacy ``threat_model.generate_findings`` cascade produces for
-the #60 CVE, #142 GitHub-workflow and #247 dependency supply-chain branches;
-the equivalence tests run BOTH producers on the same in-code fixture scans
-and compare every preserved field (title, severity, confidence band,
-mitigation, evidence, locations, tags). Fixtures follow the todo card: an
-unpinned action, curl-pipe-bash, a write-all token, OIDC misuse, a CVE on
-the dependency path, plus a negative (hardened) scan.
+findings the scan pipeline (``threat_model.generate_findings``, now the
+registry producer) emits for the #60 CVE, #142 GitHub-workflow and #247
+dependency supply-chain families; the equivalence tests run the rule and the
+pipeline on the same in-code fixture scans and compare every preserved field
+(title, severity, confidence band, mitigation, evidence, locations, tags).
+Fixtures follow the todo card: an unpinned action, curl-pipe-bash, a
+write-all token, OIDC misuse, a CVE on the dependency path, plus a negative
+(hardened) scan.
 
 Self-contained by design: models are built in-code, no shared conftest or
 harness (AR047 owns those).
@@ -192,7 +193,7 @@ def _clean_scan() -> ScanResult:
 
 
 def _legacy_findings(scan: ScanResult) -> list[Finding]:
-    """The old-cascade findings for a fixture scan (still the active producer)."""
+    """The pipeline's findings for a fixture scan (the registry is the producer)."""
     return generate_findings(scan)
 
 
@@ -253,7 +254,7 @@ def test_context_widening_carries_supply_chain_slices():
 @pytest.mark.rule("vulnerable_dependency")
 def test_cve_on_path_equivalence():
     scan = _cve_scan()
-    old = _old_by_title([f for f in _legacy_findings(scan) if f.rule_id == "vulnerable-dependency"])
+    old = _old_by_title([f for f in _legacy_findings(scan) if f.rule_id == "vulnerable_dependency"])
     new = VulnerableDependencyRule().evaluate(ReasoningContext.from_scan(scan))
     assert {f.title for f in new} == set(old)
     for finding in new:
@@ -299,9 +300,8 @@ def test_workflow_findings_equivalence():
     assert {f.rule_id for f in new} == {"workflow_security"}
     assert {_TITLE_TO_WORKFLOW_KIND[f.title] for f in new} == kinds_present
     for finding in new:
-        legacy_id = _legacy_id(_TITLE_TO_WORKFLOW_KIND[finding.title])
         old = old_by_title[finding.title]
-        assert old.rule_id == legacy_id  # the compared branch is the legacy one
+        assert old.rule_id == "workflow_security"  # the pipeline now emits the aggregate snake_case id
         _assert_finding_equivalent(finding, old)
 
 
@@ -363,9 +363,8 @@ def test_dependency_findings_equivalence():
     assert {f.rule_id for f in new} == {"supply_chain_risk"}
     assert {_TITLE_TO_SUPPLY_KIND[f.title] for f in new} == kinds_present
     for finding in new:
-        legacy_id = _legacy_id(_TITLE_TO_SUPPLY_KIND[finding.title])
         old = old_by_title[finding.title]
-        assert old.rule_id == legacy_id
+        assert old.rule_id == "supply_chain_risk"  # the pipeline now emits the aggregate snake_case id
         _assert_finding_equivalent(finding, old)
 
 

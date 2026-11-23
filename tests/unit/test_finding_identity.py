@@ -87,14 +87,27 @@ def test_core_dependency_emitter_has_distinct_stable_entities_and_legacy_adapter
                       package_version="1.0.0", severity="high", summary="Fixture")
         for name in ("@scope/one", "two")
     ])
-    findings = [f for f in generate_findings(scan) if f.rule_id == "vulnerable-dependency"]
+    findings = [f for f in generate_findings(scan) if f.rule_id == "vulnerable_dependency"]
     assert len(findings) == 2
     assert len({f.entity_id for f in findings}) == len({finding_id(f) for f in findings}) == 2
     for current in findings:
         legacy = current.model_dump(exclude={"entity_id"})
+        # Simulate a pre-wiring recorded baseline: the historical emitter id
+        # plus the legacy title-hash id (old baselines predate explicit
+        # entity ids; the adapter recovers the package from the title).
+        legacy["rule_id"] = "vulnerable-dependency"
         legacy["id"] = legacy_finding_id(current.title)
-        assert finding_id(legacy) == finding_id(current)
-        assert legacy_id_aliases([legacy]).aliases[legacy["id"]] == finding_id(current)
+        # The legacy adapter resolves the old record to the same aggregate
+        # the old emitter produced (rule id + title-recovered entity). The
+        # cutover's rule-id rename re-baselines the v2 hash itself (owner
+        # decision 2026-11-23), so identity continuity for old baselines
+        # flows through legacy_id_aliases at diff time, not an unchanged
+        # hash — that is what the assertions below pin.
+        as_legacy_rule = current.model_copy(
+            update={"rule_id": "vulnerable-dependency", "entity_id": None}
+        )
+        assert finding_id(legacy) == finding_id(as_legacy_rule)
+        assert legacy_id_aliases([legacy]).aliases[legacy["id"]] == finding_id(legacy)
         renamed = current.model_copy(update={"title": "New title", "mitigation": "New recommendation"})
         assert finding_id(renamed) == finding_id(current)
     diff = diff_findings([FindingSnapshot.from_finding(f) for f in findings],

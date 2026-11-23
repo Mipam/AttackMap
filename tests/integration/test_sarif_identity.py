@@ -49,7 +49,7 @@ def test_real_scan_validates_against_the_official_schema(tmp_path: Path) -> None
 
 def test_one_result_per_instance_with_stable_partial_fingerprint(tmp_path: Path) -> None:
     repo = _repo(tmp_path / "r", {"a.py": f'A = "{SECRET}"\n', "b.py": f'B = "{SECRET}"\n'})
-    results = [r for r in _sarif(repo)["runs"][0]["results"] if r["ruleId"] == "hardcoded-secret"]
+    results = [r for r in _sarif(repo)["runs"][0]["results"] if r["ruleId"] == "hardcoded_secret_literals"]
     assert len(results) == 2
     assert all(len(r["locations"]) == 1 for r in results)
     fps = {r["partialFingerprints"]["attackmapInstance/v1"] for r in results}
@@ -59,10 +59,10 @@ def test_one_result_per_instance_with_stable_partial_fingerprint(tmp_path: Path)
 
 def test_partial_fingerprint_survives_new_sibling_and_line_drift(tmp_path: Path) -> None:
     repo = _repo(tmp_path / "r", {"a.py": f'A = "{SECRET}"\n'})
-    before = {r["partialFingerprints"]["attackmapInstance/v1"] for r in _sarif(repo)["runs"][0]["results"] if r["ruleId"] == "hardcoded-secret"}
+    before = {r["partialFingerprints"]["attackmapInstance/v1"] for r in _sarif(repo)["runs"][0]["results"] if r["ruleId"] == "hardcoded_secret_literals"}
     (repo / "a.py").write_text(f'"""doc"""\n\n\nA = "{SECRET}"\n', encoding="utf-8")
     (repo / "b.py").write_text(f'B = "{SECRET}"\n', encoding="utf-8")
-    after = {r["partialFingerprints"]["attackmapInstance/v1"] for r in _sarif(repo)["runs"][0]["results"] if r["ruleId"] == "hardcoded-secret"}
+    after = {r["partialFingerprints"]["attackmapInstance/v1"] for r in _sarif(repo)["runs"][0]["results"] if r["ruleId"] == "hardcoded_secret_literals"}
     assert before <= after and len(after) == 2
 
 

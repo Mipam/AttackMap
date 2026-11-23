@@ -52,7 +52,7 @@ from typing import TYPE_CHECKING
 from ...model import AttackSurface, Finding
 from ...policy import WEBHOOK_MUTATING_METHODS
 from ..analyzer import _auth_hints_for_route
-from ..threat_model import _finding_evidence, _is_low_quality_source, _locs
+from ..finding_format import _finding_evidence, _is_low_quality_source, _locs
 from .base import RuleMeta, confidence_band
 from .registry import REGISTRY
 
