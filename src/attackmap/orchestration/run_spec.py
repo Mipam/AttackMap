@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any
 
 
@@ -109,6 +110,11 @@ class RunSpec:
     Repository paths, the output root, cancel hooks and fleet event callbacks
     remain request-level (AR025 keeps them there); everything that describes
     *how* a scan runs lives here in frozen groups.
+
+    One exception (AR062): the library entry point ``attackmap.analyze`` has
+    no request object, so a spec built for it names its repositories and
+    output root here (``repos`` / ``output``). Every adapter leaves both at
+    their defaults and the pipeline never reads them.
     """
 
     analyzer: AnalyzerSelection = AnalyzerSelection()
@@ -127,6 +133,9 @@ class RunSpec:
     fail_on_new_high: bool = False
     fail_on_new_suppression: bool = False
     pr_comment: str | None = None
+    # Library-only inputs (see the class docstring); unused by every adapter.
+    repos: tuple[Path | str, ...] = ()
+    output: Path | str | None = None
 
     @classmethod
     def from_scan_request(cls, request: Any) -> RunSpec:
