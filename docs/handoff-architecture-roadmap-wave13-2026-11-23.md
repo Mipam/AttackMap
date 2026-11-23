@@ -104,6 +104,24 @@ AR067; AR080/AR081 need AR061/AR069 (all done); AR088 needs AR031 (done).
 
 ## 3. What landed since the wave-11 handoff (all verified, see commits)
 
+Wave 14 (parallel lanes, post-incident protocol — agents never git-mutate;
+parent integrates after gates; 2 lanes max, lease disjointness verified
+against current code before launch):
+- **Wave 14a** (`ddc0046`): **AR049** rationale + evidence on every Finding
+  (AC-207; registry RuleMeta + observed evidence line, 12 cascade backfills,
+  SARIF property bag, redaction-aware; identity hash unchanged) +
+  **AR088** 8 ADRs + index + `tools/arch_drift.py` (cycles/fan-in/function/
+  broad-excepts per commit; AC-409).
+- **Wave 14b** (`2215223`): **AR050** all ranking/dedupe policy centralized in
+  `reasoning/ranking.py` (AC-208; total deterministic ordering with id
+  tie-breaker; identity hash unchanged; models fan-in 60→61 recorded in
+  baseline.json as the structural cost of the mandated module; the
+  `rules/evaluation.py` mirror copy is intentional rules-lane property, do NOT
+  centralize it) + yaml RecursionError hardening in `output/suppress.py` and
+  `surfaces/ui/suppress_write.py` with 3 regression tests (before/after
+  proven). Follow-up candidate: `output/sarif.py:49-51` local severity table.
+- Suite after wave 14b: **6990 passed, 11 known host failures** (§9).
+
 Wave 11 (commits `949a324`, `0866916`, `4ab1a3b`, `db883eb`, integration `a2a84ba`):
 - **AR047** rule test harness (439 tests, meta-tests + mutation green).
 - **AR062** public library API `surfaces/api.py` (`analyze(spec)`; import 0.001 s;
