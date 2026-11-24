@@ -104,6 +104,27 @@ AR067; AR080/AR081 need AR061/AR069 (all done); AR088 needs AR031 (done).
 
 ## 3. What landed since the wave-11 handoff (all verified, see commits)
 
+Wave 21 (single lane; AR082 slice 1 in-repo, lease `sdk`):
+- **AR082 slice 1** (`sdk`) — SDK v2 flip: `EXTRACTION_PROTOCOL_VERSION` → "2.0"
+  (`sdk/analyzer_contracts.py`); SDK 2.0 + indefinite v1-adapter compatibility
+  documented in sdk docstrings; new `tools/check_analyzer_versions.py`
+  (`python -m tools.check_analyzer_versions`, `--json`) enumerating built-ins +
+  `attackmap.analyzers` entry points via the same discovery as `attackmap
+  modules --json`. All **9 current built-ins** declare 2.0 (python-web,
+  javascript-web, php-web, config, php-laminas, omeka-s, node-atproto,
+  python-service, default — todo.md's "9 built-ins" was correct; the docs
+  page claiming 4 is stale). v1 adapter exercised only by the compat test
+  (`test_ar082_protocol_flip_keeps_v1_adapter_lossless`). Contract suite
+  247 passed; full suite **7166 passed, 11 known failures** (§9). Ratchet
+  PASS unchanged, identity unchanged.
+- Slice 2 (migrate the 15 external plugin repos) is **owner-approved to be
+  forked under github.com/Mipam** (decision 2026-11-24) — wave 22. Plugin
+  enumeration path of the check tool is structurally verified only; no
+  plugins installed in `.venv` yet.
+- **Owner rule 2026-11-24: never push anywhere except github.com/Mipam/AttackMap
+  (and its forks under the Mipam account). The old Harriis10/AttackMap PR #1
+  must not be repeated.**
+
 Wave 20 (single lane; AR081 lease `portfolio` verified disjoint — new files only
 plus 3 registration lines in `surfaces/cli.py`):
 - **AR081** (`portfolio`) — portfolio mode (**AC-402 MET**): `attackmap
