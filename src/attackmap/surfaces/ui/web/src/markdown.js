@@ -1,5 +1,9 @@
 /* Minimal but real Markdown renderer for the GUI (headings, bold/italic,
-   lists incl. "- [HIGH]", tables, code fences, hr, links, paragraphs). */
+   lists incl. "- [HIGH]", tables, code fences, hr, links, paragraphs).
+   AR065: ES module — imports mermaid-lite explicitly, exports renderMarkdown;
+   rendering logic unchanged. */
+
+import { extractMermaidBlocks, renderMermaidBlock } from "./mermaid-lite.js";
 
 function mdEscape(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -26,7 +30,7 @@ function mdSplitRow(line) {
   return trimmed.split("|").map((c) => c.trim());
 }
 
-function renderMarkdown(src) {
+export function renderMarkdown(src) {
   if (!src) return `<div class="empty">No review yet.</div>`;
   const mermaid = extractMermaidBlocks(src);
   let mi = 0;

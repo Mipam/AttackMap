@@ -15,13 +15,10 @@ during AR063; behavior is unchanged.
 from __future__ import annotations
 
 import logging
-import os
-import subprocess
-import threading
-import uuid
 from pathlib import Path
 from typing import Any
 
+from attackmap.surfaces.ui import dialogs
 from attackmap.surfaces.ui.api.routes import ApiResponse, route, state_response
 from attackmap.surfaces.ui.api.schemas import (
     ExportRequest,
@@ -35,6 +32,7 @@ from attackmap.surfaces.ui.api.schemas import (
 )
 from attackmap.surfaces.ui.export_md import (
     SUPPORTED_SUFFIXES,
+    render_pdf,
     render_view_markdown,
     suggested_export_name,
 )
@@ -93,9 +91,9 @@ def pick_save(app: Any, body: dict[str, Any], query: dict[str, list[str]]) -> Ap
        summary="Open the report folder in the system shell")
 def reveal_output(app: Any, body: dict[str, Any], query: dict[str, list[str]]) -> ApiResponse:
     RevealRequest.model_validate(body)
-    if app.output and app.output.exists() and hasattr(os, "startfile"):
+    if app.output and app.output.exists():
         target = current_generation(app.output) or app.output
-        os.startfile(target)
+        dialogs.reveal_path(str(target))
     return state_response(app, RevealResponse)
 
 
@@ -143,31 +141,10 @@ def _handle_export(app: Any, body: dict[str, Any]) -> dict[str, Any]:
             safe_write_text(out_dir, target, markdown)
             return {"code": 200, "body": {"ok": True, "path": str(target)}}
         html = _markdown_to_pdf_html(markdown, repo, view)
-        tmp_html = out_dir / f"._attackmap_export_{uuid.uuid4().hex}.html"
-        tmp_html.write_text(html, encoding="utf-8")
-        try:
-            browser = _find_chrome_or_edge()
-            if not browser:
-                raise RuntimeError("Chrome or Edge not found")
-            subprocess.run(
-                [
-                    str(browser),
-                    "--headless",
-                    "--disable-gpu",
-                    "--no-pdf-header-footer",
-                    f"--print-to-pdf={target}",
-                    str(tmp_html),
-                ],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=60,
-            )
-        finally:
-            try:
-                tmp_html.unlink()
-            except OSError:
-                pass
+        # AR066: browser invocation lives behind the PdfBackend protocol
+        # (export_md.render_pdf); typed PdfUnavailable/PdfRenderError surface
+        # as the same 400 JSON via the generic handler below.
+        render_pdf(html, target)
         return {"code": 200, "body": {"ok": True, "path": str(target)}}
     except Exception as exc:
         return {"code": 400, "body": {"error": str(exc)}}
@@ -204,43 +181,17 @@ def _markdown_to_pdf_html(markdown: str, repo: str, view: str) -> str:
 </html>"""
 
 
-def _find_chrome_or_edge() -> Path | None:
-    candidates = [
-        Path(os.environ.get("PROGRAMFILES(x86)", "")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
-        Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
-        Path(os.environ.get("PROGRAMFILES", "")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
-        Path(os.environ.get("PROGRAMFILES(x86)", "")) / "Google" / "Chrome" / "Application" / "chrome.exe",
-        Path(os.environ.get("PROGRAMFILES", "")) / "Google" / "Chrome" / "Application" / "chrome.exe",
-        Path(os.environ.get("LOCALAPPDATA", "")) / "Google" / "Chrome" / "Application" / "chrome.exe",
-    ]
-    for candidate in candidates:
-        if candidate and candidate.is_file():
-            return candidate
-    return None
-
-
 def _pick_save_path(suggested_name: str) -> str | None:
-    if threading.current_thread() is not threading.main_thread():
-        return None
+    # AR064/AC-306: dispatched to the main thread by dialogs.py; the HTTP
+    # handler thread is a ThreadingHTTPServer worker, never the main thread.
     try:
-        import tkinter as tk
-        from tkinter import filedialog
-    except ImportError:
+        return dialogs.save_path(suggested_name)
+    except dialogs.DialogBackendUnavailable:
+        # Recorded, not swallowed (AC-012): no-tkinter/headless hosts fail here.
         logger.debug("tkinter is unavailable; save dialog disabled.", exc_info=True)
         return None
-    try:
-        root = tk.Tk()
-        root.withdraw()
-        root.wm_attributes("-topmost", 1)
-        chosen = filedialog.asksaveasfilename(
-            title="Save report",
-            defaultextension=".md",
-            initialfile=suggested_name or "attackmap-report.md",
-            filetypes=[("Markdown files", "*.md"), ("PDF files", "*.pdf"), ("All files", "*.*")],
-        )
-        root.destroy()
-        return chosen if chosen else None
-    except tk.TclError:
-        # Recorded, not swallowed (AC-012): headless/no-display hosts fail here.
-        logger.debug("tkinter save dialog failed.", exc_info=True)
+    except dialogs.NoMainLoopError:
+        # No main-thread pump installed (browser fallback): same deferred
+        # empty result the pre-AR064 off-thread guard produced.
+        logger.debug("save dialog deferred: no main-thread dialog hook.", exc_info=True)
         return None

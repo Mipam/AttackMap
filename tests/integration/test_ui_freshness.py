@@ -139,8 +139,13 @@ def test_frontend_freshness_sequences():
     node = shutil.which("node")
     if not node:
         pytest.skip("Node.js is needed for the shipped frontend integration tests")
+    # AR065: the harness loads the frontend as ES modules via
+    # vm.SourceTextModule, which still requires the flag on Node 24.
     result = subprocess.run(
-        [node, str(Path(__file__).parents[1] / "ui_freshness.cjs")],
-        capture_output=True, text=True, encoding="utf-8", timeout=30,
+        [node, "--experimental-vm-modules", str(Path(__file__).parents[1] / "ui_freshness.cjs")],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr

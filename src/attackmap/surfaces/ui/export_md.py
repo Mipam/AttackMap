@@ -2,9 +2,47 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
+from attackmap.surfaces.ui.export.pdf import (
+    ChromeBackend,
+    EdgeBackend,
+    PdfBackend,
+    PdfRenderError,
+    PdfUnavailable,
+    default_backend,
+    detect_backends,
+    render_html_to_pdf,
+)
+
+__all__ = [
+    "SUPPORTED_SUFFIXES",
+    "ChromeBackend",
+    "EdgeBackend",
+    "PdfBackend",
+    "PdfRenderError",
+    "PdfUnavailable",
+    "default_backend",
+    "detect_backends",
+    "render_pdf",
+    "render_view_markdown",
+    "suggested_export_name",
+]
+
 SUPPORTED_SUFFIXES = {".md", ".pdf"}
+
+
+def render_pdf(html: str, out: Path, *, backend: PdfBackend | None = None) -> None:
+    """Print ``html`` to a PDF at ``out`` via the PDF backend protocol (AC-312).
+
+    Drop-in replacement for the inline headless-Chrome invocation used by the
+    export handler: same HTML input, same ``--print-to-pdf`` semantics, and
+    the same guarantee that the parent directory of ``out`` already exists.
+    Raises :class:`PdfUnavailable` with a human-readable reason when no
+    supported browser is available; never leaks a bare ``OSError``.
+    """
+    render_html_to_pdf(html, Path(out), backend=backend)
 
 _VIEW_TITLES = {
     "overview": "Overview",

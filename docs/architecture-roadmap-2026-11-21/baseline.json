@@ -55,10 +55,11 @@
     "wave 17 (AR083/AR080): modules 197 -> 200 (diagnostics pkg + cas), ruff 649 -> 648; longest function kept at 750 by extracting _init_run_events/_record_scan_metrics/_record_budget_skip",
     "wave 18 correction: the wave-17 ruff 648 was a mis-measure; the reproducible value at the wave-17 head (1e55a59) is 649 (git-archive extracts count 651, two of them .superpowers/sdd/*.py which the worktree ruff skips only because .git is present). Wave 18 lanes are net-zero on ruff (verified per-file), so the baseline is corrected 648 -> 649.",
     "wave 18 (AR063 ui-server decomposition): modules 200 -> 206 (surfaces/ui/api x6); mypy 537 -> 535 / files 69 -> 68; broad_excepts 58 -> 57; functions>80 75 -> 74; ruff net 0 (6 violations moved server.py -> api/*)",
-    "wave 18 (AR080 perf follow-up): AC-401 MET — warm p95 21.07 -> 9.19 s (10k files/50 changed, 5/5 equivalence); incremental.py shape-only gate + model_construct replay, cas.py stat/eviction trims, index.py prefix-rel. Cold ratio 1.733 is a tool-internal secondary target, NOT part of AC-401 (criteria: warm p95 only) — write-path restructure documented as follow-up debt."
+    "wave 18 (AR080 perf follow-up): AC-401 MET — warm p95 21.07 -> 9.19 s (10k files/50 changed, 5/5 equivalence); incremental.py shape-only gate + model_construct replay, cas.py stat/eviction trims, index.py prefix-rel. Cold ratio 1.733 is a tool-internal secondary target, NOT part of AC-401 (criteria: warm p95 only) — write-path restructure documented as follow-up debt.",
+    "wave 19 (AR064 dialogs + AR066 pdf + AR065 frontend split, 3 parallel lanes): modules 206 -> 209 (dialogs.py, export/pdf.py + export/__init__.py), ruff 649 -> 646 (dialog routing + render_pdf wiring removed the old inline chrome block from api/artifacts.py: 7 -> 2 findings there). Freshness node harness ported to SourceTextModule ESM loading (node --experimental-vm-modules); two tiny documented web/src exports added: state.js pendingRefresh(), paint.js setRenderObserver(fn)."
   ],
   "metrics": {
-    "ruff_total": 649,
+    "ruff_total": 646,
     "mypy_errors": 535,
     "mypy_files_with_errors": 68,
     "import_cycles": 0,
@@ -66,7 +67,7 @@
     "longest_function_lines": 750,
     "functions_over_80_lines": 74,
     "models_fan_in": 61,
-    "modules": 206,
+    "modules": 209,
     "coverage_floor_pct": 21
   }
 }

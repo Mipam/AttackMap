@@ -1,3 +1,12 @@
+/* Loopback API client for the GUI (AR065: ES module; same contract as the
+ * pre-module api.js — the X-AttackMap-Token header or ?token= query param is
+ * the only auth, and post() stays the single funnel for mutations so the
+ * state stream stays serialized via stateEpoch).
+ *
+ * Token resolution order: ?token= query param (then stripped from the URL and
+ * mirrored into sessionStorage) → sessionStorage → "".
+ */
+
 const params = new URLSearchParams(location.search);
 let TOKEN = params.get("token") || "";
 if (TOKEN) {
@@ -7,7 +16,18 @@ if (TOKEN) {
   try { TOKEN = sessionStorage.getItem("attackmap-token") || ""; } catch { TOKEN = ""; }
 }
 
-async function api(path, opts) {
+/** Current auth token (live read; never reassign from importers). */
+export function getToken() {
+  return TOKEN;
+}
+
+/**
+ * Fetch a /api/* path with the auth token; JSON-decodes JSON bodies.
+ * @param {string} path
+ * @param {RequestInit} [opts]
+ * @returns {Promise<any>}
+ */
+export async function api(path, opts) {
   const url = new URL(path, location.origin);
   const res = await fetch(url, Object.assign({ headers: { "X-AttackMap-Token": TOKEN } }, opts || {}));
   if (!res.ok) throw new Error(String(res.status));
@@ -17,9 +37,15 @@ async function api(path, opts) {
 }
 
 let stateRequest = null;
-let stateEpoch = 0;
+/** Bumped by every mutation; readers use it to detect stale responses. */
+export let stateEpoch = 0;
 
-function getState() {
+/**
+ * Serialized state read: concurrent callers share one in-flight request and
+ * responses from a superseded epoch are re-read.
+ * @returns {Promise<import("./api-types.js").StateResponse>}
+ */
+export function getState() {
   if (!stateRequest) {
     const epoch = stateEpoch;
     stateRequest = api("/api/state")
@@ -29,7 +55,7 @@ function getState() {
   return stateRequest.then(({ state, epoch }) => epoch === stateEpoch ? state : getState());
 }
 
-async function getFreshState() {
+export async function getFreshState() {
   // A command handler may already be reading a snapshot captured before the
   // report response arrived. Drain that read before starting the validation
   // read, while keeping the state stream serialized.
@@ -39,7 +65,11 @@ async function getFreshState() {
   return getState();
 }
 
-function getReport(state) {
+/**
+ * @param {import("./api-types.js").StateResponse} state
+ * @returns {Promise<import("./api-types.js").ReportResponse>}
+ */
+export function getReport(state) {
   const query = new URLSearchParams({
     repositoryKey: state.repositoryKey,
     generationId: state.reportGeneration,
@@ -47,7 +77,15 @@ function getReport(state) {
   return api(`/api/report?${query}`);
 }
 
-async function post(path, body) {
+/**
+ * POST a mutation. Every post invalidates in-flight state reads (stateEpoch),
+ * which is what keeps command handlers and the poller from painting stale
+ * snapshots.
+ * @param {string} path
+ * @param {object} [body]
+ * @returns {Promise<any>}
+ */
+export async function post(path, body) {
   stateEpoch += 1;
   try {
     return await api(path, {

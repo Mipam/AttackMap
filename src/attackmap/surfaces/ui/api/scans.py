@@ -30,6 +30,7 @@ from attackmap.foundation.secrets import (
     is_loopback_endpoint,
 )
 from attackmap.orchestration.analyzers import TRUSTED_ONLY_ENV
+from attackmap.surfaces.ui import dialogs
 from attackmap.surfaces.ui.api.routes import ApiResponse, route, state_response
 from attackmap.surfaces.ui.api.schemas import (
     CancelRequest,
@@ -418,30 +419,16 @@ def _load_recents() -> list[dict]:
 
 
 def _pick_folders(multi: bool = False) -> list[str]:
-    if threading.current_thread() is not threading.main_thread():
-        return []
+    # AR064/AC-306: the HTTP handlers run on ThreadingHTTPServer worker
+    # threads; the picker is dispatched to the main thread by dialogs.py.
     try:
-        import tkinter as tk
-        from tkinter import filedialog
-    except ImportError:
+        return dialogs.pick_folders(multi=multi)
+    except dialogs.DialogBackendUnavailable:
+        # Recorded, not swallowed (AC-012): no-tkinter/headless hosts fail here.
         logger.debug("tkinter is unavailable; folder picker disabled.", exc_info=True)
         return []
-    try:
-        root = tk.Tk()
-        root.withdraw()
-        root.wm_attributes("-topmost", 1)
-        chosen: list[str] = []
-        first = filedialog.askdirectory(title="Select a repository")
-        if first:
-            chosen.append(first)
-        while multi:
-            nxt = filedialog.askdirectory(title="Add another repository (cancel to finish)")
-            if not nxt:
-                break
-            chosen.append(nxt)
-        root.destroy()
-        return chosen
-    except tk.TclError:
-        # Recorded, not swallowed (AC-012): headless/no-display hosts fail here.
-        logger.debug("tkinter folder picker failed.", exc_info=True)
+    except dialogs.NoMainLoopError:
+        # No main-thread pump installed (browser fallback): same deferred
+        # empty result the pre-AR064 off-thread guard produced.
+        logger.debug("folder picker deferred: no main-thread dialog hook.", exc_info=True)
         return []

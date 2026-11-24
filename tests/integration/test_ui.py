@@ -56,10 +56,19 @@ def _get(url: str, token: str | None = None) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
+def _all_js() -> str:
+    """Concatenated frontend module sources (AR065 split app.js into src/views/*)."""
+    root = web_root() / "src"
+    return "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(root.rglob("*.js"))
+    )
+
+
 def test_exploitability_window_matches_fixture_rows() -> None:
     css = (web_root() / "src" / "exploitability.css").read_text(encoding="utf-8")
     html = (web_root() / "index.html").read_text(encoding="utf-8")
-    app = (web_root() / "src" / "app.js").read_text(encoding="utf-8")
+    app = _all_js()
     assert "Run scan" in html
     assert "Exploitability" in html
     assert "AI Review" in html
@@ -435,7 +444,7 @@ def test_real_mini_scan_renders_overview(tmp_path: Path, monkeypatch: pytest.Mon
         assert report["findingCount"] >= 0
         assert "severityCounts" in report
         assert not (repo / "reports").exists()
-        html = (web_root() / "src" / "app.js").read_text(encoding="utf-8")
+        html = _all_js()
         assert "renderOverview" in html and "renderFindings" in html
     finally:
         httpd.shutdown()
@@ -453,7 +462,7 @@ def test_launch_opens_dark_splash_then_loads_url() -> None:
 
 def test_html_has_macos_parity_chrome() -> None:
     html = (web_root() / "index.html").read_text(encoding="utf-8")
-    js = (web_root() / "src" / "app.js").read_text(encoding="utf-8")
+    js = _all_js()
     for label in (
         "Overview",
         "Findings",
@@ -491,7 +500,7 @@ def test_markdown_renderer_covers_review_syntax() -> None:
 
 
 def test_exploitability_empty_state_explains_taint() -> None:
-    js = (web_root() / "src" / "app.js").read_text(encoding="utf-8")
+    js = _all_js()
     assert "No static route→sink paths to rank" in js
     assert "runtime reachability and exploitability are not verified" in js
     assert "taint chains" in js

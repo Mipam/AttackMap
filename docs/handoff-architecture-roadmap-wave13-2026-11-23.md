@@ -104,6 +104,45 @@ AR067; AR080/AR081 need AR061/AR069 (all done); AR088 needs AR031 (done).
 
 ## 3. What landed since the wave-11 handoff (all verified, see commits)
 
+Wave 19 (3 parallel lanes — owner-approved; leases verified disjoint with one
+deliberate split: AR066 was forbidden `api/artifacts.py` and exposed
+`export_md.render_pdf` as a drop-in, which the parent wired at integration,
+removing the old inline chrome block + `_find_chrome_or_edge`, ruff 7 → 2):
+- **AR064** (`ui-server`) — dialog main-thread dispatcher (AC-306):
+  `dialogs.py` with `PlatformDialogs` + `MainThreadDispatcher` (queue +
+  main-loop hook; the Tk hook is a repeating `root.after` chain — naive
+  `after` from a worker raises "main thread is not in main loop" on real Tk
+  and was replaced). tkinter call sites in `api/scans.py`/`api/artifacts.py`
+  routed through it; zero wire-format changes. Proof:
+  `tests/integration/test_ui_threading.py` (6 tests: static tripwire,
+  dispatcher guarantee, live HTTP end-to-end on ThreadingHTTPServer, real-Tk
+  smoke). Follow-up debt: `launch.py` should install a pump so dispatched
+  dialogs deliver on the browser-fallback path (one line once a main loop
+  exists).
+- **AR065** (`ui-web`) — frontend ES module split (AC-307): the 626-line
+  `app.js` monolith split into `main.js`/`api.js` (ESM, same token
+  contract)/`state.js`/`paint.js`/`util.js` + `views/*.js` (22 modules);
+  single `<script type="module">`, no bundler; `tools/gen_api_types.py`
+  generates `api-types.js` from `schemas.py` (--check for CI). Freshness node
+  harness ported to `SourceTextModule` loading (`node
+  --experimental-vm-modules`); `tests/integration/test_ui.py` ported to an
+  `_all_js()` helper. Two tiny documented exports added: `state.js
+  `pendingRefresh()`, `paint.js` `setRenderObserver(fn)`. Also fixed a real
+  pre-existing bug: the PDF-preview fetch used a nonexistent `state.token`
+  (always 403) — now `getToken()`.
+- **AR066** (`ui-export`) — PDF export behind a protocol (AC-312):
+  `export/pdf.py` with `PdfBackend` + Chrome/Edge backends (flags
+  verbatim-identical to the old inline call), typed `PdfUnavailable` /
+  `PdfRenderError`; real Edge render verified (%PDF-1.4, 1 page); typed-error
+  path isolated. Integration wiring in `api/artifacts.py` by parent.
+- After wave 19: **54/56** cards DONE. Remaining 2: AR081 (portfolio, 8 d),
+  AR082 (SDK v2 — needs the external analyzer repos on github.com/mlaify).
+  Wave 20 candidates: AR081 split into slices, or AR082 if the owner provides
+  the external repo situation.
+- GUI work: M3 preview for the new frontend — `attackmap ui` rendered in the
+  browser (WebView2 absent on this host, documented fallback), full nav +
+  toolbar visually reviewed on screenshots.
+
 Wave 18 (2 parallel lanes, same protocol; AR063 lease `ui-server` × AR080-perf
 lease `extraction`, verified disjoint):
 - **AR063** (`ui-server` lease) — GUI server decomposition (AC-305):
@@ -390,14 +429,13 @@ rebuilt; if anything is missing, `pip install -e ".[llm,dev]"` again.
 | Rule docs | `tools/gen_rule_docs.py --check` | 50 files up to date |
 | Ratchet | `tools/ratchet_check.py --baseline docs/architecture-roadmap-2026-11-21/baseline.json` | PASS |
 | Report identity | `-m tools.report_identity` | 84c7b18a… |
-| Full suite | `-m pytest -q -ra -m "not live" -n auto --timeout=300 -p no:cacheprovider` | ~7078 passed, 11 known failures + up to 2 load-flaky, ~5.2 min |
+| Full suite | `-m pytest -q -ra -m "not live" -n auto --timeout=300 -p no:cacheprovider` | ~7133 passed, 11 known failures + up to 2 load-flaky, ~5 min |
 | Registry in pipeline | `attackmap.exe rules list --json` | 49 registry ids |
 | Eval baseline | `attackmap.exe eval rules --corpus corpus/reference.yaml --json` | exit 0, per-rule tp/fp/fn |
 
-Baseline recorded at `0647c9d` (last tightened wave 18): ruff 649 (corrected
-from a wave-17 mis-measure of 648 — see §3), mypy 535/68, cycles 0, broad
-excepts 57, longest function 750, 74 functions >80 lines, models fan-in 61,
-206 modules. Tighten-only.
+Baseline recorded at `0647c9d` (last tightened wave 19): ruff 646, mypy 535/68,
+cycles 0, broad excepts 57, longest function 750, 74 functions >80 lines,
+models fan-in 61, 209 modules. Tighten-only.
 
 ## 9. Known host failures (NOT regressions)
 

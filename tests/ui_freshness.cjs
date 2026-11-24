@@ -1,11 +1,22 @@
-/* Exercises the shipped API and view/cache adapter, without a browser dependency. */
+/* Exercises the shipped ES-module frontend (cache/view adapter) without a
+ * browser dependency. AR065 port: the pre-module build vm.runInContext'ed
+ * api.js+app.js as classic scripts and poked their globals; the module build
+ * is loaded with vm.SourceTextModule and driven through the real module
+ * namespaces (state.js `ui`/`refresh`/`pendingRefresh`, api.js
+ * `getState`/`post`, paint.js `setRenderObserver`).
+ *
+ * markdown.js/mermaid-lite.js are replaced with passthrough stubs at link
+ * time — the module-era equivalent of this harness's original renderMarkdown
+ * stubs, so subtest assertions on innerHTML stay text-exact. Everything else
+ * (api, state, paint, views, activity, main) is the real shipped code.
+ */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const { test } = require("node:test");
 
-const scripts = path.join(__dirname, "../src/attackmap/surfaces/ui/web/src");
+const srcDir = path.join(__dirname, "../src/attackmap/surfaces/ui/web/src");
 const copy = (value) => JSON.parse(JSON.stringify(value));
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 function deferred() {
@@ -30,6 +41,12 @@ function report(repo, generation) {
   };
 }
 
+// Passthrough renderer stubs (link-time), mirroring the original harness.
+const MARKDOWN_STUB = `export function renderMarkdown(src) { return src || ""; }`;
+const MERMAID_STUB = `export function extractMermaidBlocks() { return []; }
+export function renderMermaidBlock() { return ""; }
+export function renderMermaidDocument(src) { return src || ""; }`;
+
 async function harness() {
   const elements = new Map();
   const requests = [];
@@ -42,48 +59,88 @@ async function harness() {
   let maxStates = 0;
   function element(id) {
     if (!elements.has(id)) elements.set(id, {
-      id, innerHTML: "", value: "", style: {}, options: [], listeners: {},
+      id, innerHTML: "", value: "", textContent: "", disabled: false, hidden: false,
+      checked: false, style: {}, options: [], listeners: {},
       classList: { toggle() {} }, add() {}, remove() {},
       addEventListener(name, callback) { this.listeners[name] = callback; },
     });
     return elements.get(id);
   }
+  const documentStub = {
+    getElementById: element, activeElement: null,
+    querySelectorAll: () => [],
+  };
   const context = vm.createContext({
     URL, URLSearchParams, console, renders,
     location: { search: "", pathname: "/", origin: "http://127.0.0.1" },
     history: {}, sessionStorage: { getItem() { return "token"; } },
-    document: { getElementById: element, activeElement: null, querySelectorAll: () => [] },
-    window: {}, Option: function() {},
-    renderMarkdown: (text) => text, renderMermaidDocument: (text) => text,
-    setTimeout: (callback) => timers.push(callback),
+    document: documentStub,
+    window: {}, Option: function () {},
+    alert() {},
+    setTimeout: (callback) => { timers.push(callback); return timers.length; },
     fetch: async (url, options) => {
-      requests.push(url.pathname);
-      const isState = url.pathname === "/api/state";
+      const u = url instanceof URL ? url : new URL(String(url), "http://127.0.0.1");
+      requests.push(u.pathname);
+      const isState = u.pathname === "/api/state";
       if (isState) maxStates = Math.max(maxStates, ++activeStates);
-      const data = copy(isState ? state : url.pathname === "/api/report" ? currentReport : {});
-      const gate = gates.get(url.pathname);
-      gates.delete(url.pathname);
+      const data = copy(isState ? state : u.pathname === "/api/report" ? currentReport : {});
+      const gate = gates.get(u.pathname);
+      gates.delete(u.pathname);
       if (gate) await gate.promise;
       if (isState) activeStates -= 1;
       return { ok: true, headers: { get: () => "application/json" }, json: async () => data };
     },
   });
-  for (const name of ["api.js", "app.js"]) {
-    vm.runInContext(fs.readFileSync(path.join(scripts, name), "utf8"), context, { filename: name });
+
+  // Build the module graph; stub only the two renderer leaves.
+  const files = [];
+  (function walk(dir) {
+    for (const name of fs.readdirSync(dir)) {
+      const p = path.join(dir, name);
+      if (fs.statSync(p).isDirectory()) walk(p);
+      else if (name.endsWith(".js")) files.push(p);
+    }
+  })(srcDir);
+  const keyOf = (p) => "./" + path.relative(srcDir, p).replace(/\\/g, "/");
+  const modules = new Map();
+  const sourceOf = (key) => {
+    if (key === "./markdown.js") return MARKDOWN_STUB;
+    if (key === "./mermaid-lite.js") return MERMAID_STUB;
+    return fs.readFileSync(path.join(srcDir, key.slice(2)), "utf8");
+  };
+  for (const file of files) {
+    const key = keyOf(file);
+    modules.set(key, new vm.SourceTextModule(sourceOf(key), { identifier: key, context }));
   }
-  await vm.runInContext("refreshPromise", context);
-  vm.runInContext(`
-    const originalRenderMain = renderMain;
-    renderMain = (s, r) => {
-      renders.push({state: s, report: r, view: currentView});
-      return originalRenderMain(s, r);
-    };
-    currentView = "review";
-  `, context);
+  const entry = modules.get("./main.js");
+  await entry.link((specifier, referencing) => {
+    assert.ok(specifier.startsWith("."), `bare specifier ${specifier} in ${referencing.identifier}`);
+    const target = "./" + path.posix.normalize(
+      path.posix.join(path.posix.dirname(referencing.identifier), specifier));
+    const mod = modules.get(target);
+    assert.ok(mod, `${referencing.identifier} imports missing ${specifier}`);
+    return mod;
+  });
+  await entry.evaluate();
+
+  const stateNs = modules.get("./state.js").namespace;
+  const apiNs = modules.get("./api.js").namespace;
+  const paintNs = modules.get("./paint.js").namespace;
+
+  // Settle the initial poll (the old harness awaited `refreshPromise`), then
+  // install the render observer and park the view on "review" — the module
+  // equivalent of wrapping renderMain and setting currentView.
+  await stateNs.pendingRefresh();
+  paintNs.setRenderObserver(({ state, report, view }) => renders.push({ state, report, view }));
+  stateNs.ui.currentView = "review";
+
   return {
-    context, requests, renders, timers, elements,
-    run: (code) => vm.runInContext(code, context),
-    refresh: () => vm.runInContext("refresh()", context),
+    elements, requests, renders, timers,
+    ui: stateNs.ui,
+    refresh: () => stateNs.refresh(),
+    getState: () => apiNs.getState(),
+    post: (pathName, body) => apiNs.post(pathName, body),
+    focus(id) { documentStub.activeElement = id ? { id } : null; },
     set(repo, generation, status = "done") {
       state = snapshot(repo, generation, status);
       currentReport = generation ? report(repo, generation) : null;
@@ -103,9 +160,9 @@ test("100 scan sequences retain only the selected repository and generation", as
     if (i % 2) {
       h.set(repo, `first-${i}`, "running");
       for (const view of ["findings", "settings", "recents", "review"]) {
-        h.run(`currentView = ${JSON.stringify(view)}`);
+        h.ui.currentView = view;
         await h.refresh();
-        assert.equal(h.run("reportCache"), null);
+        assert.equal(h.ui.reportCache, null);
       }
     }
     // Even sequences finish entirely between polls.
@@ -114,12 +171,12 @@ test("100 scan sequences retain only the selected repository and generation", as
     assert.equal(h.elements.get("view").innerHTML, `${repo}/second-${i}`);
     h.set(repo, `second-${i}`, "failed");
     await h.refresh();
-    assert.equal(h.run("reportCache"), null);
+    assert.equal(h.ui.reportCache, null);
     assert.ok(!h.elements.get("view").innerHTML.includes(`second-${i}`));
     assert.equal(h.elements.get("export-md").disabled, true);
     h.set(`other-${i}`, null, "idle");
     await h.refresh();
-    assert.equal(h.run("reportCache"), null);
+    assert.equal(h.ui.reportCache, null);
     h.set(`other-${i}`, `third-${i}`);
     await h.refresh();
     assert.equal(h.elements.get("view").innerHTML, `other-${i}/third-${i}`);
@@ -141,14 +198,14 @@ test("delayed report cannot overwrite a newer workspace or navigation request", 
   const old = h.refresh();
   await tick();
   h.set("new", "g2");
-  h.run('currentView = "findings"');
+  h.ui.currentView = "findings";
   const latest = h.refresh();
   gate.resolve();
   await Promise.all([old, latest]);
   assert.ok(!h.renders.some((r) => r.report && r.report.generationId === "g1"));
   assert.equal(h.renders.at(-1).view, "findings");
-  assert.equal(h.run("reportCache.generationId"), "g2");
-  assert.equal(h.run("reportCache.repositoryKey"), "new");
+  assert.equal(h.ui.reportCache.generationId, "g2");
+  assert.equal(h.ui.reportCache.repositoryKey, "new");
 });
 
 for (const transition of [
@@ -170,10 +227,10 @@ for (const transition of [
     await pending;
     assert.ok(!h.renders.some((r) => r.report && r.report.generationId === "g1"));
     if (transition.status === "done") {
-      assert.equal(h.run("reportCache.generationId"), transition.generation);
-      assert.equal(h.run("reportCache.repositoryKey"), transition.repo);
+      assert.equal(h.ui.reportCache.generationId, transition.generation);
+      assert.equal(h.ui.reportCache.repositoryKey, transition.repo);
     } else {
-      assert.equal(h.run("reportCache"), null);
+      assert.equal(h.ui.reportCache, null);
       assert.equal(h.elements.get("export-md").disabled, true);
     }
     assert.equal(h.maxStates(), 1);
@@ -187,7 +244,7 @@ test("report validation does not reuse a state read that predates the report res
   const pending = h.refresh();
   await tick();
   const stateGate = h.hold("/api/state");
-  const commandState = h.run("getState()");
+  const commandState = h.getState();
   await tick();
   h.set("a", "g2");
   reportGate.resolve();
@@ -195,7 +252,7 @@ test("report validation does not reuse a state read that predates the report res
   assert.ok(!h.renders.some((r) => r.report));
   stateGate.resolve();
   await Promise.all([pending, commandState]);
-  assert.equal(h.run("reportCache.generationId"), "g2");
+  assert.equal(h.ui.reportCache.generationId, "g2");
   assert.ok(!h.renders.some((r) => r.report && r.report.generationId === "g1"));
   assert.equal(h.maxStates(), 1);
 });
@@ -203,7 +260,7 @@ test("report validation does not reuse a state read that predates the report res
 test("state polling is serialized across refresh and command handlers", async () => {
   const h = await harness();
   const gate = h.hold("/api/state");
-  const requests = [h.refresh(), h.run("getState()"), h.run("getState()"), h.refresh()];
+  const requests = [h.refresh(), h.getState(), h.getState(), h.refresh()];
   await tick();
   assert.equal(h.maxStates(), 1);
   gate.resolve();
@@ -227,10 +284,10 @@ test("responses started before a mutation are discarded even without another ref
   const pending = h.refresh();
   await tick();
   h.set("after", "g2");
-  await h.run('post("/api/config", {repo: "after"})');
+  await h.post("/api/config", { repo: "after" });
   gate.resolve();
   await pending;
-  assert.equal(h.run("reportCache.generationId"), "g2");
+  assert.equal(h.ui.reportCache.generationId, "g2");
   assert.ok(!h.renders.some((r) => r.state.repositoryKey === "before"));
   assert.equal(h.maxStates(), 1);
 });
@@ -248,7 +305,7 @@ test("mismatched report identity never enters the cache", async () => {
   // immediately; only the matching current generation may be painted.
   assert.ok(!h.renders.some((r) => r.report && r.report.generationId === "g1"));
   assert.ok(h.renders.every((r) => !r.report || r.report.repositoryKey === r.state.repositoryKey));
-  assert.equal(h.run("reportCache.generationId"), "g2");
+  assert.equal(h.ui.reportCache.generationId, "g2");
 });
 
 test("typing cannot preserve an old view while the next generation loads", async () => {
@@ -256,7 +313,7 @@ test("typing cannot preserve an old view while the next generation loads", async
   h.set("a", "g1");
   await h.refresh();
   assert.equal(h.elements.get("view").innerHTML, "a/g1");
-  h.run('document.activeElement = {id: "suppress-reason"}');
+  h.focus("suppress-reason");
   h.set("a", "g2");
   const gate = h.hold("/api/report");
   const pending = h.refresh();
@@ -267,8 +324,8 @@ test("typing cannot preserve an old view while the next generation loads", async
   await pending;
   assert.equal(h.elements.get("view").innerHTML, "a/g2");
   h.set("a", "g2", "running");
-  h.run('document.activeElement = {id: "repo-label"}');
+  h.focus("repo-label");
   await h.refresh();
   assert.ok(h.elements.get("view").innerHTML.includes("Scanning"));
-  assert.equal(h.run("reportCache"), null);
+  assert.equal(h.ui.reportCache, null);
 });

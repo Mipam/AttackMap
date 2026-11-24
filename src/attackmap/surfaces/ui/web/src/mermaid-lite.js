@@ -1,8 +1,15 @@
 /* Lightweight offline Mermaid renderer for AttackMap diagrams.
    Handles flowchart node declarations and simple/labeled edges, rendering a
-   clean vertical flow (node → arrow → node) without any network calls. */
+   clean vertical flow (node → arrow → node) without any network calls.
+   AR065: ES module — exports added; rendering logic unchanged. */
 
-function extractMermaidBlocks(md) {
+// Cycle note: markdown.js imports this module (to render mermaid fences),
+// and renderMermaidDocument falls back to renderMarkdown for plain Markdown
+// diagrams. Both are hoisted function declarations called only at runtime,
+// so the import cycle is safe under ESM live bindings.
+import { renderMarkdown } from "./markdown.js";
+
+export function extractMermaidBlocks(md) {
   const blocks = [];
   const re = /```mermaid\r?\n([\s\S]*?)```/g;
   let m;
@@ -14,7 +21,7 @@ function _mlEscape(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-function renderMermaidBlock(src) {
+export function renderMermaidBlock(src) {
   const lines = (src || "").split("\n").map((l) => l.trim()).filter(Boolean);
   const nodes = {};
   const edges = [];
@@ -69,7 +76,7 @@ function renderMermaidBlock(src) {
   return `<div class="mermaid-wrap">${parts.join("")}</div>`;
 }
 
-function renderMermaidDocument(md) {
+export function renderMermaidDocument(md) {
   if (!md) return `<div class="empty">No diagram.</div>`;
   const blocks = extractMermaidBlocks(md);
   if (!blocks.length) return renderMarkdown(md);

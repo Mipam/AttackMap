@@ -861,6 +861,8 @@ unchanged; cycle-free (TYPE_CHECKING + registration-side-effect pattern document
 
 **Files** new `src/attackmap/surfaces/ui/dialogs.py`; edits in `ui/server.py`
 
+**Status** DONE (wave 19) — `dialogs.py`: PlatformDialogs protocol + MainThreadDispatcher (queue + main-loop hook; Tk hook uses a repeating `root.after` chain — naive after-from-worker fails on real Tk); tkinter call sites in api/scans.py + api/artifacts.py routed through it; zero wire-format changes (no-hook case returns the same deferred empty results + debug record); AC-306 proof: tests/integration/test_ui_threading.py (6 tests incl. live-HTTP end-to-end on ThreadingHTTPServer + real-Tk smoke). Follow-up outside the card: launch.py should install a pump (install_tk_hook) so dispatched dialogs deliver on the browser-fallback path.
+
 **Steps**
 1. Define `PlatformDialogs` protocol (`pick_dir`, `pick_file`, `save_file`, `reveal`).
 2. Implement `MainThreadDispatcher` posting work to the Tk/WebView loop.
@@ -879,6 +881,16 @@ unchanged; cycle-free (TYPE_CHECKING + registration-side-effect pattern document
 
 **Files** `src/attackmap/ui/web/index.html`, `src/attackmap/ui/web/src/{api,state,views/*}.js`
 
+**Status** DONE (wave 19) — app.js (626-line monolith) split into main.js/api.js (ESM, same
+token contract)/state.js/paint.js/util.js + views/*.js (22 modules); index.html loads a single
+`<script type="module">`, no bundler; `tools/gen_api_types.py` generates api-types.js (22
+JSDoc typedefs from schemas.py, --check mode for CI); freshness node harness ported to
+SourceTextModule loading (node --experimental-vm-modules); two tiny documented exports added
+(state.js pendingRefresh, paint.js setRenderObserver); also fixed a real pre-existing bug:
+PDF-preview fetch used a nonexistent state.token (always 403'd) — now uses getToken().
+Verified: 31-URL real-server smoke, module-graph link check, DOM runtime smoke (7 POSTs),
+30 web-module tests, 12/12 freshness subtests.
+
 **Steps**
 1. Split `app.js` into `api.js` (fetch + error handling), `state.js`, `views/*.js`.
 2. Load via `<script type="module">`; no bundler, no build step.
@@ -896,6 +908,8 @@ unchanged; cycle-free (TYPE_CHECKING + registration-side-effect pattern document
 **Lease** `ui-export` · **Acceptance** AC-312
 
 **Files** `src/attackmap/ui/export_md.py`, new `src/attackmap/surfaces/ui/export/pdf.py`
+
+**Status** DONE (wave 19) — `surfaces/ui/export/pdf.py`: PdfBackend protocol + ChromeBackend/EdgeBackend (flags verbatim-identical to the old inline call), typed `PdfUnavailable`/`PdfRenderError` (AttackMapError subclasses); `export_md.render_pdf(html, out)` is the drop-in entry (temp html in out.parent, finally-cleaned); artifacts.py `_handle_export` wired at integration (inline chrome block + `_find_chrome_or_edge` removed, ruff 7->2 there). Verified: real Edge render (%PDF-1.4, 1 page), typed-error path isolated (4 tests), 12/12 unit tests.
 
 **Steps**
 1. Define `PdfBackend` protocol (`render(html, out) -> None`).
