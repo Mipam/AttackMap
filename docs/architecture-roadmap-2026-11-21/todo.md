@@ -838,6 +838,11 @@ edits in `scanner.py`, `config_scanner.py`, `threat_model.py`, `exploitability.p
 **Files** new `src/attackmap/surfaces/ui/api/{routes,schemas,scans,artifacts,settings}.py`;
 `src/attackmap/ui/server.py` shrinks to a thin adapter
 
+**Status** DONE (wave 18) — server.py 899→362 lines; 13 routes in surfaces/ui/api/ with
+23 Pydantic schemas (both directions); token check single in routes.token_ok applied by
+the dispatcher; `tools/api_report.py --check` green (avg handler 7.5/20 lines); identity
+unchanged; cycle-free (TYPE_CHECKING + registration-side-effect pattern documented)
+
 **Steps**
 1. Extract the 13 `/api/*` handlers into modules; each handler ≤ 20 lines.
 2. Declare request/response Pydantic models in `schemas.py`.
@@ -991,7 +996,14 @@ when no browser exists.
 ### AR080 · Content-addressed incremental store
 **Phase** 4 · **Priority** High · **Effort** 10 d · **Depends** AR027, AR061 · **Blocks** AC-401
 **Lease** `cas` · **Acceptance** AC-401
-**Status** PARTIAL (wave 17) — CAS landed (sha256 blob store, per-analyzer (id,version,blob) cache, LRU eviction w/ current-run pinning, equivalence 5/5) BUT AC-401 gate NOT met on this machine: 10k/50 warm p95 21.1s vs 10s target (ratio 0.29 met); cold run 1.7x full. Card stays OPEN for perf work
+**Status** DONE (wave 18) — AC-401 MET: warm p95 21.07 -> 9.19 s (10k files/50 changed,
+5 reps, fresh scratch, equivalence 5/5; chain 21.07 -> 15.37 -> 9.90 -> 9.19). Dominant
+cost was double pydantic validation of every cached item per run; fixed by shape-only
+_payload_shape_ok + model_construct replay (checksum + engine identity remain the
+integrity gates; documented trust stance unchanged, forgery-replay test pins it).
+Also: BlobStore single-stat, eviction skip when provably under cap, index.py prefix-rel.
+Cold ratio 1.733 is a tool-internal secondary target, NOT part of AC-401 (warm p95 only)
+— cold write-path restructure is follow-up debt. Records: C:/tmp/attackmap-scratch/ar080perf/run{1,2,3b}.log
 
 **Files** new `src/attackmap/extraction/cas.py`; edits in `scanner.py`, `incremental.py`,
 `tools/bench_incremental.py` (extend the existing benchmark)

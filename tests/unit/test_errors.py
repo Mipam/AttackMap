@@ -26,6 +26,8 @@ import attackmap.foundation.errors as foundation_errors
 from attackmap.extraction import analyzer_host
 from attackmap.orchestration import analyzers, pipeline, scan_service
 from attackmap.surfaces.ui import server
+from attackmap.surfaces.ui.api import artifacts as ui_artifacts
+from attackmap.surfaces.ui.api import scans as ui_scans
 
 TAXONOMY = [
     errors.AttackMapError,
@@ -198,7 +200,8 @@ def test_ui_pick_folders_without_tkinter_is_recorded(monkeypatch, caplog):
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", _no_tk)
-    with caplog.at_level(logging.DEBUG, logger="attackmap.surfaces.ui.server"):
+    # AR063: _pick_folders moved to the api package with the handlers.
+    with caplog.at_level(logging.DEBUG, logger="attackmap.surfaces.ui.api.scans"):
         assert server._pick_folders() == []
     assert any("tkinter is unavailable" in r.message for r in caplog.records)
 
@@ -222,8 +225,10 @@ def test_no_new_broad_except_in_lease_files():
                         (recorded downstream); fleet.failed records x2;
                         3x BaseException supervisor/reservation guards that
                         always re-raise after cleanup
-      server.py 3     — cancel failure -> app.error; refresh_missing warning;
-                        PDF export -> HTTP 400 error body
+      server.py 0     — handlers extracted to the ui/api package in AR063
+                        (the 3 reviewed catches moved, none added):
+      api/scans.py 2  — cancel failure -> app.error; refresh_missing warning
+      api/artifacts.py 1 — PDF export -> HTTP 400 error body
       pipeline.py 5   — BaseException cleanup guards: diagnostics/event
                         records written, always re-raised
     """
@@ -231,11 +236,16 @@ def test_no_new_broad_except_in_lease_files():
         "analyzers.py": 7,
         "analyzer_host.py": 4,
         "scan_service.py": 7,
-        "server.py": 3,
+        "server.py": 0,
+        "scans.py": 2,
+        "artifacts.py": 1,
         "pipeline.py": 5,
         "errors.py": 0,
     }
-    modules = [analyzers, analyzer_host, scan_service, server, pipeline, errors]
+    modules = [
+        analyzers, analyzer_host, scan_service, server, ui_scans, ui_artifacts,
+        pipeline, errors,
+    ]
     for module in modules:
         path = Path(inspect.getsourcefile(module) or "")
         count = len(re.findall(r"except (?:Base)?Exception\b", path.read_text(encoding="utf-8")))

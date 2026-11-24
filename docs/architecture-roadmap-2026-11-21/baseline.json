@@ -52,18 +52,21 @@
     "the fast selection cannot see that tier.",
     "wave 14b (AR050): models_fan_in 60 -> 61 (new reasoning/ranking.py imports attackmap.models shim; structural consequence of the mandated ranking module), modules 194 -> 195",
     "wave 16 (AR012): broad_excepts 63 -> 58 (typed taxonomy), modules 195 -> 197",
-    "wave 17 (AR083/AR080): modules 197 -> 200 (diagnostics pkg + cas), ruff 649 -> 648; longest function kept at 750 by extracting _init_run_events/_record_scan_metrics/_record_budget_skip"
+    "wave 17 (AR083/AR080): modules 197 -> 200 (diagnostics pkg + cas), ruff 649 -> 648; longest function kept at 750 by extracting _init_run_events/_record_scan_metrics/_record_budget_skip",
+    "wave 18 correction: the wave-17 ruff 648 was a mis-measure; the reproducible value at the wave-17 head (1e55a59) is 649 (git-archive extracts count 651, two of them .superpowers/sdd/*.py which the worktree ruff skips only because .git is present). Wave 18 lanes are net-zero on ruff (verified per-file), so the baseline is corrected 648 -> 649.",
+    "wave 18 (AR063 ui-server decomposition): modules 200 -> 206 (surfaces/ui/api x6); mypy 537 -> 535 / files 69 -> 68; broad_excepts 58 -> 57; functions>80 75 -> 74; ruff net 0 (6 violations moved server.py -> api/*)",
+    "wave 18 (AR080 perf follow-up): AC-401 MET — warm p95 21.07 -> 9.19 s (10k files/50 changed, 5/5 equivalence); incremental.py shape-only gate + model_construct replay, cas.py stat/eviction trims, index.py prefix-rel. Cold ratio 1.733 is a tool-internal secondary target, NOT part of AC-401 (criteria: warm p95 only) — write-path restructure documented as follow-up debt."
   ],
   "metrics": {
-    "ruff_total": 648,
-    "mypy_errors": 537,
-    "mypy_files_with_errors": 69,
+    "ruff_total": 649,
+    "mypy_errors": 535,
+    "mypy_files_with_errors": 68,
     "import_cycles": 0,
-    "broad_excepts": 58,
+    "broad_excepts": 57,
     "longest_function_lines": 750,
-    "functions_over_80_lines": 75,
+    "functions_over_80_lines": 74,
     "models_fan_in": 61,
-    "modules": 200,
+    "modules": 206,
     "coverage_floor_pct": 21
   }
 }

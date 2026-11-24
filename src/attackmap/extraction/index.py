@@ -289,6 +289,11 @@ class RepoIndex:
                     and (budget <= 0 or budget - used_bytes >= pending * (file_limit + 1)))
 
         capture_inputs = _ordered_capture_inputs(root_path, file_limit, _can_prefetch)
+        # Hot per-file path: every captured file is a direct child string of
+        # the resolved walk root (os.walk yields join(root, ...)), so the
+        # repo-relative posix form is the verbatim string tail — ~40x faster
+        # than Path.relative_to + as_posix at the 10k-file scale (AR080).
+        root_prefix = str(root_path) + os.sep
         if time_budget is not None:
             try:
                 time_budget.tick("index_build")
@@ -372,7 +377,7 @@ class RepoIndex:
                     f"{path.relative_to(root_path).as_posix()}"
                 )
                 continue
-            rel = path.relative_to(root_path).as_posix()
+            rel = str(path)[len(root_prefix):].replace(os.sep, "/")
             if len(raw) > file_limit:
                 limitations.append(f"file grew beyond capture byte limit during scan: {rel}")
                 resource_events.append(ResourceLimitEvent.skipped_file(producer="repo_index", category="file_bytes", relative=rel, limit=file_limit, observed_bytes=len(raw)))

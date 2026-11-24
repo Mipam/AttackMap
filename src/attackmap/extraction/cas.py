@@ -81,7 +81,11 @@ class BlobStore:
         digest = _sha256_bytes(data)
         path = self._path(digest)
         try:
-            if path.exists() and path.stat().st_size == len(data):
+            # One stat instead of exists()+stat(): a missing file raises
+            # OSError (handled below), a size match means the content-
+            # addressed blob is already stored. On the 10k-file cold
+            # path this halves the per-blob stat syscalls (AR080/AC-401).
+            if path.stat().st_size == len(data):
                 return digest
         except OSError:
             pass
@@ -328,8 +332,16 @@ class ExtractionCache:
         """LRU-evict unpinned entries (and their orphaned blobs) while over
         the byte cap. Pinned entries always survive: the cap yields to the
         current run's pin set rather than dropping what this run stored."""
-        refcounts = self._refcounts()
         total = self.total_bytes()
+        if total <= self.max_bytes:
+            # Under the cap the eviction loop can make no decision; skip the
+            # O(n log n) refcount/sort work on the hot 10k-entry warm path
+            # (AR080/AC-401). Byte accounting stays the authoritative
+            # total_bytes(), so eviction behavior is unchanged.
+            if self._orphans_possible:
+                self._collect_garbage()
+            return
+        refcounts = self._refcounts()
         order = sorted(
             self._entries.items(),
             key=lambda kv: kv[1].get("last_use") or 0,

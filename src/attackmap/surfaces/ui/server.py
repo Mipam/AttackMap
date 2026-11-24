@@ -1,4 +1,16 @@
-"""Loopback HTTP server for the Windows GUI (127.0.0.1 only)."""
+"""Loopback HTTP server for the Windows GUI (127.0.0.1 only).
+
+AR063 thin adapter: this module keeps the app state (``LoopbackApp``), static
+file serving (``/``, ``/index.html``, ``/src/*``), and the HTTP handler shell.
+All ``/api/*`` endpoints are declared, schema-gated, and dispatched from the
+``attackmap.surfaces.ui.api`` package; the single auth-token check lives in
+``api.routes.token_ok`` and is applied by the dispatcher.
+
+The scan orchestration helpers that used to live here are re-exported from
+``api.scans`` so existing callers and tests keep their import paths; the module
+remains a runnable rollback point — a partial extraction still runs because the
+adapter only needs ``api.routes.dispatch``.
+"""
 
 from __future__ import annotations
 
@@ -11,47 +23,56 @@ import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
-from attackmap.foundation.secrets import (
-    child_llm_env,
-    has_llm_key,
-    is_loopback_endpoint,
-    save_llm_key,
+from attackmap.foundation.secrets import has_llm_key
+
+# Imported for their @route registration side effect (AR063): the api.route
+# registry is populated when these handler modules load.
+from attackmap.surfaces.ui.api import artifacts as _api_artifacts  # noqa: F401
+from attackmap.surfaces.ui.api import settings as _api_settings  # noqa: F401
+from attackmap.surfaces.ui.api.routes import dispatch
+from attackmap.surfaces.ui.api.scans import (
+    _apply_config,
+    _drain_watch_pending,
+    _load_recents,
+    _pick_folders,
+    _refresh_missing,
+    _request_scan_cancel,
+    _start_scan,
+    _sync_watch,
+    _watch_notice,
 )
-from attackmap.orchestration.analyzers import TRUSTED_ONLY_ENV
-from attackmap.surfaces.ui.config import ScanConfig
 from attackmap.surfaces.ui.contract_adapter import LegacyRunContractAdapter
-from attackmap.surfaces.ui.export_md import (
-    SUPPORTED_SUFFIXES,
-    render_view_markdown,
-    suggested_export_name,
-)
-from attackmap.surfaces.ui.output import (
-    current_generation,
-    fleet_dir,
-    generation_dir,
-    promote_generation,
-    reports_dir,
-    rotate_previous,
-)
 from attackmap.surfaces.ui.report import (
     GuiReport,
     decode_report,
     fixture_report_path,
-    load_current_report,
     web_root,
 )
 from attackmap.surfaces.ui.run_state import GuiRunState
 from attackmap.surfaces.ui.runner import ScanRunner, child_python_env
-from attackmap.surfaces.ui.spawn import discovery_argv, frozen_aware_argv, is_frozen_build
-from attackmap.surfaces.ui.suppress_write import append_suppression
+from attackmap.surfaces.ui.spawn import discovery_argv
 from attackmap.surfaces.ui.watch import Watcher
 
-WEBVIEW2_INSTALL = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+__all__ = [
+    "WEBVIEW2_INSTALL",
+    "LoopbackApp",
+    "_apply_config",
+    "_drain_watch_pending",
+    "_handler",
+    "_load_recents",
+    "_pick_folders",
+    "_refresh_missing",
+    "_request_scan_cancel",
+    "_start_scan",
+    "_sync_watch",
+    "_watch_notice",
+    "load_fixture_app",
+    "make_server",
+]
 
-_RECENTS_LIMIT = 12
+WEBVIEW2_INSTALL = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 
 logger = logging.getLogger(__name__)
 
@@ -235,15 +256,6 @@ def _handler(app: LoopbackApp):
         def log_message(self, fmt: str, *args: object) -> None:
             return
 
-        def _ok_token(self) -> bool:
-            q = parse_qs(urlparse(self.path).query)
-            header = self.headers.get("X-AttackMap-Token", "")
-            token = header or (q.get("token") or [""])[0]
-            try:
-                return bool(token) and secrets.compare_digest(str(token), app.token)
-            except (TypeError, ValueError):
-                return False
-
         def _send(self, code: int, body: bytes, content_type: str) -> None:
             self.send_response(code)
             self.send_header("Content-Type", content_type)
@@ -293,394 +305,17 @@ def _handler(app: LoopbackApp):
                 }.get(path.suffix, "application/octet-stream")
                 self._send(200, path.read_bytes(), ctype)
                 return
-            if not self._ok_token():
-                self._json(403, {"error": "forbidden"})
-                return
-            if parsed.path == "/api/state":
-                self._json(200, app.state())
-                return
-            if parsed.path == "/api/report":
-                report = app.report_snapshot()
-                if report is None:
-                    self._json(404, {"error": "no report"})
-                    return
-                query = parse_qs(parsed.query)
-                if any(query.get(key, [report[key]])[0] != report[key]
-                       for key in ("repositoryKey", "generationId")):
-                    self._json(409, {"error": "report generation changed"})
-                    return
-                self._json(200, report)
-                return
-            if parsed.path == "/api/export-source":
-                view = str(parse_qs(parsed.query).get("view", [""])[0])
-                if not app.report or view == "settings":
-                    self._json(409, {"error": "not available"})
-                    return
-                repo = app.report.repo_name or (app.repo.name if app.repo else "report")
-                markdown = render_view_markdown(view, app.report.as_json(), repo_name=repo, recents=app.recents)
-                self._send(200, markdown.encode("utf-8"), "text/markdown; charset=utf-8")
+            if dispatch(app, self, "GET", parsed):
                 return
             self._json(404, {"error": "not found"})
 
         def do_POST(self) -> None:
-            if not self._ok_token():
-                self._json(403, {"error": "forbidden"})
-                return
-            body = self._body()
             parsed = urlparse(self.path)
-            if parsed.path == "/api/config":
-                _apply_config(app, body)
-                self._json(200, app.state())
-                return
-            if parsed.path == "/api/pick":
-                chosen = _pick_folders(multi=bool(body.get("multi")))
-                if chosen:
-                    app.repos = [Path(p).resolve() for p in chosen]
-                    _refresh_missing(app)
-                self._json(200, {**app.state(), "picked": [str(p) for p in app.repos]})
-                return
-            if parsed.path == "/api/run":
-                _start_scan(app, body)
-                self._json(200, app.state())
-                return
-            if parsed.path == "/api/cancel":
-                _request_scan_cancel(app)
-                self._json(200, app.state())
-                return
-            if parsed.path == "/api/watch":
-                app.watch = bool(body.get("enabled"))
-                _sync_watch(app)
-                self._json(200, app.state())
-                return
-            if parsed.path == "/api/settings":
-                try:
-                    if body.get("anthropicKey"):
-                        save_llm_key(str(body["anthropicKey"]), "claude")
-                    if body.get("openaiKey"):
-                        save_llm_key(str(body["openaiKey"]), "openai")
-                except OSError:
-                    self._json(503, {"error": "Secure credential storage unavailable; key was not saved."})
-                    return
-                self._json(200, app.state())
-                return
-            if parsed.path == "/api/reveal":
-                if app.output and app.output.exists() and hasattr(os, "startfile"):
-                    target = current_generation(app.output) or app.output
-                    os.startfile(target)
-                self._json(200, app.state())
-                return
-            if parsed.path == "/api/suppress":
-                if app.repo is None:
-                    self._json(400, {"error": "no repo"})
-                    return
-                dest = app.repo / ".attackmap-suppress.yaml"
-                try:
-                    append_suppression(dest, body)
-                except ValueError as exc:
-                    self._json(400, {"error": str(exc)})
-                    return
-                self._json(200, {"ok": True, "path": str(dest)})
-                return
-            if parsed.path == "/api/export":
-                result = _handle_export(app, body)
-                self._json(result["code"], result["body"])
-                return
-            if parsed.path == "/api/pick-save":
-                self._json(200, {"path": _pick_save_path(str(body.get("suggestedName", ""))) or ""})
+            if dispatch(app, self, "POST", parsed):
                 return
             self._json(404, {"error": "not found"})
 
     return Handler
-
-
-def _request_scan_cancel(app: LoopbackApp) -> None:
-    """Acknowledge cancellation without waiting for process-tree cleanup."""
-    with app._lock:
-        if app._run_state != GuiRunState.RUNNING:
-            return
-        app._run_state = GuiRunState.CANCELLING
-        run_id, runner = app.run_id, app.runner
-
-    def cleanup() -> None:
-        try:
-            verified = runner.cancel()
-        except Exception:
-            verified = False
-        if verified is False:
-            with app._lock:
-                if app.run_id == run_id and app.runner is runner and app._run_state == GuiRunState.CANCELLING:
-                    app.error = "Cancellation could not verify process-tree exit; restart remains blocked."
-
-    threading.Thread(target=cleanup, daemon=True).start()
-
-
-def _apply_config(app: LoopbackApp, body: dict) -> None:
-    with app._lock:
-        _apply_config_locked(app, body)
-
-
-def _apply_config_locked(app: LoopbackApp, body: dict) -> None:
-    if body.get("repo"):
-        app.repos = [Path(body["repo"]).resolve()]
-    if body.get("repos"):
-        app.repos = [Path(p).resolve() for p in body["repos"]]
-    app.cve = bool(body.get("cve", app.cve))
-    app.recall = bool(body.get("recall", app.recall))
-    app.llm_mode = str(body.get("llmMode") or body.get("llm") or app.llm_mode)
-    app.provider = str(body.get("provider") or app.provider)
-    if "model" in body:
-        app.model = str(body["model"]).strip() or None
-    if "baseUrl" in body:
-        app.base_url = str(body["baseUrl"]).strip()
-    if "modules" in body:
-        raw = body["modules"]
-        app.modules = [raw] if isinstance(raw, str) else list(raw)
-    app.no_suppress = bool(body.get("noSuppress", app.no_suppress))
-    app.use_baseline = bool(body.get("useBaseline", app.use_baseline))
-    app.fail_on_new_high = bool(body.get("failOnNewHigh", app.fail_on_new_high))
-    if app.repos:
-        _refresh_missing(app)
-
-
-def _start_scan(app: LoopbackApp, body: dict) -> None:
-    with app._lock:
-        _start_scan_locked(app, body)
-
-
-def _start_scan_locked(app: LoopbackApp, body: dict) -> None:
-    if app._run_state in {GuiRunState.RUNNING, GuiRunState.CANCELLING}:
-        return
-    _apply_config(app, body)
-    if not app.repos or not app.repos[0].exists():
-        app._run_state = GuiRunState.FAILED
-        app.error = "Pick a repository folder first."
-        return
-    llm_active = app.llm_mode not in {"none", "None (heuristic only)", ""}
-    is_local_openai = app.provider.lower().startswith("openai") and is_loopback_endpoint(app.base_url)
-    if llm_active and not is_local_openai and not has_llm_key(app.provider):
-        app._run_state = GuiRunState.FAILED
-        app.error = f"No API key stored for {app.provider}. Open Settings and save a key, or keep heuristic-only mode."
-        return
-    _refresh_missing(app)
-    fleet = len(app.repos) > 1
-    report_base = fleet_dir(app.repos) if fleet else reports_dir(app.repos[0])
-    app.output = report_base
-    baseline = None
-    if not fleet and app.use_baseline:
-        baseline = rotate_previous(app.repos[0], report_base)
-
-    run_id = uuid.uuid4().hex
-    run_repos = list(app.repos)
-    workspace_revision = app.workspace_revision
-    repository_key = app.repository_key
-    app.run_id = run_id
-    app._contract_repository_key = app.repository_key
-    app._run_state = GuiRunState.RUNNING
-    app.error = None
-    app.exit_code = None
-    app.stderr_tail = ""
-    app.progress = {"event": "begin", "label": "Starting scan"}
-    output = generation_dir(report_base, run_id)
-    cfg = ScanConfig(
-        repos=run_repos,
-        output=output,
-        run_id=app.run_id,
-        run_cve=app.cve,
-        modules=[m for m in app.modules if m and m.lower() != "auto"],
-        llm_mode=app.llm_mode,
-        provider=app.provider,
-        model=app.model,
-        recall=app.recall,
-        no_suppress=app.no_suppress,
-        baseline=baseline if app.use_baseline else None,
-        fail_on_new_high=app.fail_on_new_high,
-        capabilities=app.capabilities if app._caps_loaded else None,
-    )
-    argv = frozen_aware_argv(cfg)
-
-    def on_progress(event: dict) -> None:
-        with app._lock:
-            if app.run_id == run_id and app.workspace_revision == workspace_revision:
-                app.progress = event
-
-    def on_done(code: int, report: Path | None, tail: str = "") -> None:
-        with app._lock:
-            finish(code, report, tail)
-            # Changes observed during the run are processed by exactly one
-            # follow-up scan once the run has completed.
-            _drain_watch_pending_locked(app)
-
-    def finish(code: int, report: Path | None, tail: str) -> None:
-        if app.run_id != run_id:
-            return
-        if app.workspace_revision != workspace_revision:
-            app._run_state = GuiRunState.IDLE
-            app.run_id = None
-            app.progress = {}
-            return
-        app.exit_code = code
-        app.stderr_tail = tail
-        if app._run_state == GuiRunState.CANCELLING:
-            app._run_state = GuiRunState.CANCELLED
-            app.error = tail.strip() or "Scan cancelled."
-            return
-        if report is not None and report.is_file() and (
-            code == 0 or "failing per --fail-on-new-high" in tail
-        ):
-            try:
-                promote_generation(report_base, run_id)
-                name = run_repos[0].name
-                app.report = load_current_report(report_base, name)
-                app.report_generation = run_id
-                app.report_repository = repository_key
-                app._run_state = GuiRunState.SUCCEEDED
-                app.error = None
-                _remember(app)
-            except (OSError, FileNotFoundError) as exc:
-                app._run_state = GuiRunState.FAILED
-                app.error = f"Report generated but could not be promoted: {exc}"
-        else:
-            app._run_state = GuiRunState.FAILED
-            detail = tail.strip() or f"Scan exited with code {code} and no report."
-            app.error = detail
-            if app.missing:
-                names = ", ".join(
-                    item.get("plugin") or item.get("analyzer_name") or "?"
-                    for item in app.missing
-                )
-                app.error = f"{detail}\nMissing recommended analyzers: {names}"
-
-    env_overlay = child_llm_env(
-        app.provider if app.llm_mode not in {"none", ""} else "none",
-        app.base_url if app.provider.lower().startswith("openai") else None,
-    )
-    if is_frozen_build():
-        env_overlay[TRUSTED_ONLY_ENV] = "1"
-
-    argv.append("--direct-generation-output")
-
-    report_path = output / ("fleet-summary.json" if fleet else "attackmap-report.json")
-    started = app.runner.start(
-        run_repos[0],
-        output,
-        on_progress=on_progress,
-        on_done=lambda code, report, tail="": on_done(code, report, tail),
-        argv=argv,
-        env=env_overlay,
-        report_path=report_path,
-    )
-    if not started:
-        app._run_state = GuiRunState.FAILED
-        app.error = "Scan could not start because a previous run is still finishing."
-
-
-def _sync_watch(app: LoopbackApp) -> None:
-    if app.watcher is not None:
-        app.watcher.stop()
-        app.watcher = None
-    if not app.watch or not app.repos:
-        return
-    out = app.output or reports_dir(app.repos[0])
-
-    watcher = Watcher(
-        app.repos[0], out, lambda: None,
-        is_running=lambda: app.runner.running,
-    )
-
-    def on_quiet() -> None:
-        if app.runner.running:
-            # A scan is active; remember the burst for exactly one
-            # follow-up drained when the run completes.
-            watcher.mark_pending()
-            return
-        _start_scan(app, {})
-
-    watcher.on_quiet = on_quiet
-    app.watcher = watcher
-    watcher.start()
-
-
-def _drain_watch_pending(app: LoopbackApp) -> None:
-    with app._lock:
-        _drain_watch_pending_locked(app)
-
-
-def _drain_watch_pending_locked(app: LoopbackApp) -> None:
-    """Start exactly one follow-up scan for changes seen during the last run."""
-    watcher = app.watcher
-    if not app.watch or watcher is None:
-        return
-    if app._run_state in {GuiRunState.RUNNING, GuiRunState.CANCELLING}:
-        # The active run already reads the changed files; recheck when it ends.
-        return
-    if app._run_state == GuiRunState.CANCELLED:
-        # The user stopped the scan on purpose; do not auto-rescan.
-        watcher.take_pending()
-        return
-    if watcher.take_pending():
-        _start_scan_locked(app, {})
-
-
-def _watch_notice(app: LoopbackApp, platform: str | None = None) -> str | None:
-    """Honest watch-coverage limitation surfaced to the UI; never silent."""
-    if not app.watch:
-        return None
-    if (platform or os.name) != "nt":
-        return "Live watching is only implemented on Windows; changes are not detected automatically."
-    if app.watcher is not None and app.watcher.limitation:
-        return app.watcher.limitation
-    if len(app.repos) > 1:
-        return f"Watching covers only the first selected repository (1 of {len(app.repos)})."
-    return None
-
-
-def _refresh_missing(app: LoopbackApp) -> None:
-    if not app.repos:
-        app.missing = []
-        return
-    try:
-        from attackmap.surfaces.suggest import detect_ecosystems
-
-        app.missing = [
-            {"plugin": s.plugin, "analyzer_name": s.analyzer_name, "pip_install": s.pip_install, "signals": list(s.matched_signals)}
-            for s in detect_ecosystems(app.repos[0])
-            if not s.installed
-        ]
-    except Exception:
-        # Recorded, not swallowed (AC-012): plugin suggestions are advisory,
-        # but a persistent failure here should leave a trace in the log.
-        logger.warning("Missing-analyzer suggestions failed; continuing without them.",
-                       exc_info=True)
-        app.missing = []
-
-
-def _remember(app: LoopbackApp) -> None:
-    if not app.repos or not app.output:
-        return
-    entry = {"name": app.repos[0].name, "path": str(app.repos[0]), "output": str(app.output)}
-    recents = [item for item in _load_recents() if item.get("path") != entry["path"]]
-    recents.insert(0, entry)
-    app.recents = recents[:_RECENTS_LIMIT]
-    path = _recents_path()
-    path.write_text(json.dumps(app.recents, indent=2), encoding="utf-8")
-
-
-def _recents_path() -> Path:
-    base = os.environ.get("LOCALAPPDATA") or str(Path.home() / ".attackmap")
-    folder = Path(base) / "AttackMap"
-    folder.mkdir(parents=True, exist_ok=True)
-    return folder / "recents.json"
-
-
-def _load_recents() -> list[dict]:
-    path = _recents_path()
-    if not path.is_file():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
-    return data if isinstance(data, list) else []
 
 
 def _load_capabilities() -> set[str] | None:
@@ -711,178 +346,6 @@ def _load_modules() -> list[dict]:
         data = json.loads(raw)
         return data if isinstance(data, list) else []
     except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
-        return []
-
-
-def _handle_export(app: LoopbackApp, body: dict) -> dict[str, Any]:
-    view = str(body.get("view", ""))
-    path_str = str(body.get("path", "")).strip('"').strip("'")
-    if not app.report:
-        return {"code": 409, "body": {"error": "no report"}}
-    if view == "settings" or view not in {
-        "overview", "findings", "exploitability", "paths", "surface", "diagrams",
-        "review", "ai-review", "diff", "fleet", "deps", "secrets", "ci", "flows",
-        "analyzers", "recents",
-    }:
-        return {"code": 400, "body": {"error": "invalid view"}}
-    target = Path(path_str)
-    suffix = target.suffix.lower()
-    if suffix == ".":
-        # tkinter asksaveasfilename may return a trailing dot when the user
-        # typed a name without extension and the dialog appended defaultextension.
-        # Re-derive the suffix from the requested filename or the view default.
-        suggested = suggested_export_name(
-            app.report.repo_name or (app.repo.name if app.repo else "report"), view, ".md"
-        )
-        target = target.with_suffix(Path(suggested).suffix)
-        suffix = target.suffix.lower()
-    if suffix not in SUPPORTED_SUFFIXES:
-        return {"code": 400, "body": {"error": f"unsupported suffix {suffix}"}}
-    try:
-        from attackmap.foundation.safe_fs import safe_write_text
-
-        out_dir = target.parent
-        repo = app.report.repo_name or (app.repo.name if app.repo else "report")
-        markdown = render_view_markdown(
-            view,
-            app.report.as_json(),
-            repo_name=repo,
-            recents=app.recents,
-        )
-        if suffix == ".md":
-            safe_write_text(out_dir, target, markdown)
-            return {"code": 200, "body": {"ok": True, "path": str(target)}}
-        html = _markdown_to_pdf_html(markdown, repo, view)
-        tmp_html = out_dir / f"._attackmap_export_{uuid.uuid4().hex}.html"
-        tmp_html.write_text(html, encoding="utf-8")
-        try:
-            browser = _find_chrome_or_edge()
-            if not browser:
-                raise RuntimeError("Chrome or Edge not found")
-            subprocess.run(
-                [
-                    str(browser),
-                    "--headless",
-                    "--disable-gpu",
-                    "--no-pdf-header-footer",
-                    f"--print-to-pdf={target}",
-                    str(tmp_html),
-                ],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=60,
-            )
-        finally:
-            try:
-                tmp_html.unlink()
-            except OSError:
-                pass
-        return {"code": 200, "body": {"ok": True, "path": str(target)}}
-    except Exception as exc:
-        return {"code": 400, "body": {"error": str(exc)}}
-
-
-def _markdown_to_pdf_html(markdown: str, repo: str, view: str) -> str:
-    """Wrap rendered Markdown in print-friendly HTML with dark-to-light colors."""
-    from html import escape
-
-    title = f"AttackMap – {repo} – {view}"
-    body = "\n".join(
-        f"<p>{escape(line)}</p>" if line and not line.startswith("<") else line
-        for line in markdown.splitlines()
-    )
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>{escape(title)}</title>
-<style>
-  body {{ font-family: "Segoe UI", sans-serif; margin: 24px; color: #1a1a1a; background: #fff; line-height: 1.5; }}
-  h1 {{ font-size: 22px; margin-bottom: 8px; }}
-  h2 {{ font-size: 16px; margin-top: 24px; margin-bottom: 8px; }}
-  p {{ margin: 8px 0; }}
-  pre {{ background: #f4f4f4; padding: 10px; border-radius: 6px; overflow-x: auto; }}
-  table {{ border-collapse: collapse; width: 100%; margin: 12px 0; }}
-  th, td {{ border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; word-break: break-word; }}
-  th {{ background: #f0f0f0; }}
-</style>
-</head>
-<body>
-{body}
-</body>
-</html>"""
-
-
-def _find_chrome_or_edge() -> Path | None:
-    candidates = [
-        Path(os.environ.get("PROGRAMFILES(x86)", "")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
-        Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
-        Path(os.environ.get("PROGRAMFILES", "")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
-        Path(os.environ.get("PROGRAMFILES(x86)", "")) / "Google" / "Chrome" / "Application" / "chrome.exe",
-        Path(os.environ.get("PROGRAMFILES", "")) / "Google" / "Chrome" / "Application" / "chrome.exe",
-        Path(os.environ.get("LOCALAPPDATA", "")) / "Google" / "Chrome" / "Application" / "chrome.exe",
-    ]
-    for candidate in candidates:
-        if candidate and candidate.is_file():
-            return candidate
-    return None
-
-
-def _pick_save_path(suggested_name: str) -> str | None:
-    if threading.current_thread() is not threading.main_thread():
-        return None
-    try:
-        import tkinter as tk
-        from tkinter import filedialog
-    except ImportError:
-        logger.debug("tkinter is unavailable; save dialog disabled.", exc_info=True)
-        return None
-    try:
-        root = tk.Tk()
-        root.withdraw()
-        root.wm_attributes("-topmost", 1)
-        chosen = filedialog.asksaveasfilename(
-            title="Save report",
-            defaultextension=".md",
-            initialfile=suggested_name or "attackmap-report.md",
-            filetypes=[("Markdown files", "*.md"), ("PDF files", "*.pdf"), ("All files", "*.*")],
-        )
-        root.destroy()
-        return chosen if chosen else None
-    except tk.TclError:
-        # Recorded, not swallowed (AC-012): headless/no-display hosts fail here.
-        logger.debug("tkinter save dialog failed.", exc_info=True)
-        return None
-
-
-def _pick_folders(multi: bool = False) -> list[str]:
-    if threading.current_thread() is not threading.main_thread():
-        return []
-    try:
-        import tkinter as tk
-        from tkinter import filedialog
-    except ImportError:
-        logger.debug("tkinter is unavailable; folder picker disabled.", exc_info=True)
-        return []
-    try:
-        root = tk.Tk()
-        root.withdraw()
-        root.wm_attributes("-topmost", 1)
-        chosen: list[str] = []
-        first = filedialog.askdirectory(title="Select a repository")
-        if first:
-            chosen.append(first)
-        while multi:
-            nxt = filedialog.askdirectory(title="Add another repository (cancel to finish)")
-            if not nxt:
-                break
-            chosen.append(nxt)
-        root.destroy()
-        return chosen
-    except tk.TclError:
-        # Recorded, not swallowed (AC-012): headless/no-display hosts fail here.
-        logger.debug("tkinter folder picker failed.", exc_info=True)
         return []
 
 

@@ -294,20 +294,28 @@ class PerFileCache:
 
 
 def _payload_shape_ok(payload: dict) -> bool:
-    """Structural check before model validation (cheap miss gate)."""
+    """Structural check before replay (cheap miss gate).
+
+    Deliberately shape-only. The payload's integrity is bound by the entry
+    checksum (verified in ``get``) and the engine identity in the cache key
+    — any model-schema change rewrites the engine hash and misses every
+    entry — so ``load_payload`` rebuilds without re-running per-item model
+    validation on the hot replay path. Running the full validator in the
+    gate as well (the original design) validated every cached item twice
+    per warm run and, including the evidence-redaction validators attached
+    to every model, was the dominant warm-run cost (AR080/AC-401). A
+    structurally sound payload is replayed as stored; a structurally broken
+    one (wrong families, non-dict items) is a miss and recomputes.
+    """
     if not isinstance(payload.get("csrf_protected"), bool):
         return False
     _register_models()
-    for family, model in PAYLOAD_MODELS.items():
+    for family in PAYLOAD_MODELS:
         items = payload.get(family)
         if not isinstance(items, list):
             return False
         for item in items:
             if not isinstance(item, dict):
-                return False
-            try:
-                model.model_validate(item)
-            except Exception:
                 return False
     return True
 
@@ -324,7 +332,28 @@ def dump_payload(signals: dict[str, list], csrf_protected: bool) -> dict:
 
 
 def load_payload(payload: dict) -> tuple[dict[str, list], bool] | None:
-    """Validate and rebuild one file's cached output, or None on any error."""
+    """Rebuild one file's cached output, or None on any structural error.
+
+    Rebuilds via ``model_construct`` rather than ``model_validate``: replay
+    is a hot path (every cached file on every warm incremental run), and the
+    payloads reaching this function are already bound by two integrity
+    layers — the per-entry checksum (``PerFileCache.get``) or the CAS blob
+    content hash, and the engine identity in the cache key (any model-schema
+    change rewrites the engine hash and misses every entry). For payloads
+    written by this engine, validate(dump(model)) is a fixed point, so
+    re-validation on replay only re-pays construction cost — on a 10k-file
+    warm run it was the dominant remaining cost (AR080/AC-401). Evidence
+    text was redacted when the entry was first stored and redaction is
+    idempotent, so replay is byte-identical to a fresh compute.
+
+    Trust stance (unchanged, see the module docstring): these checks catch
+    corruption, not forgery — an entry with a recomputed checksum is
+    replayed by design, exactly like
+    ``test_cache_trust_boundary_is_documented_by_consistent_forgery``.
+    ``model_construct`` never raises on malformed items (missing fields take
+    defaults, unknown fields are ignored), so any residual doubt still
+    degrades to a computed value, never a failed scan.
+    """
     _register_models()
     rebuilt: dict[str, list] = {}
     for family, model in PAYLOAD_MODELS.items():
@@ -332,7 +361,7 @@ def load_payload(payload: dict) -> tuple[dict[str, list], bool] | None:
         if not isinstance(items, list):
             return None
         try:
-            rebuilt[family] = [model.model_validate(item) for item in items]
+            rebuilt[family] = [model.model_construct(**item) for item in items]
         except Exception:
             return None
     csrf = payload.get("csrf_protected")

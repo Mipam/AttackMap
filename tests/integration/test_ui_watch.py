@@ -54,7 +54,8 @@ def started_scans(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     calls: list[str] = []
     def fake_start(app: LoopbackApp, body: dict) -> None:
         calls.append(app.repository_key)
-    monkeypatch.setattr(ui_server, "_start_scan_locked", fake_start)
+    monkeypatch.setattr(
+        "attackmap.surfaces.ui.api.scans._start_scan_locked", fake_start)
     return calls
 
 

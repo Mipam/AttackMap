@@ -37,7 +37,8 @@ class FakeRunner:
 @pytest.fixture
 def app(tmp_path, monkeypatch):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
-    monkeypatch.setattr("attackmap.surfaces.ui.server._refresh_missing", lambda app: None)
+    # AR063: _refresh_missing moved to the api package with the handlers.
+    monkeypatch.setattr("attackmap.surfaces.ui.api.scans._refresh_missing", lambda app: None)
     instance = LoopbackApp()
     instance.runner = FakeRunner()
     repo = tmp_path / "repo"

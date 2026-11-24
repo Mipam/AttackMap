@@ -104,6 +104,48 @@ AR067; AR080/AR081 need AR061/AR069 (all done); AR088 needs AR031 (done).
 
 ## 3. What landed since the wave-11 handoff (all verified, see commits)
 
+Wave 18 (2 parallel lanes, same protocol; AR063 lease `ui-server` × AR080-perf
+lease `extraction`, verified disjoint):
+- **AR063** (`ui-server` lease) — GUI server decomposition (AC-305):
+  `surfaces/ui/server.py` 899 → 362 lines; 13 `/api/*` handlers extracted to
+  `surfaces/ui/api/{routes,schemas,scans,artifacts,settings}.py` (bucket
+  deviation documented in the package doc); 23 Pydantic models validate the
+  legacy payloads (byte-identical wire format); single token check
+  (`routes.token_ok`) applied by the dispatcher; `tools/api_report.py --check`
+  green (13/13 routes both directions, avg handler 7.5/20 lines); cycle-free
+  via TYPE_CHECKING + registration side-effect (server imports
+  `api.artifacts`/`api.settings` for `@route` registration). M3: visible
+  preview done — `attackmap ui` served to the browser (WebView2 absent on
+  this host, documented fallback), full UI rendered, Activity nav clicked and
+  reviewed on screenshot.
+- **AR080 perf follow-up** (`extraction` lease) — **AC-401 MET**: warm p95
+  **21.07 → 9.19 s** (10k files/50 changed, 5 reps, fresh scratch,
+  equivalence 5/5; chain 21.07 → 15.37 → 9.90 → 9.19). Dominant cost was
+  every cached item pydantic-validated twice per run; fixed by shape-only
+  `_payload_shape_ok` + `model_construct` replay in `incremental.py`
+  (checksum + engine identity remain the integrity gates; documented
+  "corruption, not forgery" trust stance unchanged — forgery-replay test
+  pins it). Also BlobStore single-stat, eviction skip when provably under
+  cap, `index.py` prefix-rel. **Security nuance ratified at integration:**
+  warm replay no longer re-runs validation/redaction on cache content; legit
+  entries are byte-identical (bench + wp033 100-seed + test_incremental
+  campaigns), forged entries replay as stored (consistent with the documented
+  stance). Revert = one function (`load_payload`). Cold ratio 1.733 is a
+  tool-internal secondary target, NOT part of AC-401 (criteria: warm p95
+  only) — cold write-path restructure is follow-up debt.
+  Records: `C:/tmp/attackmap-scratch/ar080perf/run{1,2,3b}.log`.
+- Baseline correction (wave 18): the wave-17 ruff 648 was a **mis-measure**;
+  the reproducible value at head `1e55a59` is **649** (git-archive extracts
+  count 651 — two `.superpowers/sdd/*.py` files the worktree ruff skips only
+  because `.git` is present). Both wave-18 lanes verified net-zero on ruff
+  per-file. Baseline corrected 648 → 649 with note; also tightened mypy
+  537→535/68, broad 58→57, fns>80 75→74, modules 200→206.
+- After wave 18: **51/56** cards DONE (AR080 closed). Remaining 5: AR064,
+  AR065, AR066 (GUI cluster — all unblocked NOW by AR063), AR081 (portfolio),
+  AR082 (SDK v2, external repos github.com/mlaify). Wave 19 candidate:
+  AR064 × AR066 (both `ui-*` leases — verify disjointness against current
+  code; AR065 is `ui-web` and could form a third disjoint lane).
+
 Wave 17 (2 parallel lanes, same protocol; AR083×AR080, lease disjointness
 verified against current code — `orchestration/`+`ai`+`surfaces/ui` vs
 `extraction/`+`tools/bench_incremental.py`):
@@ -348,13 +390,14 @@ rebuilt; if anything is missing, `pip install -e ".[llm,dev]"` again.
 | Rule docs | `tools/gen_rule_docs.py --check` | 50 files up to date |
 | Ratchet | `tools/ratchet_check.py --baseline docs/architecture-roadmap-2026-11-21/baseline.json` | PASS |
 | Report identity | `-m tools.report_identity` | 84c7b18a… |
-| Full suite | `-m pytest -q -ra -m "not live" -n auto --timeout=300 -p no:cacheprovider` | ~7058 passed, 11 known failures + up to 2 load-flaky, ~6.8 min |
+| Full suite | `-m pytest -q -ra -m "not live" -n auto --timeout=300 -p no:cacheprovider` | ~7078 passed, 11 known failures + up to 2 load-flaky, ~5.2 min |
 | Registry in pipeline | `attackmap.exe rules list --json` | 49 registry ids |
 | Eval baseline | `attackmap.exe eval rules --corpus corpus/reference.yaml --json` | exit 0, per-rule tp/fp/fn |
 
-Baseline recorded at `0647c9d` (last tightened wave 17): ruff 648 (repo-wide),
-mypy 537/69, cycles 0, broad excepts 58, longest function 750, 75 functions
->80 lines, models fan-in 61, 200 modules. Tighten-only.
+Baseline recorded at `0647c9d` (last tightened wave 18): ruff 649 (corrected
+from a wave-17 mis-measure of 648 — see §3), mypy 535/68, cycles 0, broad
+excepts 57, longest function 750, 74 functions >80 lines, models fan-in 61,
+206 modules. Tighten-only.
 
 ## 9. Known host failures (NOT regressions)
 
