@@ -1,0 +1,6 @@
+repositories:
+  - path: catalog
+    label: catalog
+  - path: billing
+    label: billing
+  - path: notifier

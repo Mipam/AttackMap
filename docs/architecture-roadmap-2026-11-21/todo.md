@@ -1037,8 +1037,9 @@ Cold ratio 1.733 is a tool-internal secondary target, NOT part of AC-401 (warm p
 ### AR081 · Portfolio mode
 **Phase** 4 · **Priority** High · **Effort** 8 d · **Depends** AR069, AR061 · **Blocks** —
 **Lease** `portfolio` · **Acceptance** AC-402
+**Status** DONE (wave 20) — AC-402 MET: cross-repo graph in `orchestration/portfolio.py` (connectors external_host/database/dependency/secret_marker only when ≥2 repos share a signal; each edge carries basis observed/inferred + evidence); hotspots ranked via read-only `reasoning.ranking.compute_finding_score` + degree boost (portfolio_score = score + 4·degree); CLI via `surfaces/portfolio_cli.py` registered with `add_typer(portfolio_app, name="portfolio")`; portfolio.json byte-stable (sort_keys, no timestamps); 3-repo fixture `tests/fixtures/portfolio/{catalog,billing,notifier}/` + `repos.yaml`; 24/24 targeted tests
 
-**Files** new `src/attackmap/orchestration/portfolio.py`, `src/attackmap/cli_portfolio.py`
+**Files** new `src/attackmap/orchestration/portfolio.py`, `src/attackmap/surfaces/portfolio_cli.py` (planned `cli_portfolio.py` superseded by surfaces/ convention)
 
 **Steps**
 1. `attackmap portfolio analyze repos.yaml --output portfolio/`.

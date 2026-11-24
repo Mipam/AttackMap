@@ -104,6 +104,29 @@ AR067; AR080/AR081 need AR061/AR069 (all done); AR088 needs AR031 (done).
 
 ## 3. What landed since the wave-11 handoff (all verified, see commits)
 
+Wave 20 (single lane; AR081 lease `portfolio` verified disjoint — new files only
+plus 3 registration lines in `surfaces/cli.py`):
+- **AR081** (`portfolio`) — portfolio mode (**AC-402 MET**): `attackmap
+  portfolio analyze repos.yaml --output portfolio/`. Cross-repo graph in
+  `orchestration/portfolio.py`: connectors (external_host / database /
+  dependency / secret_marker) are created only when ≥2 repos share a signal;
+  every edge carries `basis` (observed/inferred) + evidence. Hotspots ranked
+  across repos using the existing read-only
+  `reasoning.ranking.compute_finding_score` with a degree boost
+  (`portfolio_score = score + 4·degree`). CLI in `surfaces/portfolio_cli.py`,
+  registered via `add_typer(portfolio_app, name="portfolio")` (3 lines in
+  `surfaces/cli.py`; the planned `cli_portfolio.py` was superseded by the
+  surfaces/ convention). `portfolio.json` is byte-stable (sort_keys, no
+  timestamps). Proof: 3-repo fixture `tests/fixtures/portfolio/{catalog,
+  billing,notifier}/` + `repos.yaml`; 24/24 targeted tests (20 unit +
+  4 integration); full suite **7161 passed, 11 known failures** (§9), no
+  load-flaky extras this run. Test-module collision fixed at integration:
+  `tests/unit/test_portfolio.py` renamed to `test_portfolio_core.py`
+  (suite-wide unique basenames, pitfall 4).
+- After wave 20: **55/56** cards DONE. Remaining 1: **AR082** (SDK v2 —
+  needs the external analyzer repos on github.com/mlaify; owner input
+  required on how to proceed).
+
 Wave 19 (3 parallel lanes — owner-approved; leases verified disjoint with one
 deliberate split: AR066 was forbidden `api/artifacts.py` and exposed
 `export_md.render_pdf` as a drop-in, which the parent wired at integration,
@@ -429,13 +452,13 @@ rebuilt; if anything is missing, `pip install -e ".[llm,dev]"` again.
 | Rule docs | `tools/gen_rule_docs.py --check` | 50 files up to date |
 | Ratchet | `tools/ratchet_check.py --baseline docs/architecture-roadmap-2026-11-21/baseline.json` | PASS |
 | Report identity | `-m tools.report_identity` | 84c7b18a… |
-| Full suite | `-m pytest -q -ra -m "not live" -n auto --timeout=300 -p no:cacheprovider` | ~7133 passed, 11 known failures + up to 2 load-flaky, ~5 min |
+| Full suite | `-m pytest -q -ra -m "not live" -n auto --timeout=300 -p no:cacheprovider` | ~7161 passed, 11 known failures + up to 2 load-flaky, ~5 min |
 | Registry in pipeline | `attackmap.exe rules list --json` | 49 registry ids |
 | Eval baseline | `attackmap.exe eval rules --corpus corpus/reference.yaml --json` | exit 0, per-rule tp/fp/fn |
 
-Baseline recorded at `0647c9d` (last tightened wave 19): ruff 646, mypy 535/68,
+Baseline recorded at `0647c9d` (last tightened wave 20): ruff 646, mypy 535/68,
 cycles 0, broad excepts 57, longest function 750, 74 functions >80 lines,
-models fan-in 61, 209 modules. Tighten-only.
+models fan-in 61, 211 modules. Tighten-only.
 
 ## 9. Known host failures (NOT regressions)
 

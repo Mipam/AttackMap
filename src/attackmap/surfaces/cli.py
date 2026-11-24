@@ -38,6 +38,7 @@ from attackmap.output.report import OUTPUT_FORMATS
 from attackmap.output.review_prompts import HUNT_LENSES
 from attackmap.surfaces.eval_cli import eval_app
 from attackmap.surfaces.index_cli import index_app
+from attackmap.surfaces.portfolio_cli import portfolio_app
 from attackmap.surfaces.rules_cli import rules_app
 from attackmap.surfaces.suggest import detect_ecosystems
 
@@ -48,6 +49,8 @@ app.add_typer(rules_app, name="rules")
 app.add_typer(index_app, name="index")
 # AR048: detection-quality evaluation over the labelled reference corpus.
 app.add_typer(eval_app, name="eval")
+# AR081: portfolio mode — cross-repo graph + ranked hotspots over repos.yaml.
+app.add_typer(portfolio_app, name="portfolio")
 
 
 def _select_modules(module: list[str], install_missing: bool) -> list:
