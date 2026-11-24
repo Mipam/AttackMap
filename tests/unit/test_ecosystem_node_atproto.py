@@ -266,7 +266,7 @@ def test_registration_class_satisfies_analyzer_contract() -> None:
     from attackmap.orchestration.analyzers import BuiltinNodeAtprotoAnalyzer
 
     analyzer = BuiltinNodeAtprotoAnalyzer()
-    assert EXTRACTION_PROTOCOL_VERSION == "1.0"
+    assert EXTRACTION_PROTOCOL_VERSION == "2.0"
 
     compatibility = check_extraction_compatibility(analyzer)
     assert compatibility.compatible, compatibility.issues

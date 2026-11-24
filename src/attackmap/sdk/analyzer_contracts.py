@@ -18,14 +18,17 @@ AnalyzerResult = ScanResult
 # be safe in URLs, filesystem paths, and CLI arguments.
 _ANALYZER_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
-# Versioned extraction protocol (AM050 / C36). The analyzer I/O contract:
-# input is a repository root path (core may additionally forward optional
-# progress/recall/index kwargs to analyzers that accept them — old plugins
-# are called as plain analyze(root)); output is an AnalyzerResult (or a
-# dict coercible to one) plus the static AnalyzerMetadata. Bumping the
-# major version means a breaking protocol change; every current official
-# analyzer is compatible with "1.0".
-EXTRACTION_PROTOCOL_VERSION = "1.0"
+# Versioned extraction protocol (AM050 / C36, flipped to 2.0 by AR082 /
+# AC-403). The analyzer I/O contract: input is a repository root path (core
+# may additionally forward optional progress/recall/index kwargs to
+# analyzers that accept them — old plugins are called as plain
+# analyze(root)); output is an AnalyzerResult (or a dict coercible to one)
+# plus the static AnalyzerMetadata. Bumping the major version means a
+# breaking protocol change. All official analyzers declare "2.0"; plugins
+# written against protocol 1.0 keep working indefinitely because
+# attackmap.extraction.adapters lifts their ScanResult into the v2
+# ExtractionResult container (v1 -> v2 -> v1 round trip is lossless).
+EXTRACTION_PROTOCOL_VERSION = "2.0"
 
 
 class AnalyzerMetadata(BaseModel):
@@ -178,6 +181,7 @@ __all__ = [
     "AnalyzerResult",
     "ExtractionCompatibility",
     "check_extraction_compatibility",
+    "declared_extraction_protocol",
     "describe_extraction_protocol",
     "normalize_analyzer_metadata",
 ]
@@ -209,11 +213,17 @@ def normalize_analyzer_metadata(value: object) -> AnalyzerMetadata:
 
 
 def describe_extraction_protocol() -> dict[str, object]:
-    """Machine-readable summary of extraction protocol ``1.0``.
+    """Machine-readable summary of extraction protocol ``2.0``.
 
     The single source of truth for what core feeds an analyzer and what it
     expects back. Kept in code (not only docs) so the optional isolated
     host and compatibility checks can reference one versioned contract.
+
+    Protocol 2.0 (AR082) keeps the 1.0 wire shape — analyzers return an
+    ``AnalyzerResult`` (``ScanResult``) or an ``ExtractionResult`` (v2
+    container); core lifts v1-shaped results through
+    :mod:`attackmap.extraction.adapters`, so plugins written against 1.0
+    keep working indefinitely.
     """
     return {
         "protocol": "attackmap.analyzer.extraction",
@@ -221,15 +231,19 @@ def describe_extraction_protocol() -> dict[str, object]:
         "input": {
             "root": "Absolute path of the repository to analyze (read-only expectation).",
             "options": (
-                "None in protocol 1.0. Core may forward optional progress/recall/"
-                "index keyword arguments to analyzers whose analyze() accepts them; "
-                "plugins written against analyze(root) are called unchanged."
+                "None in the wire protocol (unchanged since 1.0). Core may "
+                "forward optional progress/recall/index keyword arguments to "
+                "analyzers whose analyze() accepts them; plugins written "
+                "against analyze(root) are called unchanged."
             ),
         },
         "output": {
             "result": (
-                "AnalyzerResult (attackmap ScanResult), or a dict coercible to it. "
-                "Core validates, stamps provenance and merges per merge.MERGE_SCHEMA."
+                "AnalyzerResult (attackmap ScanResult, the 1.0 shape), or an "
+                "ExtractionResult (contract v2 container), or a dict coercible "
+                "to either. Core validates, stamps provenance and merges per "
+                "merge.MERGE_SCHEMA; v1-shaped results are lifted through "
+                "attackmap.extraction.adapters."
             ),
             "errors": (
                 "In-process: raising or returning an invalid value records an "
@@ -264,12 +278,13 @@ class ExtractionCompatibility:
 
 
 def check_extraction_compatibility(analyzer: object) -> ExtractionCompatibility:
-    """Check a live analyzer object against extraction protocol ``1.0``.
+    """Check a live analyzer object against extraction protocol ``2.0``.
 
     Additive and backwards compatible: every analyzer that satisfies the
     long-standing duck-typed contract (callable ``analyze``, normalizable
-    ``metadata`` with a slug ``name``) passes. Used by core tests over the
-    built-ins and any installed plugin analyzers.
+    ``metadata`` with a slug ``name``) passes, including plugins written
+    against protocol 1.0 (the v1 adapter keeps them working). Used by core
+    tests over the built-ins and any installed plugin analyzers.
     """
     issues: list[str] = []
     name = getattr(analyzer, "name", None)
@@ -288,3 +303,26 @@ def check_extraction_compatibility(analyzer: object) -> ExtractionCompatibility:
         compatible=not issues,
         issues=tuple(issues),
     )
+
+
+def declared_extraction_protocol(analyzer: object) -> str:
+    """The extraction protocol version one analyzer declares.
+
+    Resolution order: an explicit ``EXTRACTION_PROTOCOL_VERSION`` (or
+    ``extraction_protocol_version``) attribute on the analyzer object or on
+    its ``metadata`` wins; otherwise the analyzer inherits the SDK default
+    :data:`EXTRACTION_PROTOCOL_VERSION`. An analyzer built against the 2.0
+    SDK therefore declares "2.0" without pinning anything, while a plugin
+    that explicitly pins an older version (or an analyzer object from a
+    pre-2.0 plugin that shadows the constant) is reported as-is — that is
+    what ``tools.check_analyzer_versions`` gates on (AR082 / AC-403).
+    """
+    metadata = getattr(analyzer, "metadata", None)
+    for source in (analyzer, metadata):
+        if source is None:
+            continue
+        for attr in ("EXTRACTION_PROTOCOL_VERSION", "extraction_protocol_version"):
+            declared = getattr(source, attr, None)
+            if isinstance(declared, str) and declared.strip():
+                return declared.strip()
+    return EXTRACTION_PROTOCOL_VERSION

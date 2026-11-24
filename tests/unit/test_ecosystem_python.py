@@ -333,7 +333,7 @@ def _registered_python_service_analyzer():
 
 
 def test_extraction_protocol_compatibility() -> None:
-    assert EXTRACTION_PROTOCOL_VERSION == "1.0"
+    assert EXTRACTION_PROTOCOL_VERSION == "2.0"
     compatibility = check_extraction_compatibility(_registered_python_service_analyzer())
     assert compatibility.compatible, compatibility.issues
 

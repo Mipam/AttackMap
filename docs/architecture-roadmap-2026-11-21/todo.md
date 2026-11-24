@@ -1056,6 +1056,7 @@ Cold ratio 1.733 is a tool-internal secondary target, NOT part of AC-401 (warm p
 ### AR082 · Official analyzers on SDK v2
 **Phase** 4 · **Priority** Medium · **Effort** 6 d · **Depends** AR060 · **Blocks** AC-403
 **Lease** `sdk` · **Acceptance** AC-403
+**Status** IN PROGRESS (wave 21, slice 1 in-repo DONE) — EXTRACTION_PROTOCOL_VERSION flipped to "2.0" (`sdk/analyzer_contracts.py`); SDK 2.0 + v1-adapter compatibility documented in sdk docstrings (adapter stays indefinitely per rollback note); `tools/check_analyzer_versions.py` (`python -m tools.check_analyzer_versions`, --json) enumerates built-ins + `attackmap.analyzers` entry points via the same discovery as `attackmap modules --json`; all 9 current built-ins declare 2.0 (python-web, javascript-web, php-web, config, php-laminas, omeka-s, node-atproto, python-service, default); v1 adapter exercised only by compat test `tests/contract/test_extraction_contract_v2.py::test_ar082_protocol_flip_keeps_v1_adapter_lossless`; contract suite 247 passed. Slice 2 (migrate 15 external plugins) PENDING owner decision — repos to be forked under github.com/Mipam per owner 2026-11-24. Note: docs.mlaify.io "4 built-ins" is stale; code has 9.
 
 **Files** external analyzer repos; `pyproject.toml` pins; `tools/check_analyzer_versions.py`
 

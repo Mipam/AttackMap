@@ -312,7 +312,7 @@ def test_every_signal_carries_location_evidence() -> None:
 
 
 def test_extraction_protocol_compatibility() -> None:
-    assert EXTRACTION_PROTOCOL_VERSION == "1.0"
+    assert EXTRACTION_PROTOCOL_VERSION == "2.0"
     for analyzer in (PhpWebAnalyzer(), PhpLaminasAnalyzer(), OmekaSAnalyzer()):
         report = check_extraction_compatibility(analyzer)
         assert report.compatible, report.issues

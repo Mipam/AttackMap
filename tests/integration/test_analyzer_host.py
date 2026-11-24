@@ -70,7 +70,7 @@ def _limits(**overrides) -> HostLimits:
 
 
 def test_extraction_protocol_version_is_pinned() -> None:
-    assert EXTRACTION_PROTOCOL_VERSION == "1.0"
+    assert EXTRACTION_PROTOCOL_VERSION == "2.0"
     described = describe_extraction_protocol()
     assert described["version"] == EXTRACTION_PROTOCOL_VERSION
     for key in ("input", "output", "metadata", "isolation"):
@@ -79,8 +79,8 @@ def test_extraction_protocol_version_is_pinned() -> None:
 
 def test_registered_analyzers_are_protocol_compatible() -> None:
     """Every built-in (and any installed plugin) analyzer satisfies
-    extraction protocol 1.0 — backwards compatible with the current
-    official analyzers."""
+    extraction protocol 2.0 — backwards compatible, including plugins
+    written against protocol 1.0 (the v1 adapter keeps them working)."""
     analyzers = get_registered_analyzers()
     assert analyzers, "expected at least the built-in analyzers"
     for analyzer in analyzers:

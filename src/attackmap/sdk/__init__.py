@@ -96,6 +96,19 @@ keyed on them) and core still decides reachability, flow and severity.
 The names exported below are stable across minor releases of the
 ``attackmap`` package. Breaking changes to this surface only happen on
 a major-version bump; deprecations get one release of overlap.
+
+## Extraction protocol 2.0 (AR082)
+
+The analyzer wire protocol is ``EXTRACTION_PROTOCOL_VERSION == "2.0"``
+(see :mod:`attackmap.sdk.analyzer_contracts`). Every official analyzer
+declares it — either explicitly via an
+``EXTRACTION_PROTOCOL_VERSION`` attribute or implicitly by building
+against this SDK. Protocol-1.0 plugins keep working indefinitely:
+:mod:`attackmap.extraction.adapters` lifts their v1 ``ScanResult`` into
+the v2 ``ExtractionResult`` container losslessly (v1 -> v2 -> v1), and
+:func:`attackmap.sdk.analyzer_contracts.check_extraction_compatibility`
+still passes them. ``python -m tools.check_analyzer_versions`` gates that
+all registered official analyzers declare "2.0".
 """
 
 from __future__ import annotations
@@ -150,9 +163,10 @@ from .models import (
 __all__ = [
     "DEFAULT_SKIP_DIRS",
     "DEPENDENCY_ECOSYSTEMS",
-    # Extraction contract v2 (AR060 / AC-301): additive exports. The v1
-    # ScanResult protocol stays valid; adapters convert in both directions
-    # (see attackmap.extraction.adapters) until AR082 migrates the core.
+    # Extraction contract v2 (AR060 / AC-301): additive exports. The analyzer
+    # wire protocol is 2.0 since AR082 (AC-403) — protocol-1.0 plugins keep
+    # working indefinitely via the v1<->v2 adapters
+    # (see attackmap.extraction.adapters).
     "EXTRACTION_CONTRACT_VERSION",
     "TAINT_SINK_KINDS",
     # Plugin-contributed taint sinks (#240).
@@ -217,8 +231,10 @@ __all__ = [
 # ``import attackmap.sdk`` no longer drags in the taint-sink registry or the
 # v1<->v2 adapters, while every documented import path keeps working (a
 # ``from attackmap.sdk import validate_taint_sink`` triggers __getattr__).
-# Retire this shim when AR082 migrates the core to ExtractionResult v2 and
-# the registry pieces move down into sdk/model.
+# Retire this shim when the registry pieces move down into sdk/model.
+# (AR082 update: the wire-protocol flip to 2.0 did not retire the shim;
+# the v1<->v2 adapters stay exported lazily below so protocol-1.0 plugins
+# keep working.)
 _LAZY_CONTRACT_NAMES: dict[str, tuple[str, str]] = {
     "TAINT_SINK_PLUGIN_GROUP": ("attackmap.reasoning.taint_sinks", "PLUGIN_GROUP"),
     "TAINT_SINK_KINDS": ("attackmap.reasoning.taint_sinks", "SINK_KINDS"),

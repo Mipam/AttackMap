@@ -1,12 +1,14 @@
 """Analyzer contracts plus the extraction contract v2 container (AR060).
 
-Protocol 1.0 keeps analyzers returning a `ScanResult`
-(`EXTRACTION_PROTOCOL_VERSION` in ``attackmap.analyzer_contracts`` stays
-"1.0" until AR082 migrates the official analyzers). The v2 contract is
-additive: `ExtractionResult` carries one discriminated
-`observations` list instead of the per-kind hint lists, and
-:mod:`attackmap.extraction.adapters` converts in both directions so plugins
-can adopt v2 before core does.
+Protocol 2.0 (AR082 / AC-403) is the declared analyzer wire protocol:
+`EXTRACTION_PROTOCOL_VERSION` in ``attackmap.analyzer_contracts`` is "2.0"
+and every official analyzer declares it (see
+:func:`attackmap.sdk.analyzer_contracts.declared_extraction_protocol` and
+``tools.check_analyzer_versions``). The v2 contract is additive:
+`ExtractionResult` carries one discriminated `observations` list instead of
+the per-kind hint lists, and :mod:`attackmap.extraction.adapters` converts
+in both directions, so plugins written against protocol 1.0 keep working
+indefinitely.
 """
 
 from __future__ import annotations
@@ -48,8 +50,9 @@ __all__ = [
 ]
 
 # Version of the extraction contract v2 container declared below. The v1
-# analyzer wire protocol (`EXTRACTION_PROTOCOL_VERSION`) deliberately stays
-# "1.0": v2 is additive until AR082 flips the official analyzers over.
+# analyzer wire protocol (`EXTRACTION_PROTOCOL_VERSION`) flipped to "2.0"
+# with AR082 (AC-403): official analyzers declare 2.0, and protocol-1.0
+# plugins keep working via attackmap.extraction.adapters.
 EXTRACTION_CONTRACT_VERSION: Literal["2.0"] = "2.0"
 
 

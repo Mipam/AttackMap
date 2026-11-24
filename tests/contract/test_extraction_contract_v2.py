@@ -294,3 +294,20 @@ def test_v1_adapter_merge_is_first_seen_wins_and_deterministic() -> None:
     native = ExtractionResult(root="C:/tmp/demo")
     assert merge_extraction_results(a, native).source_protocol_version == "1.0"
     assert merge_extraction_results(native, native).source_protocol_version == "2.0"
+
+
+def test_ar082_protocol_flip_keeps_v1_adapter_lossless() -> None:
+    """AR082 / AC-403: the wire protocol declares "2.0" while the v1
+    adapter — the only compatibility path for protocol-1.0 plugins —
+    keeps lifting v1 ScanResults and lowering them back losslessly."""
+    from attackmap.sdk.analyzer_contracts import EXTRACTION_PROTOCOL_VERSION
+
+    assert EXTRACTION_PROTOCOL_VERSION == "2.0"
+    v1 = _v1_scan_result()
+    v2 = to_extraction_result(v1)
+    # Adapted payloads stay honestly tagged as 1.0-sourced.
+    assert v2.source_protocol_version == "1.0"
+    assert v2.extraction_version == "2.0"
+    back = to_scan_result(v2)
+    for field in ROUND_TRIP_FIELDS:
+        assert getattr(back, field) == getattr(v1, field), f"round-trip lost {field}"
